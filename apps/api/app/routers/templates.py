@@ -6,12 +6,13 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.exc import IntegrityError
 
 from app.auth.context import TenantContext, require_role
 from app.billing.plans import enforce_creation_quota
 from app.models import BotRoutine, KnowledgeBase, PersistentBot, Workflow
 from app.models.scope import scoped_session
-from app.routers.common import get_services, not_found
+from app.routers.common import conflict, get_services, not_found
 from app.routers.teammates import _register_scope
 from nexus_core_schema_templates.catalog import TEMPLATE_BY_ID, TEMPLATES
 from nexus_core_schema.models import MarkdownRoutineSpec, PersistentBotSpec, WorkflowSpec
@@ -132,50 +133,53 @@ async def instantiate_template(
                 workflow_id=workflow.id,
             ))
 
-    async with scoped_session(services.engine, context.tenant_id, context.workspace_id) as session:
-        if template.knowledge_base_name and knowledge_base_id is not None and body.knowledge_base_id is None:
-            session.add(KnowledgeBase(
-                id=knowledge_base_id,
-                tenant_id=context.tenant_id,
-                workspace_id=context.workspace_id,
-                name=template.knowledge_base_name,
-                embedding_model=body.embedding_model,
-            ))
-        session.add(Workflow(
-            id=workflow.id,
-            tenant_id=context.tenant_id,
-            workspace_id=context.workspace_id,
-            name=workflow.name,
-            version=workflow.version,
-            spec=workflow.model_dump(mode="json"),
-        ))
-        # No ORM relationships exist, so flush parents before children to satisfy scoped FKs.
-        await session.flush()
-        if bot_spec is not None:
-            session.add(PersistentBot(
-                id=bot_spec.id,
-                tenant_id=context.tenant_id,
-                workspace_id=context.workspace_id,
-                name=bot_spec.name,
-                model=bot_spec.model,
-                spec=bot_spec.model_dump(mode="json"),
-            ))
-            await session.flush()
-            for routine in routine_specs:
-                session.add(BotRoutine(
-                    id=routine.id,
+    try:
+        async with scoped_session(services.engine, context.tenant_id, context.workspace_id) as session:
+            if template.knowledge_base_name and knowledge_base_id is not None and body.knowledge_base_id is None:
+                session.add(KnowledgeBase(
+                    id=knowledge_base_id,
                     tenant_id=context.tenant_id,
                     workspace_id=context.workspace_id,
-                    bot_id=routine.bot_id,
-                    name=routine.name,
-                    instruction_markdown=routine.instruction_markdown,
-                    cron_expression=routine.cron_expression,
-                    timezone=routine.timezone,
-                    enabled=routine.enabled,
-                    workflow_id=routine.workflow_id,
-                    interval_seconds=None,
-                    allowed_actions=[],
+                    name=template.knowledge_base_name,
+                    embedding_model=body.embedding_model,
                 ))
+            session.add(Workflow(
+                id=workflow.id,
+                tenant_id=context.tenant_id,
+                workspace_id=context.workspace_id,
+                name=workflow.name,
+                version=workflow.version,
+                spec=workflow.model_dump(mode="json"),
+            ))
+            # No ORM relationships exist, so flush parents before children to satisfy scoped FKs.
+            await session.flush()
+            if bot_spec is not None:
+                session.add(PersistentBot(
+                    id=bot_spec.id,
+                    tenant_id=context.tenant_id,
+                    workspace_id=context.workspace_id,
+                    name=bot_spec.name,
+                    model=bot_spec.model,
+                    spec=bot_spec.model_dump(mode="json"),
+                ))
+                await session.flush()
+                for routine in routine_specs:
+                    session.add(BotRoutine(
+                        id=routine.id,
+                        tenant_id=context.tenant_id,
+                        workspace_id=context.workspace_id,
+                        bot_id=routine.bot_id,
+                        name=routine.name,
+                        instruction_markdown=routine.instruction_markdown,
+                        cron_expression=routine.cron_expression,
+                        timezone=routine.timezone,
+                        enabled=routine.enabled,
+                        workflow_id=routine.workflow_id,
+                        interval_seconds=None,
+                        allowed_actions=[],
+                    ))
+    except IntegrityError as error:
+        raise conflict("A workflow with this name already exists in the workspace; pass a different name") from error
 
     if routine_specs:
         await _register_scope(request, context)

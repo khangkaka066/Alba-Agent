@@ -27,6 +27,7 @@ from app.workers.jobs import CeleryDispatcher, WorkerExecutor
 from autogen_bridge.sandbox_team import AutoGenSandboxRunner
 from nexus_computer_sandbox import ComputerSandboxSupervisor, DockerSandboxProvider
 from nexus_core_schema.models import RuntimeEventType
+from nexus_core_schema_templates.catalog import TEMPLATES
 from callbacks.event_bus import RuntimeEventEmitter
 from app.main import create_app
 
@@ -107,7 +108,7 @@ def test_api_auth_workflow_approval_and_event_stream() -> None:
                     assert (await client.get("/api/v1/workflows", headers=admin_headers)).status_code == 200
                     assert (await client.get("/api/v1/workflows", headers={"Authorization": "Bearer invalid"})).status_code == 401
                     catalog = await client.get("/api/v1/templates")
-                    assert catalog.status_code == 200 and len(catalog.json()) == 4
+                    assert catalog.status_code == 200 and len(catalog.json()) == len(TEMPLATES)
                     instantiated = await client.post(
                         "/api/v1/templates/executive-inbox-operations/instantiate",
                         json={}, headers=admin_headers,

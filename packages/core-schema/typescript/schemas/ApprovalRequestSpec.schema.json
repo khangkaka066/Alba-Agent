@@ -1,0 +1,85 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "minLength": 1,
+      "title": "Action",
+      "type": "string"
+    },
+    "expires_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expires At"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "node_id": {
+      "minLength": 1,
+      "title": "Node Id",
+      "type": "string"
+    },
+    "rationale": {
+      "minLength": 1,
+      "title": "Rationale",
+      "type": "string"
+    },
+    "required_role": {
+      "default": "admin",
+      "enum": [
+        "owner",
+        "admin",
+        "builder"
+      ],
+      "title": "Required Role",
+      "type": "string"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "status": {
+      "default": "pending",
+      "enum": [
+        "pending",
+        "allowed_once",
+        "always_allowed",
+        "denied"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "tenant_id": {
+      "format": "uuid",
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "workspace_id": {
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "tenant_id",
+    "workspace_id",
+    "id",
+    "run_id",
+    "node_id",
+    "action",
+    "rationale"
+  ],
+  "title": "ApprovalRequestSpec",
+  "type": "object"
+}

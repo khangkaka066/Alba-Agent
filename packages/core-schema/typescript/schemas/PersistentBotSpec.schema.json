@@ -1,0 +1,101 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "api_base": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Api Base"
+    },
+    "billing_mode": {
+      "default": "platform",
+      "enum": [
+        "platform",
+        "byok"
+      ],
+      "title": "Billing Mode",
+      "type": "string"
+    },
+    "credential_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Credential Id"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "memory_namespace": {
+      "minLength": 1,
+      "title": "Memory Namespace",
+      "type": "string"
+    },
+    "model": {
+      "minLength": 1,
+      "title": "Model",
+      "type": "string"
+    },
+    "name": {
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "routine_ids": {
+      "default": [],
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Routine Ids",
+      "type": "array"
+    },
+    "tenant_id": {
+      "format": "uuid",
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "tool_ids": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Tool Ids",
+      "type": "array"
+    },
+    "workspace_id": {
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "tenant_id",
+    "workspace_id",
+    "id",
+    "name",
+    "model",
+    "memory_namespace"
+  ],
+  "title": "PersistentBotSpec",
+  "type": "object"
+}

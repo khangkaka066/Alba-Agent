@@ -1,0 +1,40 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "embedding_model": {
+      "default": "openai/text-embedding-3-small",
+      "pattern": "^[a-z0-9_]+/.+$",
+      "title": "Embedding Model",
+      "type": "string"
+    },
+    "knowledge_base_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Knowledge Base Id"
+    },
+    "name": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Name"
+    }
+  },
+  "title": "TemplateInstantiationRequest",
+  "type": "object"
+}

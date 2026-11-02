@@ -1,0 +1,28 @@
+import type { Translate } from "./i18n.mjs";
+export type ArtifactKind = "video" | "image" | "audio" | "code" | "document" | "pdf" | "other";
+export type FileStatus = "added" | "modified";
+export type TreeNode = { name: string; path: string; kind: "dir" | "file"; status?: FileStatus; children?: TreeNode[] };
+export type DiffOp = { type: "same" | "add" | "del"; text: string; oldNo: number | null; newNo: number | null };
+export type SplitRow = { left: DiffOp | null; right: DiffOp | null };
+export type RuntimeEvent = { id: string; run_id: string; type: string; node_id: string | null; occurred_at: string; payload: Record<string, unknown> };
+export type RunApproval = { approval_id: string; run_id?: string; node_id?: string; action?: string; rationale?: string; kind?: string };
+export type RunState = {
+  status: "idle" | "running" | "paused" | "completed" | "failed"; completed: string[]; active: string[];
+  terminal: Array<{ id: string; stream: string; text: string }>; thoughts: Array<{ id: string; node: string; text: string; textKey?: string; code?: string }>;
+  tools: Array<{ id: string; node: string; name: string }>; approvals: RunApproval[]; resolved: string[]; frame: string; error: string;
+};
+export type TeamSummary = { agents: number; crews: number; sandboxes: number; steps: number; tiers: Record<string, number>; label: string; rigor: string | null };
+export function extensionOf(name: string): string;
+export function classifyArtifact(filename: string, mime?: string): { kind: ArtifactKind; text: boolean };
+export function buildTree(paths: string[], statuses?: Record<string, FileStatus | undefined>): TreeNode[];
+export function fileStatuses(current: Record<string, string | number>, previous: Record<string, string | number>): Record<string, FileStatus>;
+export function lineDiff(before: string, after: string): DiffOp[];
+export function diffStats(ops: DiffOp[]): { added: number; removed: number };
+export function splitRows(ops: DiffOp[]): SplitRow[];
+export function teamSummary(spec: unknown): TeamSummary;
+export function initialRunState(): RunState;
+export function reduceRunEvent(state: RunState, event: RuntimeEvent): RunState;
+export function isFinished(status: string): boolean;
+export function stepLabel(state: RunState, steps: number, t?: Translate): string;
+export function liveActivity(state: RunState, t?: Translate): string;
+export function flattenWorkspaceFiles(files: Array<{ path: string; content: string }>, budget?: number): { files: Record<string, string>; map: Record<string, string>; bytes: number };

@@ -1,0 +1,27 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "proposed_actions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Proposed Actions",
+      "type": "array"
+    },
+    "rationale": {
+      "title": "Rationale",
+      "type": "string"
+    },
+    "requires_human_review": {
+      "default": true,
+      "title": "Requires Human Review",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "proposed_actions",
+    "rationale"
+  ],
+  "title": "ApprovalActionPlan",
+  "type": "object"
+}

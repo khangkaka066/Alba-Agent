@@ -1,0 +1,43 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "executive_summary": {
+      "title": "Executive Summary",
+      "type": "string"
+    },
+    "key_findings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Key Findings",
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "recommended_actions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Recommended Actions",
+      "type": "array"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "executive_summary",
+    "key_findings",
+    "recommended_actions",
+    "limitations"
+  ],
+  "title": "ExecutiveDataReport",
+  "type": "object"
+}

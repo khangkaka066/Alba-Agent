@@ -1,0 +1,7 @@
+# Run deliverables and subscription logins are local state and secrets; never commit them.
+artifacts/*
+!artifacts/.gitkeep
+subscriptions/*/*
+!subscriptions/*/.gitkeep
+backup/*
+!backup/.gitkeep

@@ -1,0 +1,48 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output and type-check caches
+.next/
+dist/
+release/
+*.tsbuildinfo
+*.egg-info/
+coverage/
+htmlcov/
+
+# Python caches
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editor, OS and tool state
+.DS_Store
+.history/
+.vscode/
+.idea/
+.taste-skill/
+*.log
+
+# Local run state: sandboxes, computers, deliverables, scratch runs
+.sandbox-runs/
+.nexus-computers/
+.phase*-sandbox-test/
+/artifacts/
+
+# Generated media and one-off reports (keep curated docs/media)
+*.mp4
+!docs/media/*.mp4
+museum_*.md
+
+# Stray design drafts
+Gemini_Generated_Image_*.png

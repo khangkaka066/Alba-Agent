@@ -1,0 +1,46 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "audience_segments": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Audience Segments",
+      "type": "array"
+    },
+    "competitor_observations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Competitor Observations",
+      "type": "array"
+    },
+    "market_summary": {
+      "title": "Market Summary",
+      "type": "string"
+    },
+    "source_urls": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Source Urls",
+      "type": "array"
+    },
+    "uncertainties": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Uncertainties",
+      "type": "array"
+    }
+  },
+  "required": [
+    "market_summary",
+    "audience_segments",
+    "competitor_observations",
+    "source_urls",
+    "uncertainties"
+  ],
+  "title": "MarketResearchBrief",
+  "type": "object"
+}

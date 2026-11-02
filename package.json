@@ -1,0 +1,13 @@
+{
+  "name": "nexus-agent-studio",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "lint": "pnpm --dir apps/web lint",
+    "check": "pnpm --dir apps/web check",
+    "test": "pnpm --dir apps/web test",
+    "desktop:dev": "pnpm --filter @nexus/desktop dev",
+    "desktop:build": "pnpm --filter @nexus/desktop build",
+    "desktop:test": "pnpm --filter @nexus/desktop test"
+  }
+}

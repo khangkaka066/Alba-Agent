@@ -1,0 +1,14 @@
+export type ShortcutAction = { id: string; group: "general" | "navigation"; default: string };
+export type Bindings = Record<string, string>;
+export const STORAGE_KEY: string;
+export const ACTIONS: ShortcutAction[];
+export const DEFAULT_BINDINGS: Bindings;
+export function comboFromEvent(event: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }): string;
+export function isValidCombo(combo: string): boolean;
+export function formatCombo(combo: string, mac: boolean): string;
+export function resolveBindings(saved: unknown): Bindings;
+export function findConflict(bindings: Bindings, actionId: string, combo: string): string | null;
+export function overridesOf(bindings: Bindings): Bindings;
+export function actionFor(bindings: Bindings, event: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }): string | null;
+export function loadBindings(storage: Pick<Storage, "getItem">): Bindings;
+export function saveBindings(storage: Pick<Storage, "setItem">, bindings: Bindings): void;

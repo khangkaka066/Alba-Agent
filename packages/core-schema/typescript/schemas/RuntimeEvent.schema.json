@@ -1,0 +1,79 @@
+{
+  "$defs": {
+    "RuntimeEventType": {
+      "enum": [
+        "FLOW_STATE_CHANGED",
+        "CREW_AGENT_THOUGHT",
+        "TOOL_INVOKED",
+        "AUTOGEN_CODE_GENERATED",
+        "SANDBOX_TERMINAL_OUTPUT",
+        "SANDBOX_SCREEN_FRAME",
+        "APPROVAL_REQUIRED",
+        "APPROVAL_RESOLVED",
+        "NEGATIVE_TRANSFER_DETECTED",
+        "RUN_COMPLETED",
+        "RUN_FAILED"
+      ],
+      "title": "RuntimeEventType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "node_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Node Id"
+    },
+    "occurred_at": {
+      "format": "date-time",
+      "title": "Occurred At",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "tenant_id": {
+      "format": "uuid",
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "type": {
+      "$ref": "#/$defs/RuntimeEventType"
+    },
+    "workspace_id": {
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "tenant_id",
+    "workspace_id",
+    "id",
+    "run_id",
+    "type",
+    "occurred_at"
+  ],
+  "title": "RuntimeEvent",
+  "type": "object"
+}

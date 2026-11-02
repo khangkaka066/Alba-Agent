@@ -1,0 +1,8 @@
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["packages", "apps/api"]
+mypy_path = ["packages/core-schema/templates"]
+
+[tool.pytest.ini_options]
+testpaths = ["apps/api/tests"]

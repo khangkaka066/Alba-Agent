@@ -1,0 +1,38 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "citation_gaps": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Citation Gaps",
+      "type": "array"
+    },
+    "publication_ready": {
+      "title": "Publication Ready",
+      "type": "boolean"
+    },
+    "unsupported_claims": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Unsupported Claims",
+      "type": "array"
+    },
+    "verified_claims": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Verified Claims",
+      "type": "array"
+    }
+  },
+  "required": [
+    "verified_claims",
+    "unsupported_claims",
+    "citation_gaps",
+    "publication_ready"
+  ],
+  "title": "CitationReview",
+  "type": "object"
+}

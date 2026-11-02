@@ -1,0 +1,10 @@
+export type ChatModel = { id: string; model: string; provider: string; group: string; source: "workspace" | "platform"; local: boolean };
+export type ModelGroup = { name: string; local: boolean; models: ChatModel[] };
+export const MODEL_STORAGE_KEY: string;
+export function modelLabel(id: string | null | undefined): string;
+export type SuggestedModel = { id: string; model: string; provider: string; group: string; connected: boolean };
+export function parseModelId(text: unknown): { provider: string; model: string; id: string } | null;
+export function resolveSelection(models: ChatModel[], remembered: string | null, serverDefault: string | null, reachableProviders?: string[]): string | null;
+export function groupModels(models: ChatModel[]): ModelGroup[];
+export function loadModel(storage: Pick<Storage, "getItem">): string | null;
+export function saveModel(storage: Pick<Storage, "setItem" | "removeItem">, id: string | null): void;

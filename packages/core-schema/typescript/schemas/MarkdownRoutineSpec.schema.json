@@ -1,0 +1,88 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "bot_id": {
+      "format": "uuid",
+      "title": "Bot Id",
+      "type": "string"
+    },
+    "cron_expression": {
+      "minLength": 1,
+      "title": "Cron Expression",
+      "type": "string"
+    },
+    "enabled": {
+      "default": true,
+      "title": "Enabled",
+      "type": "boolean"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "instruction_markdown": {
+      "minLength": 1,
+      "title": "Instruction Markdown",
+      "type": "string"
+    },
+    "interval_seconds": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Interval Seconds"
+    },
+    "name": {
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "tenant_id": {
+      "format": "uuid",
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "timezone": {
+      "minLength": 1,
+      "title": "Timezone",
+      "type": "string"
+    },
+    "workflow_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Workflow Id"
+    },
+    "workspace_id": {
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "tenant_id",
+    "workspace_id",
+    "id",
+    "bot_id",
+    "name",
+    "instruction_markdown",
+    "cron_expression",
+    "timezone"
+  ],
+  "title": "MarkdownRoutineSpec",
+  "type": "object"
+}

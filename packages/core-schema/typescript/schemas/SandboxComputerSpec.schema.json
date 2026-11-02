@@ -1,0 +1,95 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "bot_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bot Id"
+    },
+    "cpu_limit": {
+      "default": 1.0,
+      "exclusiveMinimum": 0,
+      "maximum": 64,
+      "title": "Cpu Limit",
+      "type": "number"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "idle_timeout_seconds": {
+      "default": 1800,
+      "minimum": 60,
+      "title": "Idle Timeout Seconds",
+      "type": "integer"
+    },
+    "memory_mb": {
+      "default": 1024,
+      "maximum": 131072,
+      "minimum": 128,
+      "title": "Memory Mb",
+      "type": "integer"
+    },
+    "provider": {
+      "enum": [
+        "docker",
+        "e2b",
+        "daytona",
+        "createos",
+        "boat",
+        "railway"
+      ],
+      "title": "Provider",
+      "type": "string"
+    },
+    "run_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Run Id"
+    },
+    "tenant_id": {
+      "format": "uuid",
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "visibility": {
+      "enum": [
+        "private",
+        "shared"
+      ],
+      "title": "Visibility",
+      "type": "string"
+    },
+    "workspace_id": {
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "tenant_id",
+    "workspace_id",
+    "id",
+    "provider",
+    "visibility"
+  ],
+  "title": "SandboxComputerSpec",
+  "type": "object"
+}

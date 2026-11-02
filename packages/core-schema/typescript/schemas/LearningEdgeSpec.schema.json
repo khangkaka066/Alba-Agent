@@ -1,0 +1,55 @@
+{
+  "$defs": {
+    "PropagationScope": {
+      "enum": [
+        "AGENT_PRIVATE",
+        "CREW_LOCAL",
+        "WORKFLOW_SCOPED",
+        "WORKSPACE_QUARANTINE",
+        "WORKSPACE_VERIFIED"
+      ],
+      "title": "PropagationScope",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "allow_code_patterns": {
+      "default": false,
+      "title": "Allow Code Patterns",
+      "type": "boolean"
+    },
+    "allow_heuristics": {
+      "default": true,
+      "title": "Allow Heuristics",
+      "type": "boolean"
+    },
+    "require_human_approval": {
+      "default": false,
+      "title": "Require Human Approval",
+      "type": "boolean"
+    },
+    "scope": {
+      "$ref": "#/$defs/PropagationScope",
+      "default": "CREW_LOCAL"
+    },
+    "source_agent_id": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Source Agent Id",
+      "type": "string"
+    },
+    "target_agent_id": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Target Agent Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_agent_id",
+    "target_agent_id"
+  ],
+  "title": "LearningEdgeSpec",
+  "type": "object"
+}

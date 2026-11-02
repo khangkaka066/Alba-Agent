@@ -1,0 +1,105 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "backstory": {
+      "default": "",
+      "title": "Backstory",
+      "type": "string"
+    },
+    "goal": {
+      "minLength": 1,
+      "title": "Goal",
+      "type": "string"
+    },
+    "guardrails": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Guardrails",
+      "type": "array"
+    },
+    "id": {
+      "maxLength": 100,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "title": "Id",
+      "type": "string"
+    },
+    "knowledge_capsule_ids": {
+      "default": [],
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Knowledge Capsule Ids",
+      "type": "array"
+    },
+    "max_iterations": {
+      "default": 10,
+      "maximum": 100,
+      "minimum": 1,
+      "title": "Max Iterations",
+      "type": "integer"
+    },
+    "model": {
+      "minLength": 1,
+      "title": "Model",
+      "type": "string"
+    },
+    "role": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Role",
+      "type": "string"
+    },
+    "skill_ids": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Skill Ids",
+      "type": "array"
+    },
+    "temperature": {
+      "default": 0.2,
+      "maximum": 2.0,
+      "minimum": 0.0,
+      "title": "Temperature",
+      "type": "number"
+    },
+    "tier": {
+      "anyOf": [
+        {
+          "enum": [
+            "director",
+            "lead",
+            "specialist"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tier"
+    },
+    "tool_ids": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Tool Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "role",
+    "goal",
+    "model"
+  ],
+  "title": "AgentSpec",
+  "type": "object"
+}

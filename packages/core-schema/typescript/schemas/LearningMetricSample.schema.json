@@ -1,0 +1,41 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "human_approval_rejection_rate": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Human Approval Rejection Rate",
+      "type": "number"
+    },
+    "latency_ms": {
+      "minimum": 0,
+      "title": "Latency Ms",
+      "type": "number"
+    },
+    "retry_and_error_turns": {
+      "minimum": 0,
+      "title": "Retry And Error Turns",
+      "type": "number"
+    },
+    "success_rate": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Success Rate",
+      "type": "number"
+    },
+    "token_count": {
+      "minimum": 0,
+      "title": "Token Count",
+      "type": "number"
+    }
+  },
+  "required": [
+    "success_rate",
+    "retry_and_error_turns",
+    "human_approval_rejection_rate",
+    "token_count",
+    "latency_ms"
+  ],
+  "title": "LearningMetricSample",
+  "type": "object"
+}

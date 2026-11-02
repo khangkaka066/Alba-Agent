@@ -1,0 +1,70 @@
+{
+  "name": "@nexus/desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NexusAgent desktop app: a native window for your local Docker stack or a remote HTTPS server.",
+  "author": "NexusAgent",
+  "license": "MIT",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "tsc -p tsconfig.json && electron .",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.json && node --test dist/*.test.js",
+    "build": "tsc -p tsconfig.json && electron-builder",
+    "build:dir": "tsc -p tsconfig.json && electron-builder --dir",
+    "build:mac": "tsc -p tsconfig.json && electron-builder --mac dmg",
+    "build:win": "tsc -p tsconfig.json && electron-builder --win nsis",
+    "build:linux": "tsc -p tsconfig.json && electron-builder --linux AppImage",
+    "licenses": "node ../../scripts/check-npm-licenses.mjs"
+  },
+  "build": {
+    "appId": "ai.nexusagent.desktop",
+    "productName": "NexusAgent",
+    "copyright": "NexusAgent",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.png",
+      "target": [
+        "dmg"
+      ],
+      "identity": null,
+      "hardenedRuntime": false
+    },
+    "dmg": {
+      "title": "NexusAgent"
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "target": [
+        "AppImage"
+      ],
+      "category": "Development"
+    },
+    "artifactName": "NexusAgent-${version}-${os}-${arch}.${ext}"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.6",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.9.2"
+  }
+}

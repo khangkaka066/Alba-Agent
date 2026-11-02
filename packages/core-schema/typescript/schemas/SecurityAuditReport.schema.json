@@ -1,0 +1,38 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "findings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Findings",
+      "type": "array"
+    },
+    "summary": {
+      "title": "Summary",
+      "type": "string"
+    },
+    "tests_executed": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tests Executed",
+      "type": "array"
+    },
+    "unresolved_risks": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Unresolved Risks",
+      "type": "array"
+    }
+  },
+  "required": [
+    "summary",
+    "findings",
+    "tests_executed",
+    "unresolved_risks"
+  ],
+  "title": "SecurityAuditReport",
+  "type": "object"
+}

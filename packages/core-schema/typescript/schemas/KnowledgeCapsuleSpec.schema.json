@@ -1,0 +1,133 @@
+{
+  "$defs": {
+    "PropagationScope": {
+      "enum": [
+        "AGENT_PRIVATE",
+        "CREW_LOCAL",
+        "WORKFLOW_SCOPED",
+        "WORKSPACE_QUARANTINE",
+        "WORKSPACE_VERIFIED"
+      ],
+      "title": "PropagationScope",
+      "type": "string"
+    },
+    "SensitivityLevel": {
+      "enum": [
+        "PUBLIC",
+        "INTERNAL",
+        "CONFIDENTIAL_PII_STRIPPED"
+      ],
+      "title": "SensitivityLevel",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "capsule_id": {
+      "format": "uuid",
+      "title": "Capsule Id",
+      "type": "string"
+    },
+    "confidence": {
+      "default": 0.5,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "distilled_heuristic": {
+      "maxLength": 8000,
+      "minLength": 1,
+      "title": "Distilled Heuristic",
+      "type": "string"
+    },
+    "prohibited_contexts": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Prohibited Contexts",
+      "type": "array"
+    },
+    "propagation_scope": {
+      "$ref": "#/$defs/PropagationScope",
+      "default": "AGENT_PRIVATE"
+    },
+    "sensitivity_level": {
+      "$ref": "#/$defs/SensitivityLevel",
+      "default": "INTERNAL"
+    },
+    "source_agent_id": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Source Agent Id",
+      "type": "string"
+    },
+    "source_crew_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Crew Id"
+    },
+    "source_domain_tags": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Source Domain Tags",
+      "type": "array"
+    },
+    "source_role": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Source Role",
+      "type": "string"
+    },
+    "source_workflow_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Workflow Id"
+    },
+    "tenant_id": {
+      "format": "uuid",
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "trigger_preconditions": {
+      "maxLength": 4000,
+      "minLength": 1,
+      "title": "Trigger Preconditions",
+      "type": "string"
+    },
+    "workspace_id": {
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "tenant_id",
+    "workspace_id",
+    "capsule_id",
+    "source_agent_id",
+    "source_role",
+    "trigger_preconditions",
+    "distilled_heuristic"
+  ],
+  "title": "KnowledgeCapsuleSpec",
+  "type": "object"
+}

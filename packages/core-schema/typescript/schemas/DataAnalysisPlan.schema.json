@@ -1,0 +1,38 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "assumptions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Assumptions",
+      "type": "array"
+    },
+    "metrics": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Metrics",
+      "type": "array"
+    },
+    "objective": {
+      "title": "Objective",
+      "type": "string"
+    },
+    "validation_checks": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Validation Checks",
+      "type": "array"
+    }
+  },
+  "required": [
+    "objective",
+    "metrics",
+    "validation_checks",
+    "assumptions"
+  ],
+  "title": "DataAnalysisPlan",
+  "type": "object"
+}

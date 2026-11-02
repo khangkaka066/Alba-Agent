@@ -1,0 +1,104 @@
+{
+  "properties": {
+    "bot": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bot"
+    },
+    "bot_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bot Id"
+    },
+    "knowledge_base_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Knowledge Base Id"
+    },
+    "required_connections": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Required Connections",
+      "type": "array"
+    },
+    "routine_ids": {
+      "default": [],
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Routine Ids",
+      "type": "array"
+    },
+    "routines": {
+      "default": [],
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Routines",
+      "type": "array"
+    },
+    "template_id": {
+      "title": "Template Id",
+      "type": "string"
+    },
+    "workflow": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Workflow"
+    },
+    "workflow_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Workflow Id"
+    }
+  },
+  "required": [
+    "template_id"
+  ],
+  "title": "TemplateInstantiationResponse",
+  "type": "object"
+}

@@ -1,0 +1,67 @@
+{
+  "$defs": {
+    "PathRuleSpec": {
+      "additionalProperties": false,
+      "description": "A content or coding standard injected for agents writing to matching artifact paths.",
+      "properties": {
+        "pattern": {
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_*./-]+$",
+          "title": "Pattern",
+          "type": "string"
+        },
+        "rule": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Rule",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pattern",
+        "rule"
+      ],
+      "title": "PathRuleSpec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "channels": {
+      "default": [],
+      "items": {
+        "enum": [
+          "tiktok",
+          "facebook",
+          "youtube"
+        ],
+        "type": "string"
+      },
+      "maxItems": 3,
+      "title": "Channels",
+      "type": "array"
+    },
+    "path_rules": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/PathRuleSpec"
+      },
+      "maxItems": 64,
+      "title": "Path Rules",
+      "type": "array"
+    },
+    "rigor": {
+      "default": "minimal",
+      "enum": [
+        "minimal",
+        "standard",
+        "full_studio"
+      ],
+      "title": "Rigor",
+      "type": "string"
+    }
+  },
+  "title": "WorkflowModesSpec",
+  "type": "object"
+}

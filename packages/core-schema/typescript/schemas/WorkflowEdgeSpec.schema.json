@@ -1,0 +1,38 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "loop_back": {
+      "default": false,
+      "title": "Loop Back",
+      "type": "boolean"
+    },
+    "route": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Route"
+    },
+    "source": {
+      "minLength": 1,
+      "title": "Source",
+      "type": "string"
+    },
+    "target": {
+      "minLength": 1,
+      "title": "Target",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source",
+    "target"
+  ],
+  "title": "WorkflowEdgeSpec",
+  "type": "object"
+}

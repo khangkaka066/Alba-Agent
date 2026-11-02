@@ -1,0 +1,51 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "caveats": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Caveats",
+      "type": "array"
+    },
+    "chart_artifacts": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Chart Artifacts",
+      "type": "array"
+    },
+    "statistical_tables": {
+      "items": {
+        "additionalProperties": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "type": "object"
+      },
+      "title": "Statistical Tables",
+      "type": "array"
+    },
+    "summary": {
+      "title": "Summary",
+      "type": "string"
+    }
+  },
+  "required": [
+    "summary",
+    "statistical_tables",
+    "chart_artifacts",
+    "caveats"
+  ],
+  "title": "DataScienceFindings",
+  "type": "object"
+}

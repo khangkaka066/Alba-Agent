@@ -1,0 +1,310 @@
+{
+  "$defs": {
+    "AgentSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "backstory": {
+          "default": "",
+          "title": "Backstory",
+          "type": "string"
+        },
+        "goal": {
+          "minLength": 1,
+          "title": "Goal",
+          "type": "string"
+        },
+        "guardrails": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Guardrails",
+          "type": "array"
+        },
+        "id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "knowledge_capsule_ids": {
+          "default": [],
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Knowledge Capsule Ids",
+          "type": "array"
+        },
+        "max_iterations": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Max Iterations",
+          "type": "integer"
+        },
+        "model": {
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "role": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Role",
+          "type": "string"
+        },
+        "skill_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Skill Ids",
+          "type": "array"
+        },
+        "temperature": {
+          "default": 0.2,
+          "maximum": 2.0,
+          "minimum": 0.0,
+          "title": "Temperature",
+          "type": "number"
+        },
+        "tier": {
+          "anyOf": [
+            {
+              "enum": [
+                "director",
+                "lead",
+                "specialist"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tier"
+        },
+        "tool_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tool Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "role",
+        "goal",
+        "model"
+      ],
+      "title": "AgentSpec",
+      "type": "object"
+    },
+    "ConsensusConfigSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "arbiter_model": {
+          "default": "",
+          "title": "Arbiter Model",
+          "type": "string"
+        },
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "min_agreement_threshold": {
+          "default": 0.85,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Min Agreement Threshold",
+          "type": "number"
+        },
+        "models": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 0,
+          "title": "Models",
+          "type": "array"
+        }
+      },
+      "title": "ConsensusConfigSpec",
+      "type": "object"
+    },
+    "TaskSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_id": {
+          "minLength": 1,
+          "title": "Agent Id",
+          "type": "string"
+        },
+        "context_task_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Context Task Ids",
+          "type": "array"
+        },
+        "description": {
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "expected_artifact_paths": {
+          "default": [],
+          "items": {
+            "maxLength": 240,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}(/[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}){0,7}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Expected Artifact Paths",
+          "type": "array"
+        },
+        "expected_output": {
+          "minLength": 1,
+          "title": "Expected Output",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "output_schema": {
+          "minLength": 1,
+          "title": "Output Schema",
+          "type": "string"
+        },
+        "output_schema_json": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Schema Json"
+        }
+      },
+      "required": [
+        "id",
+        "agent_id",
+        "description",
+        "expected_output",
+        "output_schema"
+      ],
+      "title": "TaskSpec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "agents": {
+      "items": {
+        "$ref": "#/$defs/AgentSpec"
+      },
+      "minItems": 1,
+      "title": "Agents",
+      "type": "array"
+    },
+    "consensus_config": {
+      "$ref": "#/$defs/ConsensusConfigSpec"
+    },
+    "expected_artifact_paths": {
+      "default": [],
+      "items": {
+        "maxLength": 240,
+        "minLength": 1,
+        "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}(/[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}){0,7}$",
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Expected Artifact Paths",
+      "type": "array"
+    },
+    "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "join": {
+      "default": "any",
+      "enum": [
+        "any",
+        "all"
+      ],
+      "title": "Join",
+      "type": "string"
+    },
+    "kind": {
+      "const": "crew",
+      "default": "crew",
+      "title": "Kind",
+      "type": "string"
+    },
+    "label": {
+      "minLength": 1,
+      "title": "Label",
+      "type": "string"
+    },
+    "manager_agent_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Manager Agent Id"
+    },
+    "process": {
+      "default": "sequential",
+      "enum": [
+        "sequential",
+        "hierarchical"
+      ],
+      "title": "Process",
+      "type": "string"
+    },
+    "requires_visual_evidence": {
+      "default": false,
+      "title": "Requires Visual Evidence",
+      "type": "boolean"
+    },
+    "tasks": {
+      "items": {
+        "$ref": "#/$defs/TaskSpec"
+      },
+      "minItems": 1,
+      "title": "Tasks",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "label",
+    "agents",
+    "tasks"
+  ],
+  "title": "CrewNodeSpec",
+  "type": "object"
+}

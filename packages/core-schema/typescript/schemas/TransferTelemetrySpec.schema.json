@@ -1,0 +1,92 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "capsule_id": {
+      "format": "uuid",
+      "title": "Capsule Id",
+      "type": "string"
+    },
+    "condition": {
+      "enum": [
+        "baseline",
+        "treatment"
+      ],
+      "title": "Condition",
+      "type": "string"
+    },
+    "human_approval_rejected": {
+      "default": false,
+      "title": "Human Approval Rejected",
+      "type": "boolean"
+    },
+    "latency_ms": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Latency Ms",
+      "type": "integer"
+    },
+    "retry_and_error_turns": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Retry And Error Turns",
+      "type": "integer"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "source_agent_id": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Source Agent Id",
+      "type": "string"
+    },
+    "success": {
+      "title": "Success",
+      "type": "boolean"
+    },
+    "target_agent_id": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Target Agent Id",
+      "type": "string"
+    },
+    "target_domain_tags": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Target Domain Tags",
+      "type": "array"
+    },
+    "tenant_id": {
+      "format": "uuid",
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "token_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Token Count",
+      "type": "integer"
+    },
+    "workspace_id": {
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "tenant_id",
+    "workspace_id",
+    "run_id",
+    "capsule_id",
+    "source_agent_id",
+    "target_agent_id",
+    "condition",
+    "success"
+  ],
+  "title": "TransferTelemetrySpec",
+  "type": "object"
+}

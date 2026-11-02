@@ -1,0 +1,41 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "exclusions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Exclusions",
+      "type": "array"
+    },
+    "scope": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Scope",
+      "type": "array"
+    },
+    "security_checks": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Security Checks",
+      "type": "array"
+    },
+    "test_cases": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Test Cases",
+      "type": "array"
+    }
+  },
+  "required": [
+    "scope",
+    "test_cases",
+    "security_checks",
+    "exclusions"
+  ],
+  "title": "SecurityTestPlan",
+  "type": "object"
+}

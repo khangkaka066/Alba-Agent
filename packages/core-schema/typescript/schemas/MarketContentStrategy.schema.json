@@ -1,0 +1,46 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "channel_plan": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Channel Plan",
+      "type": "array"
+    },
+    "citations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Citations",
+      "type": "array"
+    },
+    "content_pillars": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Content Pillars",
+      "type": "array"
+    },
+    "positioning": {
+      "title": "Positioning",
+      "type": "string"
+    },
+    "proposed_headlines": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Proposed Headlines",
+      "type": "array"
+    }
+  },
+  "required": [
+    "positioning",
+    "content_pillars",
+    "channel_plan",
+    "proposed_headlines",
+    "citations"
+  ],
+  "title": "MarketContentStrategy",
+  "type": "object"
+}

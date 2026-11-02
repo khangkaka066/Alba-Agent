@@ -1,0 +1,229 @@
+name: nexus-agent-studio
+
+services:
+  postgres:
+    image: postgres:16.4
+    environment:
+      POSTGRES_USER: ${NEXUS_POSTGRES_USER:-nexus}
+      POSTGRES_DB: ${NEXUS_POSTGRES_DB:-nexus}
+      POSTGRES_PASSWORD: ${NEXUS_POSTGRES_PASSWORD:?Set NEXUS_POSTGRES_PASSWORD in .env}
+      NEXUS_RUNTIME_DB_PASSWORD: ${NEXUS_RUNTIME_DB_PASSWORD:?Set NEXUS_RUNTIME_DB_PASSWORD in .env}
+    volumes:
+      - nexus_postgres_data:/var/lib/postgresql/data
+      - ./apps/api/postgres-init/01-runtime-role.sh:/docker-entrypoint-initdb.d/01-runtime-role.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [data]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.2.4
+    environment:
+      NEXUS_REDIS_PASSWORD: ${NEXUS_REDIS_PASSWORD:?Set NEXUS_REDIS_PASSWORD in .env}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$${NEXUS_REDIS_PASSWORD}\""]
+    volumes:
+      - nexus_redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$${NEXUS_REDIS_PASSWORD}\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [data]
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.6
+    environment:
+      QDRANT__TELEMETRY_DISABLED: "true"
+    volumes:
+      - nexus_qdrant_data:/qdrant/storage
+    networks: [data]
+    restart: unless-stopped
+
+  sandbox-supervisor:
+    build:
+      context: .
+      dockerfile: packages/computer-sandbox/Dockerfile
+    image: ${NEXUS_SANDBOX_IMAGE:-nexus-sandbox-python:3.11}
+    environment:
+      NEXUS_ARTIFACTS_DIR: /var/lib/nexus/artifacts
+      OTEL_SDK_DISABLED: "true"
+      CREWAI_DISABLE_TELEMETRY: "true"
+    volumes:
+      - ./data/artifacts:/var/lib/nexus/artifacts
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks: [app]
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment: &app_environment
+      NEXUS_BRAND_NAME: ${NEXUS_BRAND_NAME:-NexusAgent Studio}
+      NEXUS_CORS_ORIGINS: ${NEXUS_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      NEXUS_DB_HOST: postgres
+      NEXUS_DB_NAME: ${NEXUS_POSTGRES_DB:-nexus}
+      NEXUS_DB_USER: nexus_runtime
+      NEXUS_DB_PASSWORD: ${NEXUS_RUNTIME_DB_PASSWORD:?Set NEXUS_RUNTIME_DB_PASSWORD in .env}
+      NEXUS_MIGRATION_DATABASE_URL: postgresql+asyncpg://${NEXUS_POSTGRES_USER:-nexus}:${NEXUS_POSTGRES_PASSWORD:?Set NEXUS_POSTGRES_PASSWORD in .env}@postgres:5432/${NEXUS_POSTGRES_DB:-nexus}
+      NEXUS_SETUP_DATABASE_URL: postgresql+asyncpg://${NEXUS_POSTGRES_USER:-nexus}:${NEXUS_POSTGRES_PASSWORD:?Set NEXUS_POSTGRES_PASSWORD in .env}@postgres:5432/${NEXUS_POSTGRES_DB:-nexus}
+      NEXUS_CREDENTIAL_ENCRYPTION_KEY_BASE64: ${NEXUS_CREDENTIAL_ENCRYPTION_KEY_BASE64:-}
+      NEXUS_ENCRYPTION_KEY: ${NEXUS_ENCRYPTION_KEY:-}
+      NEXUS_REDIS_HOST: redis
+      NEXUS_REDIS_PASSWORD: ${NEXUS_REDIS_PASSWORD:?Set NEXUS_REDIS_PASSWORD in .env}
+      NEXUS_QDRANT_URL: http://qdrant:6333
+      NEXUS_SANDBOX_URL: http://api:8000/api/v1/sandboxes
+      NEXUS_SECRET_KEY: ${NEXUS_SECRET_KEY:?Set NEXUS_SECRET_KEY in .env}
+      NEXUS_API_KEY_PEPPER: ${NEXUS_API_KEY_PEPPER:?Set NEXUS_API_KEY_PEPPER in .env}
+      NEXUS_COMPUTER_ROOT: ${NEXUS_COMPUTER_ROOT:-/tmp/nexus-computers}
+      NEXUS_ARTIFACTS_DIR: /var/lib/nexus/artifacts
+      NEXUS_SANDBOX_IMAGE: ${NEXUS_SANDBOX_IMAGE:-nexus-sandbox-python:3.11}
+      NEXUS_AUTOGEN_API_KEY: ${NEXUS_AUTOGEN_API_KEY:-}
+      NEXUS_AUTOGEN_API_BASE: ${NEXUS_AUTOGEN_API_BASE:-}
+      NEXUS_OPENAI_API_KEY: ${NEXUS_OPENAI_API_KEY:-}
+      NEXUS_OPENAI_API_BASE: ${NEXUS_OPENAI_API_BASE:-}
+      NEXUS_SERPER_API_KEY: ${NEXUS_SERPER_API_KEY:-}
+      NEXUS_TAVILY_API_KEY: ${NEXUS_TAVILY_API_KEY:-}
+      NEXUS_ANTHROPIC_API_KEY: ${NEXUS_ANTHROPIC_API_KEY:-}
+      NEXUS_ANTHROPIC_API_BASE: ${NEXUS_ANTHROPIC_API_BASE:-}
+      NEXUS_GEMINI_API_KEY: ${NEXUS_GEMINI_API_KEY:-}
+      NEXUS_GEMINI_API_BASE: ${NEXUS_GEMINI_API_BASE:-}
+      NEXUS_DEEPSEEK_API_KEY: ${NEXUS_DEEPSEEK_API_KEY:-}
+      NEXUS_DEEPSEEK_API_BASE: ${NEXUS_DEEPSEEK_API_BASE:-}
+      NEXUS_OPENROUTER_API_KEY: ${NEXUS_OPENROUTER_API_KEY:-}
+      NEXUS_OPENROUTER_API_BASE: ${NEXUS_OPENROUTER_API_BASE:-}
+      NEXUS_GROQ_API_KEY: ${NEXUS_GROQ_API_KEY:-}
+      NEXUS_GROQ_API_BASE: ${NEXUS_GROQ_API_BASE:-}
+      NEXUS_MISTRAL_API_KEY: ${NEXUS_MISTRAL_API_KEY:-}
+      NEXUS_MISTRAL_API_BASE: ${NEXUS_MISTRAL_API_BASE:-}
+      NEXUS_TOGETHER_AI_API_KEY: ${NEXUS_TOGETHER_AI_API_KEY:-}
+      NEXUS_TOGETHER_AI_API_BASE: ${NEXUS_TOGETHER_AI_API_BASE:-}
+      NEXUS_ALLOWED_LOCAL_MODEL_BASES_JSON: ${NEXUS_ALLOWED_LOCAL_MODEL_BASES_JSON:-[]}
+      NEXUS_STT_API_KEY: ${NEXUS_STT_API_KEY:-}
+      NEXUS_STT_API_BASE: ${NEXUS_STT_API_BASE:-https://api.openai.com/v1}
+      NEXUS_STT_MODEL: ${NEXUS_STT_MODEL:-whisper-1}
+      NEXUS_TTS_API_KEY: ${NEXUS_TTS_API_KEY:-}
+      NEXUS_TTS_API_BASE: ${NEXUS_TTS_API_BASE:-https://api.openai.com/v1}
+      NEXUS_TTS_MODEL: ${NEXUS_TTS_MODEL:-tts-1}
+      NEXUS_TTS_VOICE: ${NEXUS_TTS_VOICE:-alloy}
+      NEXUS_REGISTRATION_TOKEN: ${NEXUS_REGISTRATION_TOKEN:-}
+      NEXUS_PUBLIC_SIGNUP_ENABLED: ${NEXUS_PUBLIC_SIGNUP_ENABLED:-true}
+      NEXUS_NEW_TENANT_CREDIT_USD: ${NEXUS_NEW_TENANT_CREDIT_USD:-10}
+      NEXUS_BILLING_PLAN_LIMITS_JSON: ${NEXUS_BILLING_PLAN_LIMITS_JSON:-}
+      NEXUS_BILLING_PRODUCT_PLANS_JSON: ${NEXUS_BILLING_PRODUCT_PLANS_JSON:-'{}'}
+      NEXUS_BILLING_PRODUCT_CREDITS_JSON: ${NEXUS_BILLING_PRODUCT_CREDITS_JSON:-'{}'}
+      NEXUS_LICENSE_KEY: ${NEXUS_LICENSE_KEY:-}
+      NEXUS_LICENSE_PUBLIC_KEY: ${NEXUS_LICENSE_PUBLIC_KEY:-}
+      NEXUS_STRIPE_WEBHOOK_SECRET: ${NEXUS_STRIPE_WEBHOOK_SECRET:-}
+      NEXUS_POLAR_WEBHOOK_SECRET: ${NEXUS_POLAR_WEBHOOK_SECRET:-}
+      NEXUS_VIETQR_WEBHOOK_SECRET: ${NEXUS_VIETQR_WEBHOOK_SECRET:-}
+      # Single-user machine: the app opens without sign-in. Never enable this on a shared or public server.
+      NEXUS_LOCAL_MODE: ${NEXUS_LOCAL_MODE:-true}
+      NEXUS_RELOAD: ${NEXUS_RELOAD:-true}
+      NEXUS_SUBSCRIPTIONS_DIR: /var/lib/nexus/subscriptions
+      NEXUS_MOUNTED_SUBSCRIPTIONS_ENABLED: ${NEXUS_MOUNTED_SUBSCRIPTIONS_ENABLED:-true}
+      NEXUS_WORKER_LOG_LEVEL: ${NEXUS_WORKER_LOG_LEVEL:-INFO}
+      NEXUS_WORKER_CONCURRENCY: ${NEXUS_WORKER_CONCURRENCY:-2}
+      # Optional price overrides. Models without a price (and every subscription plan) are recorded as SUBSCRIPTION_INCLUDED at $0.
+      NEXUS_MODEL_RATES_JSON: ${NEXUS_MODEL_RATES_JSON:-'{}'}
+      NEXUS_OUTPUT_SCHEMAS_JSON: ${NEXUS_OUTPUT_SCHEMAS_JSON:-'{}'}
+      OTEL_SDK_DISABLED: "true"
+      ANONYMIZED_TELEMETRY: "false"
+      DO_NOT_TRACK: "true"
+      CREWAI_DISABLE_TELEMETRY: "true"
+      LITELLM_TELEMETRY_DISABLED: "true"
+      LITELLM_OFFLINE_MODE: "true"
+    # Run through `sh` because a bind-mounted source tree shadows the image's executable bit.
+    entrypoint: ["sh", "/workspace/apps/api/start.sh"]
+    command: ["api"]
+    ports:
+      - "127.0.0.1:${NEXUS_API_PORT:-8000}:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${NEXUS_COMPUTER_ROOT:-/tmp/nexus-computers}:${NEXUS_COMPUTER_ROOT:-/tmp/nexus-computers}
+      - ./data/artifacts:/var/lib/nexus/artifacts
+      # Live source for instant iteration (uvicorn --reload watches these). Remove for an image-only deployment.
+      - ./apps/api:/workspace/apps/api
+      - ./packages:/workspace/packages
+      # Read-only subscription logins; point NEXUS_*_HOME at ~/.codex, ~/.claude, ... or copy files into ./data/subscriptions/<name>/.
+      - ${NEXUS_CODEX_HOME:-./data/subscriptions/codex}:/var/lib/nexus/subscriptions/codex:ro
+      - ${NEXUS_CLAUDE_HOME:-./data/subscriptions/claude}:/var/lib/nexus/subscriptions/claude:ro
+      - ${NEXUS_GEMINI_HOME:-./data/subscriptions/gemini}:/var/lib/nexus/subscriptions/gemini:ro
+      - ${NEXUS_COPILOT_HOME:-./data/subscriptions/github-copilot}:/var/lib/nexus/subscriptions/github-copilot:ro
+    group_add: ["${NEXUS_DOCKER_GID:-0}"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      qdrant: {condition: service_started}
+      sandbox-supervisor: {condition: service_healthy}
+    networks: [app, data]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 60s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    entrypoint: ["sh", "/workspace/apps/api/start.sh"]
+    command: ["worker"]
+    environment: *app_environment
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${NEXUS_COMPUTER_ROOT:-/tmp/nexus-computers}:${NEXUS_COMPUTER_ROOT:-/tmp/nexus-computers}
+      - ./data/artifacts:/var/lib/nexus/artifacts
+      - ./apps/api:/workspace/apps/api
+      - ./packages:/workspace/packages
+    group_add: ["${NEXUS_DOCKER_GID:-0}"]
+    depends_on:
+      api: {condition: service_healthy}
+    networks: [app, data]
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: runner
+      args:
+        NEXT_PUBLIC_NEXUS_API_WS_URL: ${NEXT_PUBLIC_NEXUS_API_WS_URL:-ws://localhost:${NEXUS_API_PORT:-8000}}
+    environment:
+      NEXUS_BRAND_NAME: ${NEXUS_BRAND_NAME:-NexusAgent Studio}
+      NEXUS_API_INTERNAL_URL: http://api:8000
+      NEXT_TELEMETRY_DISABLED: "1"
+      OTEL_SDK_DISABLED: "true"
+      CREWAI_DISABLE_TELEMETRY: "true"
+    ports:
+      - "127.0.0.1:${NEXUS_WEB_PORT:-3000}:3000"
+    depends_on:
+      api: {condition: service_healthy}
+    networks: [app]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    restart: unless-stopped
+
+networks:
+  app:
+  data:
+    internal: true
+
+volumes:
+  nexus_postgres_data:
+  nexus_redis_data:
+  nexus_qdrant_data:

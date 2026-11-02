@@ -1,0 +1,13 @@
+export type Locale = "vi" | "en";
+export type Translate = (key: string, vars?: Record<string, string | number>) => string;
+export const LOCALES: ReadonlyArray<{ id: Locale; label: string }>;
+export const DEFAULT_LOCALE: Locale;
+export const LOCALE_STORAGE_KEY: string;
+export function isLocale(value: unknown): value is Locale;
+export function resolveLocale(value: unknown): Locale;
+export function format(text: string, vars?: Record<string, string | number>): string;
+export function createTranslator(locale: unknown): Translate;
+export function loadLocale(storage: Pick<Storage, "getItem">): Locale;
+export function saveLocale(storage: Pick<Storage, "setItem">, locale: Locale): void;
+export function statusLabel(t: Translate, status: string): string;
+export function dateLocale(locale: unknown): string;

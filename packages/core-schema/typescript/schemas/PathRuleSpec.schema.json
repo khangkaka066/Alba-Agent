@@ -1,0 +1,25 @@
+{
+  "additionalProperties": false,
+  "description": "A content or coding standard injected for agents writing to matching artifact paths.",
+  "properties": {
+    "pattern": {
+      "maxLength": 200,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_*./-]+$",
+      "title": "Pattern",
+      "type": "string"
+    },
+    "rule": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Rule",
+      "type": "string"
+    }
+  },
+  "required": [
+    "pattern",
+    "rule"
+  ],
+  "title": "PathRuleSpec",
+  "type": "object"
+}

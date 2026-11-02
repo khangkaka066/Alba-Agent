@@ -1,0 +1,104 @@
+{
+  "$defs": {
+    "NodePosition": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "NodePosition",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Public, tenant-neutral gallery view of a seeded template.",
+  "properties": {
+    "category": {
+      "title": "Category",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "has_bot": {
+      "title": "Has Bot",
+      "type": "boolean"
+    },
+    "has_routine": {
+      "title": "Has Routine",
+      "type": "boolean"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "layout": {
+      "additionalProperties": {
+        "$ref": "#/$defs/NodePosition"
+      },
+      "title": "Layout",
+      "type": "object"
+    },
+    "readiness_notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Readiness Notes",
+      "type": "array"
+    },
+    "required_connections": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Required Connections",
+      "type": "array"
+    },
+    "summary": {
+      "title": "Summary",
+      "type": "string"
+    },
+    "tags": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tags",
+      "type": "array"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "workflow": {
+      "additionalProperties": true,
+      "title": "Workflow",
+      "type": "object"
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "summary",
+    "description",
+    "category",
+    "tags",
+    "required_connections",
+    "readiness_notes",
+    "workflow",
+    "layout",
+    "has_bot",
+    "has_routine"
+  ],
+  "title": "TemplateCatalogEntry",
+  "type": "object"
+}

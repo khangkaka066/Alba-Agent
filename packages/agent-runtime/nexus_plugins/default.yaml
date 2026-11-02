@@ -1,0 +1,18 @@
+# The plugins a NexusAgent process boots, in order. Rows are matched by id, so a patch file can replace a row's
+# config, disable it (`disabled: true`), insert another or remove one. Print the result with:
+#   python -m nexus_plugins dump-config [--patch file.yaml ...]
+plugins:
+  - id: infrastructure
+    plugin: infrastructure.runtime
+  - id: llm
+    plugin: llm.gateway
+  - id: checkpoints
+    plugin: memory.checkpoints
+  - id: tools
+    plugin: tools.registry
+  - id: sandbox
+    plugin: sandbox.supervisor
+  - id: sandbox-docker
+    plugin: sandbox.docker
+  - id: sandbox-runner
+    plugin: sandbox.runner

@@ -1,0 +1,57 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "action_description": {
+      "minLength": 1,
+      "title": "Action Description",
+      "type": "string"
+    },
+    "boundary_rules": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Boundary Rules",
+      "type": "array"
+    },
+    "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "kind": {
+      "const": "approval",
+      "default": "approval",
+      "title": "Kind",
+      "type": "string"
+    },
+    "label": {
+      "minLength": 1,
+      "title": "Label",
+      "type": "string"
+    },
+    "required_role": {
+      "default": "admin",
+      "enum": [
+        "owner",
+        "admin",
+        "builder"
+      ],
+      "title": "Required Role",
+      "type": "string"
+    },
+    "timeout_seconds": {
+      "default": 86400,
+      "minimum": 60,
+      "title": "Timeout Seconds",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "id",
+    "label",
+    "action_description"
+  ],
+  "title": "ApprovalGateNodeSpec",
+  "type": "object"
+}

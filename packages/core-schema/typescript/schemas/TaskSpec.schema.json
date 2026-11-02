@@ -1,0 +1,74 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "agent_id": {
+      "minLength": 1,
+      "title": "Agent Id",
+      "type": "string"
+    },
+    "context_task_ids": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Context Task Ids",
+      "type": "array"
+    },
+    "description": {
+      "minLength": 1,
+      "title": "Description",
+      "type": "string"
+    },
+    "expected_artifact_paths": {
+      "default": [],
+      "items": {
+        "maxLength": 240,
+        "minLength": 1,
+        "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}(/[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}){0,7}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Expected Artifact Paths",
+      "type": "array"
+    },
+    "expected_output": {
+      "minLength": 1,
+      "title": "Expected Output",
+      "type": "string"
+    },
+    "id": {
+      "maxLength": 100,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "title": "Id",
+      "type": "string"
+    },
+    "output_schema": {
+      "minLength": 1,
+      "title": "Output Schema",
+      "type": "string"
+    },
+    "output_schema_json": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Output Schema Json"
+    }
+  },
+  "required": [
+    "id",
+    "agent_id",
+    "description",
+    "expected_output",
+    "output_schema"
+  ],
+  "title": "TaskSpec",
+  "type": "object"
+}

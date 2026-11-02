@@ -1,0 +1,113 @@
+{
+  "$defs": {
+    "RouteSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "field_path": {
+          "minLength": 1,
+          "title": "Field Path",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "title": "Name",
+          "type": "string"
+        },
+        "operator": {
+          "enum": [
+            "eq",
+            "ne",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "exists"
+          ],
+          "title": "Operator",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "name",
+        "field_path",
+        "operator"
+      ],
+      "title": "RouteSpec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "artifact_gate": {
+      "default": false,
+      "title": "Artifact Gate",
+      "type": "boolean"
+    },
+    "default_route": {
+      "minLength": 1,
+      "title": "Default Route",
+      "type": "string"
+    },
+    "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "kind": {
+      "const": "router",
+      "default": "router",
+      "title": "Kind",
+      "type": "string"
+    },
+    "label": {
+      "minLength": 1,
+      "title": "Label",
+      "type": "string"
+    },
+    "max_loop_iterations": {
+      "default": 0,
+      "maximum": 5,
+      "minimum": 0,
+      "title": "Max Loop Iterations",
+      "type": "integer"
+    },
+    "routes": {
+      "items": {
+        "$ref": "#/$defs/RouteSpec"
+      },
+      "minItems": 1,
+      "title": "Routes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "label",
+    "routes",
+    "default_route"
+  ],
+  "title": "RouterNodeSpec",
+  "type": "object"
+}

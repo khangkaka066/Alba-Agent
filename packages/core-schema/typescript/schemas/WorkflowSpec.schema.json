@@ -1,0 +1,1003 @@
+{
+  "$defs": {
+    "AgentSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "backstory": {
+          "default": "",
+          "title": "Backstory",
+          "type": "string"
+        },
+        "goal": {
+          "minLength": 1,
+          "title": "Goal",
+          "type": "string"
+        },
+        "guardrails": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Guardrails",
+          "type": "array"
+        },
+        "id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "knowledge_capsule_ids": {
+          "default": [],
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Knowledge Capsule Ids",
+          "type": "array"
+        },
+        "max_iterations": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Max Iterations",
+          "type": "integer"
+        },
+        "model": {
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "role": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Role",
+          "type": "string"
+        },
+        "skill_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Skill Ids",
+          "type": "array"
+        },
+        "temperature": {
+          "default": 0.2,
+          "maximum": 2.0,
+          "minimum": 0.0,
+          "title": "Temperature",
+          "type": "number"
+        },
+        "tier": {
+          "anyOf": [
+            {
+              "enum": [
+                "director",
+                "lead",
+                "specialist"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tier"
+        },
+        "tool_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tool Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "role",
+        "goal",
+        "model"
+      ],
+      "title": "AgentSpec",
+      "type": "object"
+    },
+    "ApprovalGateNodeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "action_description": {
+          "minLength": 1,
+          "title": "Action Description",
+          "type": "string"
+        },
+        "boundary_rules": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Boundary Rules",
+          "type": "array"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "approval",
+          "default": "approval",
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "required_role": {
+          "default": "admin",
+          "enum": [
+            "owner",
+            "admin",
+            "builder"
+          ],
+          "title": "Required Role",
+          "type": "string"
+        },
+        "timeout_seconds": {
+          "default": 86400,
+          "minimum": 60,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "action_description"
+      ],
+      "title": "ApprovalGateNodeSpec",
+      "type": "object"
+    },
+    "AutoGenSandboxNodeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "coder_instructions": {
+          "default": "",
+          "title": "Coder Instructions",
+          "type": "string"
+        },
+        "coder_model": {
+          "minLength": 1,
+          "title": "Coder Model",
+          "type": "string"
+        },
+        "computer_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Computer Id"
+        },
+        "consensus_config": {
+          "$ref": "#/$defs/ConsensusConfigSpec"
+        },
+        "expected_artifact_paths": {
+          "default": [],
+          "items": {
+            "maxLength": 240,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}(/[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}){0,7}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Expected Artifact Paths",
+          "type": "array"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "join": {
+          "default": "any",
+          "enum": [
+            "any",
+            "all"
+          ],
+          "title": "Join",
+          "type": "string"
+        },
+        "kind": {
+          "const": "sandbox",
+          "default": "sandbox",
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "max_rounds": {
+          "default": 8,
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Max Rounds",
+          "type": "integer"
+        },
+        "requires_visual_evidence": {
+          "default": false,
+          "title": "Requires Visual Evidence",
+          "type": "boolean"
+        },
+        "reviewer_instructions": {
+          "default": "",
+          "title": "Reviewer Instructions",
+          "type": "string"
+        },
+        "reviewer_model": {
+          "minLength": 1,
+          "title": "Reviewer Model",
+          "type": "string"
+        },
+        "sandbox_provider": {
+          "default": "docker",
+          "enum": [
+            "docker",
+            "e2b",
+            "daytona"
+          ],
+          "title": "Sandbox Provider",
+          "type": "string"
+        },
+        "skill_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Skill Ids",
+          "type": "array"
+        },
+        "timeout_seconds": {
+          "default": 300,
+          "maximum": 3600,
+          "minimum": 1,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        },
+        "tool_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tool Ids",
+          "type": "array"
+        },
+        "verification_command": {
+          "minLength": 1,
+          "title": "Verification Command",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "coder_model",
+        "reviewer_model",
+        "verification_command"
+      ],
+      "title": "AutoGenSandboxNodeSpec",
+      "type": "object"
+    },
+    "ConsensusConfigSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "arbiter_model": {
+          "default": "",
+          "title": "Arbiter Model",
+          "type": "string"
+        },
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "min_agreement_threshold": {
+          "default": 0.85,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Min Agreement Threshold",
+          "type": "number"
+        },
+        "models": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 0,
+          "title": "Models",
+          "type": "array"
+        }
+      },
+      "title": "ConsensusConfigSpec",
+      "type": "object"
+    },
+    "CrewNodeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "agents": {
+          "items": {
+            "$ref": "#/$defs/AgentSpec"
+          },
+          "minItems": 1,
+          "title": "Agents",
+          "type": "array"
+        },
+        "consensus_config": {
+          "$ref": "#/$defs/ConsensusConfigSpec"
+        },
+        "expected_artifact_paths": {
+          "default": [],
+          "items": {
+            "maxLength": 240,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}(/[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}){0,7}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Expected Artifact Paths",
+          "type": "array"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "join": {
+          "default": "any",
+          "enum": [
+            "any",
+            "all"
+          ],
+          "title": "Join",
+          "type": "string"
+        },
+        "kind": {
+          "const": "crew",
+          "default": "crew",
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "manager_agent_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Manager Agent Id"
+        },
+        "process": {
+          "default": "sequential",
+          "enum": [
+            "sequential",
+            "hierarchical"
+          ],
+          "title": "Process",
+          "type": "string"
+        },
+        "requires_visual_evidence": {
+          "default": false,
+          "title": "Requires Visual Evidence",
+          "type": "boolean"
+        },
+        "tasks": {
+          "items": {
+            "$ref": "#/$defs/TaskSpec"
+          },
+          "minItems": 1,
+          "title": "Tasks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "agents",
+        "tasks"
+      ],
+      "title": "CrewNodeSpec",
+      "type": "object"
+    },
+    "LearningEdgeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_code_patterns": {
+          "default": false,
+          "title": "Allow Code Patterns",
+          "type": "boolean"
+        },
+        "allow_heuristics": {
+          "default": true,
+          "title": "Allow Heuristics",
+          "type": "boolean"
+        },
+        "require_human_approval": {
+          "default": false,
+          "title": "Require Human Approval",
+          "type": "boolean"
+        },
+        "scope": {
+          "$ref": "#/$defs/PropagationScope",
+          "default": "CREW_LOCAL"
+        },
+        "source_agent_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Source Agent Id",
+          "type": "string"
+        },
+        "target_agent_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Target Agent Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_agent_id",
+        "target_agent_id"
+      ],
+      "title": "LearningEdgeSpec",
+      "type": "object"
+    },
+    "NodePosition": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "NodePosition",
+      "type": "object"
+    },
+    "PathRuleSpec": {
+      "additionalProperties": false,
+      "description": "A content or coding standard injected for agents writing to matching artifact paths.",
+      "properties": {
+        "pattern": {
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_*./-]+$",
+          "title": "Pattern",
+          "type": "string"
+        },
+        "rule": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Rule",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pattern",
+        "rule"
+      ],
+      "title": "PathRuleSpec",
+      "type": "object"
+    },
+    "PropagationScope": {
+      "enum": [
+        "AGENT_PRIVATE",
+        "CREW_LOCAL",
+        "WORKFLOW_SCOPED",
+        "WORKSPACE_QUARANTINE",
+        "WORKSPACE_VERIFIED"
+      ],
+      "title": "PropagationScope",
+      "type": "string"
+    },
+    "RAGNodeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "rag",
+          "default": "rag",
+          "title": "Kind",
+          "type": "string"
+        },
+        "knowledge_base_id": {
+          "format": "uuid",
+          "title": "Knowledge Base Id",
+          "type": "string"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "mcp_server_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Mcp Server Ids",
+          "type": "array"
+        },
+        "query_template": {
+          "minLength": 1,
+          "title": "Query Template",
+          "type": "string"
+        },
+        "top_k": {
+          "default": 5,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Top K",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "knowledge_base_id",
+        "query_template"
+      ],
+      "title": "RAGNodeSpec",
+      "type": "object"
+    },
+    "RouteSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "field_path": {
+          "minLength": 1,
+          "title": "Field Path",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "title": "Name",
+          "type": "string"
+        },
+        "operator": {
+          "enum": [
+            "eq",
+            "ne",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "exists"
+          ],
+          "title": "Operator",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "name",
+        "field_path",
+        "operator"
+      ],
+      "title": "RouteSpec",
+      "type": "object"
+    },
+    "RouterNodeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_gate": {
+          "default": false,
+          "title": "Artifact Gate",
+          "type": "boolean"
+        },
+        "default_route": {
+          "minLength": 1,
+          "title": "Default Route",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "router",
+          "default": "router",
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "max_loop_iterations": {
+          "default": 0,
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Max Loop Iterations",
+          "type": "integer"
+        },
+        "routes": {
+          "items": {
+            "$ref": "#/$defs/RouteSpec"
+          },
+          "minItems": 1,
+          "title": "Routes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "routes",
+        "default_route"
+      ],
+      "title": "RouterNodeSpec",
+      "type": "object"
+    },
+    "StartNodeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "input_schema": {
+          "additionalProperties": true,
+          "title": "Input Schema",
+          "type": "object"
+        },
+        "kind": {
+          "const": "start",
+          "default": "start",
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "default": "Start",
+          "title": "Label",
+          "type": "string"
+        },
+        "schedule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schedule"
+        },
+        "trigger_type": {
+          "default": "manual",
+          "enum": [
+            "manual",
+            "webhook",
+            "schedule",
+            "bot"
+          ],
+          "title": "Trigger Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "StartNodeSpec",
+      "type": "object"
+    },
+    "TaskSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_id": {
+          "minLength": 1,
+          "title": "Agent Id",
+          "type": "string"
+        },
+        "context_task_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Context Task Ids",
+          "type": "array"
+        },
+        "description": {
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "expected_artifact_paths": {
+          "default": [],
+          "items": {
+            "maxLength": 240,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}(/[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}){0,7}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Expected Artifact Paths",
+          "type": "array"
+        },
+        "expected_output": {
+          "minLength": 1,
+          "title": "Expected Output",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "output_schema": {
+          "minLength": 1,
+          "title": "Output Schema",
+          "type": "string"
+        },
+        "output_schema_json": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Schema Json"
+        }
+      },
+      "required": [
+        "id",
+        "agent_id",
+        "description",
+        "expected_output",
+        "output_schema"
+      ],
+      "title": "TaskSpec",
+      "type": "object"
+    },
+    "WorkflowEdgeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "loop_back": {
+          "default": false,
+          "title": "Loop Back",
+          "type": "boolean"
+        },
+        "route": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Route"
+        },
+        "source": {
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "target": {
+          "minLength": 1,
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "target"
+      ],
+      "title": "WorkflowEdgeSpec",
+      "type": "object"
+    },
+    "WorkflowModesSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "channels": {
+          "default": [],
+          "items": {
+            "enum": [
+              "tiktok",
+              "facebook",
+              "youtube"
+            ],
+            "type": "string"
+          },
+          "maxItems": 3,
+          "title": "Channels",
+          "type": "array"
+        },
+        "path_rules": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PathRuleSpec"
+          },
+          "maxItems": 64,
+          "title": "Path Rules",
+          "type": "array"
+        },
+        "rigor": {
+          "default": "minimal",
+          "enum": [
+            "minimal",
+            "standard",
+            "full_studio"
+          ],
+          "title": "Rigor",
+          "type": "string"
+        }
+      },
+      "title": "WorkflowModesSpec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "edges": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/WorkflowEdgeSpec"
+      },
+      "title": "Edges",
+      "type": "array"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "layout": {
+      "additionalProperties": {
+        "$ref": "#/$defs/NodePosition"
+      },
+      "title": "Layout",
+      "type": "object"
+    },
+    "learning_edges": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/LearningEdgeSpec"
+      },
+      "title": "Learning Edges",
+      "type": "array"
+    },
+    "modes": {
+      "$ref": "#/$defs/WorkflowModesSpec"
+    },
+    "name": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "nodes": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "approval": "#/$defs/ApprovalGateNodeSpec",
+            "crew": "#/$defs/CrewNodeSpec",
+            "rag": "#/$defs/RAGNodeSpec",
+            "router": "#/$defs/RouterNodeSpec",
+            "sandbox": "#/$defs/AutoGenSandboxNodeSpec",
+            "start": "#/$defs/StartNodeSpec"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/StartNodeSpec"
+          },
+          {
+            "$ref": "#/$defs/CrewNodeSpec"
+          },
+          {
+            "$ref": "#/$defs/AutoGenSandboxNodeSpec"
+          },
+          {
+            "$ref": "#/$defs/ApprovalGateNodeSpec"
+          },
+          {
+            "$ref": "#/$defs/RouterNodeSpec"
+          },
+          {
+            "$ref": "#/$defs/RAGNodeSpec"
+          }
+        ]
+      },
+      "minItems": 1,
+      "title": "Nodes",
+      "type": "array"
+    },
+    "tenant_id": {
+      "format": "uuid",
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "version": {
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "workspace_id": {
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "tenant_id",
+    "workspace_id",
+    "id",
+    "name",
+    "version",
+    "nodes"
+  ],
+  "title": "WorkflowSpec",
+  "type": "object"
+}

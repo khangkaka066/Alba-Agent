@@ -1,0 +1,38 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "digest": {
+      "title": "Digest",
+      "type": "string"
+    },
+    "draft_replies": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Draft Replies",
+      "type": "array"
+    },
+    "high_priority_actions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "High Priority Actions",
+      "type": "array"
+    },
+    "items_requiring_approval": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Items Requiring Approval",
+      "type": "array"
+    }
+  },
+  "required": [
+    "digest",
+    "high_priority_actions",
+    "draft_replies",
+    "items_requiring_approval"
+  ],
+  "title": "OperationsDigest",
+  "type": "object"
+}

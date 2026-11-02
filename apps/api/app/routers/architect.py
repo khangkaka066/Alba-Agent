@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.context import TenantContext, require_role
 from app.models import AgentSkill, AuditLog, TaskConversation, KnowledgeBase, KnowledgeCapsule, LearningPolicy, ModelCredential, TransferApplicationLog, TransferCircuitBreaker, Workflow, WorkflowRun
@@ -137,6 +138,17 @@ def _approved_chat_models(model_names: set[str]) -> tuple[str, ...]:
         if separator and provider and model not in NON_CHAT_MODELS and not any(part in model.lower() for part in NON_CHAT_NAME_PARTS):
             approved.append(full_name)
     return tuple(sorted(approved))
+
+
+async def free_workflow_name(session: AsyncSession, name: str, version: int) -> str:
+    """`name`, or `name (2)`, `name (3)`... when this workspace already has a workflow with that name and version."""
+    taken = set((await session.scalars(select(Workflow.name).where(Workflow.version == version, Workflow.name.startswith(name[:190], autoescape=True)))).all())
+    if name not in taken:
+        return name
+    counter = 2
+    while f"{name[:190]} ({counter})" in taken:
+        counter += 1
+    return f"{name[:190]} ({counter})"
 
 
 async def _workspace_context(request: Request, context: TenantContext, preferred_model: str | None = None) -> ArchitectWorkspaceContext:
@@ -274,6 +286,10 @@ async def generate_workflow(body: GenerateWorkflowRequest, request: Request, con
     services = get_services(request)
     run_id = uuid4()
     async with scoped_session(services.engine, context.tenant_id, context.workspace_id) as session:
+        free = await free_workflow_name(session, spec.name, spec.version)
+        if free != spec.name:  # asking for something similar twice must not fail on the name the Meta-Architect chose again
+            spec = spec.model_copy(update={"name": free})
+            document["name"] = free
         session.add(Workflow(
             id=spec.id, tenant_id=context.tenant_id, workspace_id=context.workspace_id,
             name=spec.name, version=spec.version, spec=document,

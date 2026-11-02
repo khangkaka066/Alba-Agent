@@ -1,232 +1,262 @@
 <p align="center">
-  <img src="docs/assets/nexusagent-logo.png" alt="NexusAgent" width="700">
+  <img src="docs/assets/nexusagent-logo.png" alt="NexusAgent" width="640">
 </p>
 
-<p align="center"><b>Dựng đội AI bằng kéo-thả. Người duyệt ở bước quan trọng.</b></p>
+<h3 align="center">A governed team of AI agents in your own sandbox.<br>Describe a goal. Agents plan, code and produce files. You approve the risky steps.</h3>
 
 <p align="center">
-  <a href="#-demo">Demo</a> ·
-  <a href="#-giao-diện">Giao diện</a> ·
-  <a href="#-tính-năng">Tính năng</a> ·
-  <a href="#-cài-đặt-nhanh">Cài đặt</a> ·
-  <a href="#-sử-dụng">Sử dụng</a> ·
-  <a href="https://github.com/khangkaka066/Nexus-Agent/issues">Issues</a>
+  <b>English</b> · <a href="README.vi.md">Tiếng Việt</a>
 </p>
 
 <p align="center">
+  <a href="https://github.com/khangkaka066/Nexus-Agent/actions/workflows/ci.yml"><img src="https://github.com/khangkaka066/Nexus-Agent/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/khangkaka066/Nexus-Agent?color=2f6fed" alt="MIT license"></a>
   <a href="https://github.com/khangkaka066/Nexus-Agent/stargazers"><img src="https://img.shields.io/github/stars/khangkaka066/Nexus-Agent?style=flat&logo=github&color=2f6fed" alt="Stars"></a>
   <a href="https://github.com/khangkaka066/Nexus-Agent/forks"><img src="https://img.shields.io/github/forks/khangkaka066/Nexus-Agent?style=flat&logo=github&color=2f6fed" alt="Forks"></a>
   <a href="https://github.com/khangkaka066/Nexus-Agent/issues"><img src="https://img.shields.io/github/issues/khangkaka066/Nexus-Agent?style=flat&color=2f6fed" alt="Issues"></a>
-  <a href="https://github.com/khangkaka066/Nexus-Agent/pulls"><img src="https://img.shields.io/github/issues-pr/khangkaka066/Nexus-Agent?style=flat&color=2f6fed" alt="Pull requests"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/khangkaka066/Nexus-Agent?style=flat&color=2f6fed" alt="License"></a>
+  <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-2f6fed?style=flat" alt="PRs welcome"></a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/python-3.11+-2f6fed?style=flat&logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/Next.js-15-2f6fed?style=flat&logo=next.js&logoColor=white" alt="Next.js">
+  <img src="https://img.shields.io/badge/python-3.11+-2f6fed?style=flat&logo=python&logoColor=white" alt="Python 3.11+">
   <img src="https://img.shields.io/badge/FastAPI-2f6fed?style=flat&logo=fastapi&logoColor=white" alt="FastAPI">
-  <img src="https://img.shields.io/badge/Docker-compose-2f6fed?style=flat&logo=docker&logoColor=white" alt="Docker">
+  <img src="https://img.shields.io/badge/Next.js-15-2f6fed?style=flat&logo=next.js&logoColor=white" alt="Next.js 15">
+  <img src="https://img.shields.io/badge/PostgreSQL-RLS-2f6fed?style=flat&logo=postgresql&logoColor=white" alt="PostgreSQL with row-level security">
+  <img src="https://img.shields.io/badge/Docker-sandbox-2f6fed?style=flat&logo=docker&logoColor=white" alt="Docker sandbox">
+  <img src="https://img.shields.io/badge/MCP-ready-2f6fed?style=flat" alt="MCP">
 </p>
-
----
-
-## 🎬 Demo
 
 <p align="center">
-<img src="docs/media/nexus-run.gif" alt="NexusAgent: đội agent chạy, chờ duyệt, ra kết quả" width="860"/>
+  <a href="#-quick-start">Quick start</a> ·
+  <a href="#-see-it">Screenshots</a> ·
+  <a href="#-what-you-get">Features</a> ·
+  <a href="#-agent-studios">Agent studios</a> ·
+  <a href="#-connect-a-model">Models</a> ·
+  <a href="#-roadmap-and-honest-limits">Roadmap</a> ·
+  <a href="CONTRIBUTING.md">Contribute</a>
 </p>
 
-<p align="center"><sub>Bản quay thật: gửi yêu cầu → đội agent phân tích và viết báo cáo → dừng chờ quản lý duyệt → <b>Allow once</b> → hoàn tất (2.536 token, ~$0,002).</sub></p>
+---
+
+## Why NexusAgent
+
+Most multi-agent projects are libraries: you write the orchestration, the sandbox, the review step and the UI yourself. NexusAgent is the finished product built on top of them. It is a self-hosted web and desktop app where you type a goal, an AI architect designs a whole **team** of agents for it, the team runs inside an isolated Docker computer, and a human approves the sensitive steps.
+
+- **Team, not chatbot.** A request becomes a structured team: directors, department leads and specialists, with a quality gate that sends missing work back to the right department.
+- **Safe by design.** Code runs in a locked-down container. Sensitive actions stop at an approval card. Every decision is written to an audit log.
+- **Honest results.** A team that claims a file it never wrote fails with a clear message (media is never invented) instead of finishing as if it had delivered.
+- **Bring any model.** Use your ChatGPT, Claude, Gemini or GitHub Copilot plan, an API key, any OpenAI-compatible gateway, or a local Ollama model.
+- **Yours.** Self-hosted, MIT licensed, no telemetry leaves your machine.
 
 ---
 
-## 🖼️ Giao diện
+## 🖼️ See it
 
-### 1 · Workflow Studio — dựng quy trình
-Kéo-thả node hoặc mô tả bằng lời để AI dựng cả đội agent.
-<p align="center"><img src="docs/screenshots/studio.png" alt="Workflow Studio" width="860"/></p>
+<p align="center">
+  <img src="docs/media/nexus-tour.gif" alt="NexusAgent product tour: start a task, choose a model, review the files, hand off to the next team" width="860">
+</p>
+<p align="center"><sub>A tour of the real interface (frames from the screenshots below).</sub></p>
 
-### 2 · Teammates — đồng đội AI
-Có trí nhớ, routine theo lịch và thẻ phê duyệt.
-<p align="center"><img src="docs/screenshots/teammates.png" alt="Teammates" width="860"/></p>
-
-### 3 · Intelligence — đo lường & tiết kiệm
-Tác động tri thức chuyển giao, bản vá prompt, gợi ý hạ chi phí model.
-<p align="center"><img src="docs/screenshots/intelligence.png" alt="Intelligence" width="860"/></p>
-
----
-
-## ✨ Tính năng
-
-| | Tính năng | Làm được gì |
-|---|---|---|
-| 🧩 | **Workflow Studio** | Kéo-thả node trên canvas, xuất bản thành REST API hoặc WebApp nhúng |
-| 🤝 | **Đa-agent** | Nhiều agent cộng tác theo vai trò, mỗi bước có checkpoint để dừng/chạy tiếp |
-| 💻 | **Code Sandbox** | Agent viết code, chạy trong container cô lập, tự sửa lỗi đến khi chạy sạch |
-| 🧑‍💼 | **Đồng đội AI** | Bot có trí nhớ, công cụ, routine theo lịch và chat bằng giọng nói |
-| 🖥️ | **Computer Sandbox** | Terminal, file, trình duyệt trong Docker đã siết bảo mật |
-| ✅ | **Phê duyệt** | Dừng ở bước nhạy cảm, hiện thẻ `Allow once` / `Always allow` / `Deny`, ghi audit log |
-| 📚 | **RAG** | Nạp PDF/DOCX/MD/CSV, tìm kiếm lai, tách biệt dữ liệu từng tenant |
-| 🏢 | **Đa-tenant** | Cô lập bằng Row-Level Security, RBAC, API key, BYOK, tính chi phí |
-
-### 🚀 6 điểm khác biệt
-
-| # | Tên | Một câu |
-|---|-----|---------|
-| 1 | Learning Transfer | Agent học từ nhau, có tường lửa phạm vi và tự thu hồi tri thức gây hại |
-| 2 | Self-Healing Prompt | Góp ý khi duyệt → tự đề xuất bản vá prompt dạng git-diff |
-| 3 | Time-Travel | Quay lại bất kỳ checkpoint, sửa và chạy lại, hoặc chạy A/B hai nhánh |
-| 4 | FinOps | Gợi ý hạ sang model rẻ hơn khi chất lượng tương đương ≥ 95% |
-| 5 | Swarm Consensus | Nhiều model phản biện chéo, độ tin cậy thấp thì chuyển cho người duyệt |
-| 6 | Meta-Architect | Mô tả bằng lời → sinh workflow hoàn chỉnh |
-| 7 | Team Evolution | Đội agent tự chẩn đoán điểm nghẽn, thêm/tách/gộp/cắt thành viên, chấm điểm từng thế hệ và tự quay lui khi tệ hơn |
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/home.png" alt="Start a task from one prompt"><br><sub><b>One prompt.</b> Describe the result; pick a model and a team size.</sub></td>
+    <td width="50%"><img src="docs/screenshots/work.png" alt="Files, download and hand-off buttons"><br><sub><b>Results next to the chat.</b> Preview, download, and hand the files to the next team.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/work-code.png" alt="Code deliverable with a diff view"><br><sub><b>Code as a diff.</b> Accept or reject a file into your project folder.</sub></td>
+    <td><img src="docs/screenshots/canvas.png" alt="A studio team on the visual canvas"><br><sub><b>The team on a canvas.</b> Directors, departments, sandboxes, quality gate and sign-off.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/model-picker.png" alt="Model selector"><br><sub><b>Switch model on the fly.</b> Connected models, well-known ones, or any model id.</sub></td>
+    <td><img src="docs/screenshots/settings.png" alt="AI settings with subscription connectors"><br><sub><b>Use the plan you already pay for.</b> Claude, ChatGPT, Copilot, Gemini or an API key.</sub></td>
+  </tr>
+</table>
 
 ---
 
-## 🏗️ Kiến trúc
+## ⚡ Quick start
 
-```text
- Web (Next.js)  ──►  API (FastAPI)  ──►  Worker (Celery)
-                        │                    │
-         ┌──────────────┼────────────────────┤
-         ▼              ▼                    ▼
-    PostgreSQL        Redis             Sandbox (Docker)
-    (RLS)                               Qdrant (RAG)
-```
-
-| Thư mục | Vai trò |
-|---------|---------|
-| `apps/web` | Giao diện |
-| `apps/api` | API, xác thực, thanh toán, worker |
-| `packages/agent-runtime` | Chạy workflow, time-travel, consensus |
-| `packages/learning-transfer` | Học chuyển giao, self-healing |
-| `packages/model-gateway` | Định tuyến model, chi phí, FinOps |
-| `packages/computer-sandbox` | Sandbox Docker |
-| `packages/rag-engine`, `mcp-hub` | RAG và công cụ MCP/OpenAPI |
-
----
-
-## ⚡ Cài đặt nhanh
-
-**Cần:** Docker Compose và một gói AI đang dùng (ChatGPT, Claude, Gemini, GitHub Copilot) *hoặc* một API key.
+You need Docker Compose, and either an AI subscription you already use (ChatGPT, Claude, Gemini, GitHub Copilot) or an API key.
 
 ```bash
 git clone https://github.com/khangkaka066/Nexus-Agent.git && cd Nexus-Agent
 cp .env.example .env
-openssl rand -hex 32      # dán vào: NEXUS_POSTGRES_PASSWORD, NEXUS_RUNTIME_DB_PASSWORD,
-                          #          NEXUS_REDIS_PASSWORD, NEXUS_SECRET_KEY, NEXUS_API_KEY_PEPPER
-openssl rand -base64 32   # dán vào: NEXUS_CREDENTIAL_ENCRYPTION_KEY_BASE64
+openssl rand -hex 32      # paste into: NEXUS_POSTGRES_PASSWORD, NEXUS_RUNTIME_DB_PASSWORD,
+                          #             NEXUS_REDIS_PASSWORD, NEXUS_SECRET_KEY, NEXUS_API_KEY_PEPPER
+openssl rand -base64 32   # paste into: NEXUS_CREDENTIAL_ENCRYPTION_KEY_BASE64
 docker compose up -d --build
 ```
 
-Mở **http://localhost:3000** (API ở `:8000`). Linux: đặt `NEXUS_DOCKER_GID` theo group của `/var/run/docker.sock`, và `sudo chown -R 10001 data/artifacts` để container ghi được kết quả.
+Open **http://localhost:3000**. There is no sign-up in local mode: a *Local Workspace* is created for you. Then:
 
-Mã nguồn `apps/api` và `packages/` được mount vào container với `--reload`, nên sửa code là API tự nạp lại (worker cần `docker compose restart worker`). Kết quả chạy workflow nằm ở `./data/artifacts/`.
+1. **AI Settings → Models & keys:** connect a model (see [Connect a model](#-connect-a-model)).
+2. Type what you want on the **Work** screen and press Enter.
+3. Open the files the team produced, download them, or hand them to another team.
+
+On Linux set `NEXUS_DOCKER_GID` to the group of `/var/run/docker.sock` and run `sudo chown -R 10001 data/artifacts` so the containers can write results. The API and `packages/` are mounted with `--reload`; after changing runtime code run `docker compose restart worker`, which does not reload by itself.
+
+> **Local mode** (`NEXUS_LOCAL_MODE=true`, the default in `docker-compose.yml`) gives anyone who can reach the API an owner session. Use it on a personal machine only; the web and API ports are bound to `127.0.0.1`. On a shared or public server set `NEXUS_LOCAL_MODE=false` to require accounts.
 
 ---
 
-## 📖 Sử dụng
+## ✨ What you get
 
-```text
-1 Đăng ký ─► 2 Thêm key model ─► 3 Tạo workflow ─► 4 Chạy & duyệt ─► 5 Publish
+| | Feature | What it does |
+|---|---|---|
+| 🧠 | **AI Meta-Architect** | Turns a sentence into a compilable team: agents, tasks, tools, knowledge and approval gates. |
+| 🏢 | **Hierarchical teams** | Directors, department leads and specialists work in parallel waves with artifact contracts and a rework loop. |
+| 💻 | **Code sandbox** | Coder and reviewer agents run code in Docker (no network, dropped capabilities, resource limits) until it verifies. |
+| ✅ | **Human approval** | Sensitive steps pause on an *Allow once / Always allow / Deny* card; every decision is audited. |
+| 🗂️ | **Task history** | Every task and its conversation is saved; reopen it, delete it, or retry it. |
+| 🩺 | **Readable failures** | The failure card names the department and agent that stopped and the sanitised error. Retry only the failed step (finished departments are kept) or the whole team. |
+| 🔗 | **Team-to-team handoff** | Attach files from an earlier task with `@`, or press *Hand off* to start a marketing or analytics team from the results. |
+| 🔌 | **Model freedom** | Subscription connectors, API keys, OpenRouter, Groq, Mistral, DeepSeek, Ollama, LM Studio, vLLM and any OpenAI-compatible gateway; switch model per task. |
+| 📚 | **RAG + MCP** | Upload documents into a knowledge base (Qdrant), or connect MCP servers and OpenAPI tools. |
+| 🔁 | **Time travel** | Rewind to any checkpoint, edit state, resume, or fork two branches and compare them. |
+| 🧬 | **Learning & evolution** | Agents share vetted lessons under a scope firewall; teams diagnose bottlenecks and propose new generations, with rollback. |
+| 💸 | **FinOps** | Per-model cost tracking, plan usage recorded at $0, and cheaper-model suggestions once quality is verified. |
+| 🛡️ | **Multi-tenant security** | PostgreSQL row-level security on every table, RBAC, scoped API keys, encrypted credentials. |
+| 🌐 | **English and Vietnamese** | Switch the interface language at any time. |
+
+---
+
+## 🎬 Agent studios
+
+Ask for a product and NexusAgent builds a whole studio. Pick the size: *compact*, *by department* (~19 agents) or *full studio*.
+
+| Studio | Agents | Produces |
+|---|---:|---|
+| **Feature Film & Series Production** | 50 | Screenplay, storyboard and previs, design and casting, camera, sound, VFX, budget and schedule, animatic, distribution plan. |
+| **Full Game Development** | 49 | Design docs, art direction, code, build checks, playable preview. |
+| **Marketing & Social Publishing** | 41 | Strategy, copy, per-channel packages for TikTok, YouTube and Facebook, content calendar, KPI tracker, launch checklist. |
+| **Analytics & Optimization** | 34 | Measurement plan, KPI baseline from the data you attach, experiment plan, forecast, HTML report. |
+| **Full-Stack SaaS & AI Software Factory** | 32 | Architecture, backend and frontend code, tests, security review, release notes. |
+| **Cinematic Video & Documentary** | 26 | Research, script, storyboard, voice and sound plan, subtitles, contact sheet. |
+
+Plus four small templates: Data Science & Financial Analyst, Software QA & Security Auditor, Market Research & Content Engine, and an Executive Inbox & Operations teammate.
+
+---
+
+## 🏗️ How it works
+
+```mermaid
+flowchart LR
+    U([You]) -->|goal| A[Meta-Architect]
+    A -->|designs| T[Agent team]
+    T --> D1[Department crews]
+    T --> D2[Sandbox teams]
+    D1 --> Q{Quality gate}
+    D2 --> Q
+    Q -->|missing files| D1
+    Q -->|pass| H{{Human approval}}
+    H -->|approved| R[Files and report]
+    R -->|hand off| T2[Next team]
 ```
 
-1. **Mở ứng dụng:** vào http://localhost:3000, không cần đăng ký. Workspace *Local Workspace* được tạo sẵn.
-2. **Kết nối model:** vào **Cài đặt AI** (xem mục [Kết nối gói đăng ký](#-kết-nối-gói-đăng-ký-ai)). Không cần bảng giá: model chưa có giá chạy ở mức $0 (`SUBSCRIPTION_INCLUDED`).
-3. **Tạo workflow:** vào **Studio**, chọn template hoặc nhờ **Canvas Copilot**, ví dụ *"Nghiên cứu thị trường, có bước duyệt trước khi gửi báo cáo"*.
-4. **Chạy & duyệt:** bấm **Run**, theo dõi **Inspector** (suy nghĩ agent, terminal, màn hình), xử lý Approval Card.
-5. **Publish:** lấy REST endpoint hoặc mã nhúng.
-
-**Thêm đồng đội AI:** **Teammates** → tạo bot → gắn công cụ → viết routine Markdown (*"8h sáng mỗi ngày, tóm tắt tin ngành"*).
-**Thêm tri thức:** tải tài liệu vào Knowledge Base rồi gắn vào node RAG hoặc bot.
-
-**Gọi API:**
-
-```bash
-curl -H "Authorization: Bearer nx-sk-<API_KEY>" http://localhost:8000/v1/workflows
+```mermaid
+flowchart TB
+    Web["Web app (Next.js 15) and Desktop (Electron)"] --> API["API (FastAPI)"]
+    API --> PG[("PostgreSQL + RLS")]
+    API --> RD[("Redis: events")]
+    API --> WK["Worker (Celery)"]
+    WK --> RT["Runtime: CrewAI Flows + AutoGen"]
+    RT --> SB["Docker sandbox"]
+    RT --> QD[("Qdrant: RAG")]
+    RT --> GW["Model gateway (LiteLLM)"]
 ```
 
----
+The runtime is assembled from plugins: connections, model access, checkpoints, tools, and the sandbox supervisor with its Docker provider are independent plugins mounted by a small kernel (`python -m nexus_plugins dump-config` prints what a process boots). See [AGENTS.md](AGENTS.md) for the rules.
 
-## 🖥️ Giao diện và ứng dụng Desktop
-
-Mở **http://localhost:3000** là dùng được ngay, không cần đăng nhập (chế độ local, xem lưu ý bên dưới). Thanh bên chỉ có **Làm việc** và **Cài đặt AI**, kèm cây tệp của các tác vụ:
-
-| Mục | Làm gì |
-|-----|--------|
-| **Làm việc** | Một ô nhập trung tâm: *"Bạn muốn đội Agent làm gì hôm nay?"*. Gõ yêu cầu, Enter: đội Agent được thiết kế và chạy ngay. Màn hình tách đôi: cuộc trò chuyện bên trái, sản phẩm bên phải (diff mã, ảnh, báo cáo, **video và âm thanh phát ngay tại chỗ**, nút **Tải xuống** cho mọi file), terminal thu gọn bên dưới. Nút **Xem sơ đồ Agent Canvas** (⌘/Ctrl+\) mở đồ thị để chỉnh đội. |
-| **Cây tác vụ (thanh bên)** | Mọi tác vụ (đang chạy, chờ duyệt, thất bại, hoàn tất) với chấm trạng thái; file của từng tác vụ nằm bên dưới. Bấm một tác vụ để mở lại **cả cuộc hội thoại** (được lưu trong Postgres), bấm một file để xem ở màn hình Làm việc; nút × xóa tác vụ cùng hội thoại, kết quả chạy và file của nó. |
-| **Khi tác vụ thất bại** | Thẻ lỗi cho biết phòng ban và **agent** nào dừng (đội sandbox ghi "Coder + Reviewer"), lỗi gì (đã lọc khóa và đường dẫn máy chủ) và chi tiết kỹ thuật; **Chạy lại bước lỗi** tiếp tục từ checkpoint cuối, các phòng ban đã xong được giữ nguyên; **Chạy lại cả đội** bắt đầu lại từ đầu. |
-| **Chuyển kết quả cho đội khác** | Cùng một workspace: tác vụ vừa xong tự đính kèm file của nó cho tin nhắn tiếp theo (gỡ được bằng ×); gõ `@` hoặc bấm *Đính kèm* để chọn file của bất kỳ tác vụ nào; thẻ tác vụ hoàn tất có nút **Marketing & đăng mạng xã hội**, **Phân tích & tối ưu** và **Dùng kết quả cho tác vụ mới**. File được sao chép sang lần chạy mới, nên xóa tác vụ cũ không làm hỏng đội sau. |
-| **Cài đặt AI → Mô hình & khóa** | 3 mục: gói đăng ký sẵn có, **Nexus Harness** (nhà cung cấp API Key bên thứ 3: nhập URL và khóa), mô hình khác hoặc chạy máy cá nhân. *Chế độ Chuyên gia* mở bảng số liệu học tập và chi phí, đồng đội AI, tài liệu đã tải lên và toàn bộ nhà cung cấp. |
-| **Cài đặt AI → Tích hợp** | Kỹ năng và kết nối MCP. Mục TikTok, Facebook, YouTube chỉ hiện khi workspace có một đội dùng chúng (ví dụ xưởng phim). |
-
-Góc trên bên phải có **bộ chọn mô hình** (bấm để đổi mô hình cho các tác vụ mới: `gpt-4.1-mini`, `gpt-4o`, `claude-sonnet-4-6`, `gemini-2.5-flash`, `deepseek-chat` hay mô hình Ollama phát hiện trên máy, tùy khóa bạn đã kết nối); cùng bộ chọn thu gọn nằm trong ô nhập. Cạnh đó là nút `?` mở bảng phím tắt (có thể đổi phím).
-
-> **Chế độ local** (`NEXUS_LOCAL_MODE=true`, mặc định trong `docker-compose.yml`) cấp phiên chủ sở hữu cho bất kỳ ai truy cập được API. Chỉ dùng trên máy cá nhân; cổng API và web đã bind vào `127.0.0.1`. Trên máy chủ dùng chung hoặc công khai, đặt `NEXUS_LOCAL_MODE=false` để quay lại đăng nhập tài khoản.
-
-Ứng dụng desktop (Electron) nằm ở [apps/desktop](apps/desktop/README.md): mở thư mục dự án thật (`⌘/Ctrl+O`), phím tắt toàn cục `⌘/Ctrl+Shift+Space` để giao việc nhanh, thông báo hệ điều hành. Chạy: `pnpm --filter @nexus/desktop dev`; đóng gói: `pnpm --filter @nexus/desktop build` (`.dmg` / `.exe` / `.AppImage`).
+| Path | Role |
+|---|---|
+| `apps/web` | Next.js interface |
+| `apps/api` | FastAPI control plane, auth, billing, workers |
+| `apps/desktop` | Electron shell with local folder mounting |
+| `packages/agent-runtime` | Flow compiler, crews, AutoGen bridge, time travel, consensus, plugin kernel |
+| `packages/learning-transfer` | Knowledge capsules, scope firewall, self-healing prompts |
+| `packages/model-gateway` | Providers, subscription connectors, pricing, FinOps |
+| `packages/computer-sandbox` | Docker and cloud sandbox providers |
+| `packages/rag-engine`, `mcp-hub`, `builtin-tools` | Retrieval, MCP and OpenAPI tools, built-in tools |
+| `packages/core-schema` | Shared schemas and the studio blueprints |
 
 ---
 
-## 🔌 Kết nối gói đăng ký AI
+## 🔌 Connect a model
 
-**Settings → Subscription Plans & AI Providers** có hai chế độ: **Connect Subscription Plan (OAuth / CLI Token)** và **Connect Gateway / API Key**. Lượt dùng thuộc gói được ghi `billing_mode = SUBSCRIPTION_INCLUDED`, chi phí $0 trên mỗi token.
+Open **AI Settings → Models & keys**.
 
-| Gói | Cách kết nối |
-|-----|--------------|
-| **GitHub Copilot** | Bấm *Sign in with GitHub*, nhập mã 8 ký tự tại github.com/login/device. Dùng GPT, Claude, Gemini có trong gói Copilot. |
-| **ChatGPT Plus / Pro / Team** | `codex login`, chép `~/.codex/auth.json` vào `data/subscriptions/codex/` (hoặc dán nội dung) và nhập URL cầu nối gói đăng ký. |
-| **Claude Pro / Max** | `claude setup-token` rồi dán token, hoặc chép `~/.claude/.credentials.json` vào `data/subscriptions/claude/`. |
-| **Gemini Advanced / Code Assist** | Chép `~/.gemini/oauth_creds.json` vào `data/subscriptions/gemini/`, hoặc dán token cầu nối. |
-| **Nhà cung cấp API Key bên thứ 3, OpenRouter, CLIProxyAPI** | Cài đặt AI → **Nexus Harness**: nhập URL API và khóa, mô hình được lấy tự động. OpenRouter, CLIProxyAPI nằm trong Chế độ Chuyên gia. |
+| Source | How |
+|---|---|
+| **GitHub Copilot** | *Sign in with GitHub* and enter the 8-character code. |
+| **ChatGPT Plus / Pro / Team** | `codex login`, copy `~/.codex/auth.json` into `data/subscriptions/codex/` (or paste it), and give the URL of your subscription bridge. |
+| **Claude Pro / Max** | `claude setup-token` and paste the token, or copy `~/.claude/.credentials.json` into `data/subscriptions/claude/`. |
+| **Gemini Advanced / Code Assist** | Copy `~/.gemini/oauth_creds.json` into `data/subscriptions/gemini/`, or paste a bridge token. |
+| **API key or gateway** | **Nexus Harness**: enter the API URL and key of any OpenAI-compatible provider; models are discovered automatically. OpenAI, Anthropic, Gemini, DeepSeek and Ollama have their own cards. |
 
-Mỗi thẻ có nút **Verify Subscription & Test Model**: gọi thật 1 token qua đúng đường mà workflow dùng. Chi tiết thư mục mount: [data/subscriptions/README.md](data/subscriptions/README.md).
+Use the model selector in the header (or the small pill in the prompt bar) to switch model per task, including any model id you type. Plan usage is recorded at $0 per token; no price table is needed.
 
-> Token gói ChatGPT/Claude/Gemini chỉ chạy được trên endpoint hiểu chúng (ví dụ cầu nối như CLIProxyAPI); nhà cung cấp có thể giới hạn việc dùng token gói ngoài app chính chủ. Hãy kiểm tra điều khoản của gói bạn.
-
----
-
-## 🎥 Quay GIF demo bằng Recordly
-
-[Recordly](https://github.com/webadderallorg/recordly) (miễn phí, macOS/Windows/Linux) quay màn hình và tự thêm zoom, nền đẹp. Chỉ là công cụ ngoài, không phải phụ thuộc của dự án.
-
-1. Cài Recordly từ trang Releases, chạy `docker compose up --build`.
-2. Chọn cửa sổ trình duyệt ở http://localhost:3000 → **Record**.
-3. Quay: Copilot tạo workflow → Run → Inspector → duyệt Approval Card (~60–90 giây).
-4. Chỉnh trong Recordly → **Export GIF** → lưu đè `docs/media/nexus-run.gif`.
+> Plan tokens work only on endpoints that understand them (for example a bridge such as CLIProxyAPI), and providers may limit using plan tokens outside their own apps. Check the terms of your plan.
 
 ---
 
-## ⚙️ Cấu hình chính
+## 🖥️ Desktop app
 
-| Nhóm | Biến |
-|------|------|
-| Bảo mật | `NEXUS_SECRET_KEY`, `NEXUS_API_KEY_PEPPER`, `NEXUS_CREDENTIAL_ENCRYPTION_KEY_BASE64` |
-| Model | `NEXUS_*_API_KEY` (tuỳ chọn), `NEXUS_MODEL_RATES_JSON` (tuỳ chọn, chỉ để ước tính chi phí) |
-| Gói đăng ký | `NEXUS_CODEX_HOME`, `NEXUS_CLAUDE_HOME`, `NEXUS_GEMINI_HOME`, `NEXUS_COPILOT_HOME` |
-| Giọng nói | `NEXUS_STT_API_KEY`, `NEXUS_TTS_API_KEY` |
+[apps/desktop](apps/desktop/README.md) is an Electron shell: open a real project folder (`⌘/Ctrl+O`), review changes as diffs, accept them into your files, a global shortcut (`⌘/Ctrl+Shift+Space`) for quick tasks, and system notifications. `pnpm --filter @nexus/desktop dev` runs it and `pnpm --filter @nexus/desktop build` packages it. The macOS `.dmg` build is verified; Windows and Linux targets are configured but not yet tested.
+
+---
+
+## ⚙️ Configuration
+
+| Group | Variables |
+|---|---|
+| Security | `NEXUS_SECRET_KEY`, `NEXUS_API_KEY_PEPPER`, `NEXUS_CREDENTIAL_ENCRYPTION_KEY_BASE64` |
+| Models | `NEXUS_*_API_KEY` (optional server keys), `NEXUS_MODEL_RATES_JSON` (optional cost estimates) |
+| Plans | `NEXUS_CODEX_HOME`, `NEXUS_CLAUDE_HOME`, `NEXUS_GEMINI_HOME`, `NEXUS_COPILOT_HOME` |
+| Plugins | `NEXUS_PLUGINS_FILE`, `NEXUS_PLUGIN_PATCHES` |
+| Access | `NEXUS_LOCAL_MODE`, `NEXUS_PUBLIC_SIGNUP_ENABLED`, `NEXUS_REGISTRATION_TOKEN`, `NEXUS_CORS_ORIGINS` |
 | Sandbox | `NEXUS_COMPUTER_ROOT`, `NEXUS_DOCKER_GID` |
-| Đăng ký | `NEXUS_PUBLIC_SIGNUP_ENABLED`, `NEXUS_REGISTRATION_TOKEN` |
 
-Danh sách đầy đủ: [.env.example](.env.example). Sandbox đi kèm chạy headless: terminal và chạy code hoạt động, còn màn hình trực tiếp cần thêm browser driver.
+Everything is listed in [.env.example](.env.example). Call the API with a scoped key: `curl -H "Authorization: Bearer nx-sk-<KEY>" http://localhost:8000/api/v1/workflows`.
 
 ---
 
-## 🧪 Kiểm thử
+## 🧪 Development and tests
 
 ```bash
-pytest && mypy --strict packages/ apps/api/
-npx --yes pnpm@9.15.4 lint && npx --yes pnpm@9.15.4 check && npx --yes pnpm@9.15.4 test
+pytest && mypy packages/ apps/api/          # backend: 180+ tests, strict typing
+pnpm lint && pnpm check && pnpm test        # frontend
+python3 scripts/smoke_test.py               # full stack (needs a model key)
 ```
 
-Test E2E (`python3 scripts/smoke_test.py`) cần một API key cho model; không cần bảng giá.
+CI runs the same commands plus licence and branding checks on every push. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ---
 
-## 🔒 Bảo mật & giấy phép
+## 🧭 Roadmap and honest limits
 
-- Cô lập theo tenant/workspace ở Postgres, Qdrant, Redis và sandbox.
-- Không gửi telemetry ra ngoài.
-- Chỉ dùng dependency giấy phép thương mại an toàn (kiểm bằng `scripts/check-*-licenses`). Xem [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-- Giấy phép dự án: [MIT](LICENSE).
+- **Posting to TikTok, Facebook and YouTube is not wired yet.** The marketing and film teams write publish-ready packages and checklists and stop at your approval; channel cards store a token and check connectivity only.
+- **Video generation** depends on your provider offering a video API. Agents describe, plan and assemble media; they do not invent files.
+- The interface has a single local workspace for now; the multi-workspace switcher is planned (the backend already isolates workspaces).
+- Agents can still misjudge their own work. Failed claims are caught and reported, and every run can be retried, but review important output yourself.
+- Planned: node handlers as plugins, per-workspace plugin configuration, Windows and Linux desktop verification.
+
+Ideas and bug reports are welcome in [Issues](https://github.com/khangkaka066/Nexus-Agent/issues).
+
+---
+
+## ⭐ Support the project
+
+If NexusAgent saves you time, a star helps other people find it, and sharing a screenshot of a team you built helps even more.
+
+<a href="https://star-history.com/#khangkaka066/Nexus-Agent&Date">
+  <img src="https://api.star-history.com/svg?repos=khangkaka066/Nexus-Agent&type=Date" alt="Star history" width="520">
+</a>
+
+## 🔒 Security and license
+
+- Isolation by tenant and workspace in PostgreSQL, Qdrant, Redis and the sandbox. Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
+- No telemetry is sent anywhere.
+- Only permissively licensed dependencies are used (checked in CI); see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+- Released under the [MIT License](LICENSE).
+
+<sub>**Topics:** multi-agent, ai-agents, agent-orchestration, llm, workflow-automation, crewai, autogen, mcp, rag, human-in-the-loop, docker-sandbox, self-hosted, fastapi, nextjs, multi-tenant, ai-workflow-builder.</sub>

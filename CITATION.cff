@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use NexusAgent in your work, please cite it as below."
+title: "NexusAgent: a governed multi-agent studio with sandboxed execution and human approval"
+type: software
+authors:
+  - name: "khangkaka066"
+repository-code: "https://github.com/khangkaka066/Nexus-Agent"
+license: MIT
+keywords:
+  - multi-agent
+  - ai-agents
+  - agent-orchestration
+  - human-in-the-loop
+  - sandbox
+  - mcp
+  - rag

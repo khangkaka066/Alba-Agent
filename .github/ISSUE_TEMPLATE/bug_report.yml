@@ -1,0 +1,34 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you see instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Open Work\n2. Type ...\n3. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or the failure card
+      description: Paste the text of the failure card, or `docker compose logs api worker --tail 100`. Remove any keys or tokens first.
+      render: shell
+  - type: input
+    id: model
+    attributes:
+      label: Model and how it is connected
+      placeholder: "gpt-4.1-mini through an API key / Claude plan through a bridge / Ollama llama3.1"
+  - type: input
+    id: version
+    attributes:
+      label: Version and platform
+      placeholder: "commit abc1234, macOS 15, Docker Desktop 27"

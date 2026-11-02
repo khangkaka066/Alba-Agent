@@ -181,3 +181,32 @@ def test_threads_are_saved_isolated_retried_and_deleted_with_their_files(tmp_pat
             await runtime.dispose()
 
     asyncio.run(check())
+
+
+def test_a_second_similar_request_gets_a_free_workflow_name_instead_of_failing(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.routers.architect import free_workflow_name
+    from app.models import Workflow
+
+    admin_url, app_url = _urls()
+
+    async def check() -> None:
+        tenant, workspace = uuid4(), uuid4()
+        admin, runtime = create_async_engine(admin_url), create_async_engine(app_url)
+        try:
+            async with admin.begin() as connection:
+                await connection.execute(text("INSERT INTO tenants (id, name) VALUES (:id, 'Names')"), {"id": tenant})
+                await connection.execute(text("INSERT INTO workspaces (id, tenant_id, name) VALUES (:id, :t, 'Names')"), {"id": workspace, "t": tenant})
+            async with scoped_session(runtime, tenant, workspace) as session:
+                assert await free_workflow_name(session, "Coffee shop launch", 1) == "Coffee shop launch"
+                for name in ("Coffee shop launch", "Coffee shop launch (2)", "100%_sure"):
+                    session.add(Workflow(id=uuid4(), tenant_id=tenant, workspace_id=workspace, name=name, version=1, spec={}))
+                await session.flush()
+                assert await free_workflow_name(session, "Coffee shop launch", 1) == "Coffee shop launch (3)"
+                assert await free_workflow_name(session, "Coffee shop launch", 2) == "Coffee shop launch", "another version is a different workflow"
+                assert await free_workflow_name(session, "100%_sure", 1) == "100%_sure (2)", "% and _ in a name are not wildcards"
+                assert await free_workflow_name(session, "Coffee", 1) == "Coffee"
+        finally:
+            await admin.dispose()
+            await runtime.dispose()
+
+    asyncio.run(check())

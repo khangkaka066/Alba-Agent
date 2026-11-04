@@ -29,9 +29,27 @@ from agent_skills import SkillLoader
 from nexus_computer_sandbox import ComputerSandboxSupervisor, DockerSandboxSupervisor, SandboxExecution
 from nexus_core_schema.models import NexusGenSandboxNodeSpec, RuntimeEventType
 from verification import (
-    Evidence, Status, build_probe, build_self_test_probe, decide, parse_probe_output, parse_self_test_output,
+    Evidence, Status, VerificationReport, build_probe, build_self_test_probe, decide, parse_probe_output, parse_self_test_output,
     protected_test_hashes,
 )
+
+def require_declared_files(report: VerificationReport, declared: tuple[str, ...], present: tuple[str, ...]) -> VerificationReport:
+    """A node that declares its deliverables is not verified until those files exist.
+
+    The run's working directory is shared by every node, so tests and files left by an earlier node can make a probe pass
+    before this node has written anything; the files this node promised are the only proof that it did its own work.
+    """
+    if report.status is not Status.VERIFIED or not declared:
+        return report
+    have = {name.lstrip("./") for name in present}
+    missing = [path for path in declared if path not in have]
+    if not missing:
+        return report
+    return VerificationReport(
+        Status.UNVERIFIED, report.level,
+        f"the checks pass but this node has not written its declared files yet: {', '.join(missing[:5])}; "
+        "write them here (files left by other nodes do not count)", report.evidence)
+
 
 # Probe scripts take attempt numbers far above any coder attempt so the two never collide in one run directory.
 _PROBE_ATTEMPT_BASE = 1000
@@ -215,7 +233,9 @@ class NexusGenSandboxRunner:
             }
             if last_execution.exit_code == 0:
                 last_evidence = await probe_evidence()
-                verdict = decide(last_evidence, execution_ok=True)
+                verdict = require_declared_files(
+                    decide(last_evidence, execution_ok=True, min_added_tests=spec.min_added_tests if protected_tests else 0),
+                    spec.expected_artifact_paths, last_execution.artifacts)
                 result["verification"] = verdict.as_dict()
                 if verdict.status is Status.VERIFIED:
                     verified_stop.set()
@@ -238,6 +258,11 @@ class NexusGenSandboxRunner:
                     "behavioural clause of the task text and of the docstrings you read (each rule, each error case, each "
                     "'also applies to' sentence) and make sure the code handles each one, including inputs the shipped "
                     "tests never use."
+                    + (
+                        f" Then write at least {spec.min_added_tests} tests of your own in a new test_*.py file, one per clause the shipped "
+                        "tests never exercise, derived from the task text and not from your implementation; the result is not verified until they pass."
+                        if spec.min_added_tests else ""
+                    )
                     if protected_tests else
                     "No tests ship with this task, so write your own as a unittest file named test_<module>.py in the working "
                     "directory, derived from the task text and not from your implementation: at least 4 cases including edge "
@@ -288,7 +313,9 @@ class NexusGenSandboxRunner:
             if reviewer_client is not coder_client:
                 await reviewer_client.close()
         execution_ok = last_execution is not None and last_execution.exit_code == 0
-        report = decide(last_evidence, execution_ok=execution_ok)
+        report = require_declared_files(
+            decide(last_evidence, execution_ok=execution_ok, min_added_tests=spec.min_added_tests if protected_tests else 0),
+            spec.expected_artifact_paths, last_execution.artifacts if last_execution else ())
         # Executed evidence decides. The reviewer's opinion can neither promote a result nor demote a verified one.
         if report.status is Status.VERIFIED:
             exit_code = 0

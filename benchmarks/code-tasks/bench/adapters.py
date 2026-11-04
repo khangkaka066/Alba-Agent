@@ -345,6 +345,26 @@ class NexusAgentAutoAdapter(NexusAgentAdapter):
     rigor = "auto"
 
 
+class NexusAgentUnitsAdapter(NexusAgentAdapter):
+    """Splits the request into independent units that own separate files, then integrates; every model is still the benchmark model."""
+
+    name = "nexus_units"
+    rigor = "units"
+
+
+class NexusAgentClauseAdapter(NexusAgentAutoAdapter):
+    """nexus_auto, plus: where a task ships tests the coder must add three passing tests of its own before the result is verified."""
+
+    name = "nexus_clause"
+
+    def _pin_model(self, spec: dict[str, object]) -> dict[str, object]:
+        pinned = super()._pin_model(spec)
+        for node in pinned.get("nodes", []):  # type: ignore[attr-defined]
+            if node.get("kind") == "sandbox":
+                node["min_added_tests"] = 3
+        return pinned
+
+
 class NexusAgentPlainAdapter(NexusAgentAdapter):
     """Ablation: identical to nexus but the task text is sent unchanged (no RESULT-line instructions)."""
 

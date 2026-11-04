@@ -36,6 +36,9 @@ class Evidence:
     killed: int = 0
     # `file:line name` for names the program files read but never define: tests cannot vouch for lines they do not run.
     undefined: tuple[str, ...] = ()
+    # Test files the coder added next to the protected ones, and how they fared.
+    added_passed: int = 0
+    added_failed: int = 0
 
     @property
     def ran(self) -> int:
@@ -62,6 +65,8 @@ class VerificationReport:
             "mutants": evidence.mutants if evidence else 0,
             "killed": evidence.killed if evidence else 0,
             "undefined": list(evidence.undefined) if evidence else [],
+            "added_passed": evidence.added_passed if evidence else 0,
+            "added_failed": evidence.added_failed if evidence else 0,
         }
 
 
@@ -106,8 +111,12 @@ def _decide_self_tests(evidence: Evidence) -> VerificationReport:
     return VerificationReport(Status.VERIFIED, level, f"{evidence.passed} self-written tests pass, fail on the starting code and caught {evidence.killed} of {evidence.mutants} mutants", evidence)
 
 
-def decide(evidence: Evidence | None, *, execution_ok: bool) -> VerificationReport:
-    """Verified only by executed tests that all passed; compile or review output is never evidence."""
+def decide(evidence: Evidence | None, *, execution_ok: bool, min_added_tests: int = 0) -> VerificationReport:
+    """Verified only by executed tests that all passed; compile or review output is never evidence.
+
+    `min_added_tests` asks, for tasks that ship tests, for that many passing tests of the coder's own on top of the shipped
+    ones: shipped tests cover only part of what the task states, and writing a test per remaining clause is how the rest is checked.
+    """
     if evidence is not None and evidence.tampered:
         return VerificationReport(Status.FAILED, evidence.level, f"protected test files were changed: {', '.join(evidence.tampered)}", evidence)
     if evidence is not None and evidence.undefined:
@@ -121,4 +130,12 @@ def decide(evidence: Evidence | None, *, execution_ok: bool) -> VerificationRepo
         return VerificationReport(Status.UNVERIFIED, Level.NONE, "the code ran but no executable test exists to prove it correct", evidence)
     if evidence.failed:
         return VerificationReport(Status.FAILED, evidence.level, f"{evidence.failed} of {evidence.ran} existing tests failed", evidence)
+    if min_added_tests and evidence.level is Level.EXISTING_TESTS:
+        if evidence.added_failed:
+            return VerificationReport(Status.UNVERIFIED, evidence.level, f"{evidence.added_failed} of the tests you added fail; fix the code or the test", evidence)
+        if evidence.added_passed < min_added_tests:
+            return VerificationReport(
+                Status.UNVERIFIED, evidence.level,
+                f"the shipped tests pass but only {evidence.added_passed} test(s) of your own exist; add at least {min_added_tests} in a new test_*.py file, "
+                "one for each clause of the task or the docstrings that the shipped tests never exercise", evidence)
     return VerificationReport(Status.VERIFIED, evidence.level, f"all {evidence.passed} existing tests passed", evidence)

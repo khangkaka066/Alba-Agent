@@ -64,6 +64,34 @@ def sandbox_input_path_error(name: str) -> str | None:
     return None
 
 
+def mount_node_artifacts(state: WorkflowState, sources: list[Any], input_files: dict[str, bytes]) -> list[str]:
+    """Copy the delivered files that earlier nodes declared into the sandbox's input files, within its 1 MiB limit.
+
+    A file the run already supplies under the same name is left alone, and a file that is not there (the node did not
+    deliver it) is skipped; the node's own contract check reports missing deliverables, this one never invents them.
+    """
+    directory = artifact_directory(state.tenant_id, state.workspace_id, state.run_id)
+    budget = 1_048_576 - sum(len(content) for content in input_files.values())
+    mounted: list[str] = []
+    for source in sources:
+        for path in source.declared_artifact_paths():
+            if path in input_files:
+                continue
+            try:
+                candidate = artifact_file(directory, path)
+            except ValueError:
+                continue
+            if not candidate.is_file() or candidate.is_symlink():
+                continue
+            content = candidate.read_bytes()
+            if len(content) > budget:
+                continue
+            input_files[path] = content
+            budget -= len(content)
+            mounted.append(path)
+    return mounted
+
+
 MAX_UNDECLARED_FILES = 20
 MAX_UNDECLARED_BYTES = 25_000_000
 
@@ -823,6 +851,7 @@ class FlowCompiler:
                         raise ValueError("XLSX workflow input is not valid base64") from error
                 if sum(len(content) for content in input_files.values()) > 1_048_576:
                     raise ValueError("Sandbox file inputs exceed the 1 MiB workflow run limit")
+                mounted_from_nodes = mount_node_artifacts(state, [nodes[source_id] for source_id in node.mount_artifacts_from], input_files)
                 mounted_upstream = mount_upstream(state, input_files)
                 task_input = dict(state.input_data)
                 task_input.pop("sandbox_files", None)
@@ -840,6 +869,8 @@ class FlowCompiler:
                 }
                 if state.upstream_artifacts:
                     sandbox_task["upstream_artifacts"] = mounted_upstream
+                if mounted_from_nodes:
+                    sandbox_task["files_from_earlier_nodes"] = mounted_from_nodes
                 contract_block = hook_engine.rules.instruction_block(node.expected_artifact_paths)
                 if contract_block:
                     sandbox_task["deliverable_contract"] = contract_block + "\nWrite each file relative to the working directory, creating folders as needed."

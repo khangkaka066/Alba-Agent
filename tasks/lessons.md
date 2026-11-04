@@ -21,3 +21,7 @@
 - Lỗi: bốn tác vụ nhiều file cho NexusAgent 0/4 qua ba lượt đo. Nguyên nhân là adapter chỉ gửi file ở thư mục gốc và backend cấm đường dẫn, nên agent nhận sandbox thiếu package; "completed" nhưng số test đạt y hệt starter.
 - Quy tắc: khi một run báo hoàn thành mà workspace không đổi (số test đạt bằng starter), coi là lỗi bộ đo hoặc đầu vào trước, không phải lỗi agent. Kiểm tra mỗi hệ thống nhận đúng cùng đầu vào.
 - Test ẩn phải suy ra được từ đề. Nếu một cách đọc hợp lệ của đề làm rớt test, sửa test, ghi lại, và chấm lại tất cả hệ thống theo cùng một test.
+
+## Bộ đo: không sửa mã trong lúc đang đo
+- Lỗi: đang chạy A/B (18 run) thì mình thêm một trường vào schema. Mã được bind-mount vào container, nên API (đã nạp bản mới) và worker (bản cũ) lệch nhau; 16/18 run chết sau 5 giây với `extra_forbidden`, số liệu A/B vô giá trị.
+- Quy tắc: trước khi bắt đầu một phép đo, chốt mã và dựng lại stack; trong lúc đo chỉ viết mã ở nơi không được mount hoặc chờ đo xong. Khi trung vị thời gian của một nhóm run chỉ vài giây, đọc lỗi từ log worker trước khi diễn giải kết quả.

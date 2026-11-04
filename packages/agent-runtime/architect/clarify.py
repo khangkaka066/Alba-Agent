@@ -139,7 +139,7 @@ _INSTRUCTIONS = (
     f"and never ask more than {MAX_QUESTIONS} questions. If nothing needs asking, return status \"ready\" with empty lists.\n"
     "Each question has 2-4 concrete options; mark exactly one \"recommended\": true, the one you would pick if the person said 'you choose'.\n"
     f"Also offer 2-{MAX_OPTIONS} ways to build it, each with a different level: \"solo\" (one coder and reviewer, for plain code or calculation work), "
-    "\"team\" (a planned sequence of specialists), \"studio\" (departments working in parallel, for large products). Say honestly what each "
+    "\"team\" (a planned sequence of specialists), \"studio\" (departments with a quality gate, for large products). Say honestly what each "
     "gives up. Mark exactly one option recommended and give the reason. Use only these speeds: fast, medium, slow. Do not mention cost.\n"
     "Return JSON: {\"status\", \"assumptions\": [short strings you will assume if nobody answers], "
     "\"questions\": [{\"id\", \"text\", \"options\": [{\"label\", \"description\", \"recommended\"}]}], "

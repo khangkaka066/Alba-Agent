@@ -155,6 +155,12 @@ class NexusGenSandboxNodeSpec(Contract):
     # What to do when verification does not pass: fail the run, or finish the node with the evidence so a router after
     # it can send the work to a stronger team. A node that continues exports no files of its own.
     on_failure: Literal["fail", "continue"] = "fail"
+    # When the task ships tests: how many passing tests of the coder's own are required on top of them before the result
+    # counts as verified. 0 keeps the shipped tests alone as the evidence.
+    min_added_tests: int = Field(default=0, ge=0, le=20)
+    # Nodes whose delivered files this node starts from: their declared artifact paths are copied into the sandbox (within
+    # the 1 MiB input limit), so a node that integrates work done by parallel nodes can see it.
+    mount_artifacts_from: tuple[str, ...] = Field(default=(), max_length=16)
     consensus_config: ConsensusConfigSpec = Field(default_factory=ConsensusConfigSpec)
     join: JoinMode = "any"
     expected_artifact_paths: tuple[ArtifactPath, ...] = Field(default=(), max_length=64)
@@ -293,6 +299,14 @@ class WorkflowSpec(ScopedContract):
         if len(starts) != 1:
             raise ValueError("Workflow must contain exactly one start node")
         nodes_by_id = {node.id: node for node in self.nodes}
+        for node in self.nodes:
+            if isinstance(node, NexusGenSandboxNodeSpec):
+                for source_id in node.mount_artifacts_from:
+                    source_node = nodes_by_id.get(source_id)
+                    if source_node is None or source_id == node.id:
+                        raise ValueError("A node can only mount the artifacts of another node in the workflow")
+                    if not hasattr(source_node, "declared_artifact_paths"):
+                        raise ValueError("A node can only mount artifacts from a node that declares artifact paths")
         for edge in self.edges:
             if edge.source not in nodes_by_id or edge.target not in nodes_by_id:
                 raise ValueError("Workflow edge references an unknown node")

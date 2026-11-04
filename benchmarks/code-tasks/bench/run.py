@@ -16,7 +16,7 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 
-from .adapters import Adapter, AgentOutcome, ClaudeCodeAdapter, ClaudeCodeSandboxAdapter, DshAdapter, Endpoint, NexusAgentAdapter, NexusAgentAutoAdapter, NexusAgentPlainAdapter
+from .adapters import Adapter, AgentOutcome, ClaudeCodeAdapter, ClaudeCodeSandboxAdapter, DshAdapter, Endpoint, NexusAgentAdapter, NexusAgentAutoAdapter, NexusAgentClauseAdapter, NexusAgentUnitsAdapter, NexusAgentPlainAdapter
 from .billing import settled_usage_cents, total_usage_cents
 from .grade import grade
 from .task import Task, file_hashes, load_tasks
@@ -123,6 +123,10 @@ def build_adapter(name: str) -> Adapter:
         return NexusAgentAdapter(endpoint)
     if name == "nexus_auto":
         return NexusAgentAutoAdapter(endpoint)
+    if name == "nexus_units":
+        return NexusAgentUnitsAdapter(endpoint)
+    if name == "nexus_clause":
+        return NexusAgentClauseAdapter(endpoint)
     raise SystemExit(f"adapter {name!r} is not implemented yet")
 
 

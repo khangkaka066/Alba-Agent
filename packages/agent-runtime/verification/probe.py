@@ -69,10 +69,33 @@ if not tampered:
         pytest.main(["-q", "-p", "no:cacheprovider", name], plugins=[counter])
         passed += counter.ok
         failed += counter.bad
+added_passed = added_failed = 0
+if not tampered:
+    extra = []
+    for folder, dirs, files in os.walk("."):
+        dirs[:] = sorted(d for d in dirs if d not in ("__pycache__", "node_modules", "upstream", "_hidden") and not d.startswith("."))
+        for file in sorted(files):
+            relative = os.path.relpath(os.path.join(folder, file), ".").replace(os.sep, "/")
+            if _TEST_FILE.match(file) and relative not in PROTECTED:
+                extra.append(relative)
+    for name in extra[:20]:
+        module = name[:-3].replace("/", ".")
+        try:
+            suite = unittest.defaultTestLoader.loadTestsFromName(module)
+        except Exception as error:
+            added_failed += 1
+            details.append(name + ": cannot be imported: " + str(error)[-200:])
+            continue
+        result = unittest.TextTestRunner(stream=io.StringIO(), verbosity=0).run(suite)
+        bad = list(result.failures) + list(result.errors)
+        added_passed += result.testsRun - len(bad)
+        added_failed += len(bad)
+        for case, trace in bad[:3]:
+            details.append("(your test) " + str(case) + ": " + trace.strip()[-300:])
 print()
 print("NEXUS_EVIDENCE " + NONCE + " " + json.dumps(
     {"passed": passed, "failed": failed, "tampered": tampered, "details": details[:8],
-     "undefined": scan_undefined(os.getcwd())}))
+     "undefined": scan_undefined(os.getcwd()), "added_passed": added_passed, "added_failed": added_failed}))
 '''
 
 
@@ -103,6 +126,7 @@ def parse_probe_output(stdout: str, nonce: str) -> Evidence | None:
                 Level.EXISTING_TESTS, int(raw["passed"]), int(raw["failed"]),
                 tuple(str(item) for item in raw.get("tampered", ())), tuple(str(item) for item in raw.get("details", ())),
                 undefined=tuple(str(item) for item in raw.get("undefined", ())),
+                added_passed=int(raw.get("added_passed", 0)), added_failed=int(raw.get("added_failed", 0)),
             )
         except (ValueError, KeyError, TypeError):
             return None

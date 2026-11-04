@@ -66,7 +66,9 @@ class GenerateWorkflowRequest(BaseModel):
     auto_run: bool = True
     # None means "auto": plain code and calculation requests get one coder and reviewer with a repair step, anything
     # else gets the planned team (or a studio when the request names a domain). "minimal" always plans a team.
-    rigor: Literal["auto", "solo", "minimal", "standard", "full_studio"] | None = None
+    # "units" splits the request into independent units that each own separate files, then integrates them; it is never chosen
+    # automatically and fails with a 422 when the model cannot propose such a split. The units run one after another for now.
+    rigor: Literal["auto", "solo", "units", "minimal", "standard", "full_studio"] | None = None
     # Text files from a mounted local folder; the sandbox receives them as flat files, so names carry no path.
     input_files: dict[str, str] = Field(default_factory=dict, max_length=64)
     # Continue an existing thread; without it a new conversation is started for this request.

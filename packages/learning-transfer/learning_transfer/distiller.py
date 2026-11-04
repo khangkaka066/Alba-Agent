@@ -9,6 +9,10 @@ from uuid import UUID, uuid4
 from nexus_core_schema.models import KnowledgeCapsuleSpec, PropagationScope, SensitivityLevel
 
 
+MAX_PRECONDITIONS = 4000  # KnowledgeCapsuleSpec.trigger_preconditions
+MAX_HEURISTIC = 8000  # KnowledgeCapsuleSpec.distilled_heuristic
+
+
 class DistillationTrigger(StrEnum):
     DEBUG_RECOVERY = "debug_recovery"
     APPROVAL_CORRECTION = "approval_correction"
@@ -58,7 +62,8 @@ class EpisodicKnowledgeDistiller:
             capsule_id=uuid4(), source_agent_id=candidate.source_agent_id,
             source_role=candidate.source_role,
             source_domain_tags=tuple(dict.fromkeys(tag.strip().lower() for tag in candidate.domain_tags if tag.strip())),
-            trigger_preconditions=candidate.preconditions.strip(), distilled_heuristic=heuristic.strip(),
+            # A long request is text a capsule only needs the start of; the schema limits would otherwise fail a finished run.
+            trigger_preconditions=candidate.preconditions.strip()[:MAX_PRECONDITIONS], distilled_heuristic=heuristic.strip()[:MAX_HEURISTIC],
             prohibited_contexts=(), propagation_scope=candidate.propagation_scope,
             sensitivity_level=SensitivityLevel.CONFIDENTIAL_PII_STRIPPED if candidate.trigger == DistillationTrigger.APPROVAL_CORRECTION else SensitivityLevel.INTERNAL,
             source_workflow_id=candidate.workflow_id, source_crew_id=candidate.crew_id,

@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .run import RESULTS
 
-ORDER = ["claude_code", "claude_code_sbx", "dsh", "nexus", "nexus_auto", "nexus_plain"]
+ORDER = ["claude_code", "claude_code_sbx", "dsh", "nexus", "nexus_auto", "nexus_clause", "nexus_units", "nexus_plain"]
 
 
 def wilson(passed: int, total: int, z: float = 1.96) -> tuple[float, float]:

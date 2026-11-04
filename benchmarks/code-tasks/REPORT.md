@@ -163,6 +163,27 @@ Nguyên nhân ba lần rớt của NexusAgent (đã đọc từng workspace):
 
 **Cách đọc.** Ba hệ thống chạy song song trên cùng một cổng API, nên thời gian chỉ mang tính tham khảo (độ chính xác là số đo chính). Chi phí không tách riêng được vì billing đo chung. 18 lượt mỗi hệ thống là cỡ mẫu nhỏ: khoảng tin cậy chồng lấn nhiều. Các tác vụ do chúng tôi viết nên có thể thiên về kiểu lỗi mà chúng tôi hình dung ra. Kết luận có thể nói: trên bộ này NexusAgent ở cùng tầm với hai đối thủ, nhanh hơn Claude Code, và tỉ lệ tuyên bố sai cao hơn (3/18 so với 2/18 và 1/18, chưa có ý nghĩa thống kê).
 
+## Giai đoạn 32: tác vụ lớn `big-001-minisql` và hai thí nghiệm
+
+**Tác vụ.** Công cụ SQL nhỏ trong bộ nhớ gồm 5 module (tokenizer, parser, evaluator, storage, engine) với hợp đồng giao diện được nêu chính xác trong đề, 49 test ẩn theo từng module và tích hợp. Lời giải tham chiếu qua 49/49. Tác vụ do chính chúng tôi viết, mỗi hệ thống chỉ chạy 3 lần, cùng model `gpt-6-luna`; không có khác biệt nào ở đây đủ để kết luận thống kê.
+
+| Hệ thống | Đạt | Test ẩn đạt mỗi lượt | Báo xong sai | Thời gian mỗi lượt |
+|---|---|---|---|---|
+| Claude Code (chạy đơn) | 0/3 | 45, 30, 48 / 49 | 3 | 306, 252, 360 s |
+| DeepSeek Harness | 3/3 | 49, 49, 49 | 0 | 315, 249, 224 s |
+| NexusAgent `auto` (một coder + reviewer, có sửa lỗi) | 2/3 | 48, 49, 49 | 1 | 126, 96, 102 s |
+| NexusAgent `units` (5 đơn vị có tệp riêng, rồi ghép; chạy nối tiếp) | 3/3 | 49, 49, 49 | 0 | 361, 407, 435 s |
+
+**Hai lỗi sản phẩm lộ ra ở lượt đầu và đã sửa trước khi đo lại** (nên các số NexusAgent ở trên là sau sửa; lượt đầu của `auto` là 1/3 và của `units` là 0/3 vì hai lỗi này):
+1. Chưng cất capsule nhét nguyên văn đề vào trường giới hạn 4000 ký tự, nên với đề dài run thất bại sau khi coder đã làm xong. Đã cắt theo giới hạn của schema.
+2. Mọi node của một run dùng chung thư mục làm việc; probe tự kiểm thử của node sau thấy tệp và test của node trước nên đánh dấu VERIFIED trong khi tệp khai báo của chính node chưa được viết. Nay một node có khai báo tệp đầu ra chưa được coi là đã kiểm chứng cho tới khi các tệp đó tồn tại.
+
+**Điều không làm được.** Các đơn vị chưa chạy cùng lúc: mọi node của một run dùng chung một khóa thực thi, một container và một thư mục làm việc (phát hiện này cũng nghĩa là các phòng ban "song song" của studio thực tế chạy nối tiếp). Chạy cùng lúc cần thư mục làm việc riêng cho từng node và một khóa cho phép các node sandbox chồng lên nhau; chưa làm, test `test_units_run_at_the_same_time` đánh dấu xfail nghiêm ngặt để nhắc việc này.
+
+**Thí nghiệm "coder phải viết thêm 3 test của riêng mình" (`nexus_clause`)** trên `scheduler`, `stock`, `mdlite`: 14/18 so với 22/26 của `nexus_auto`, tệ hơn ở `mdlite` (2/6 so với 8/10), chậm hơn, vẫn 4 lượt báo xong sai. Không có bằng chứng lợi ích; tùy chọn `min_added_tests` giữ ở mặc định 0.
+
+**Một lần A/B đầu bị hỏng** vì mình sửa schema khi đang đo (mã được bind-mount, API và worker nạp hai phiên bản): 16/18 run chết sau 5 giây. Đã đo lại sau khi chốt mã.
+
 ## Tái tạo
 
 ```bash

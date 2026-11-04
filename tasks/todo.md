@@ -368,3 +368,11 @@ Goal: for a request that is unclear or has several reasonable ways to be built, 
 - Over-asking is the failure users notice first; the default must be "ready" unless an answer would change the plan.
 - A model-written recommendation can be confidently wrong; options must state the trade-off, not only a verdict.
 - The time estimate in the options is only as good as the Phase 32 calibration data; label it as an estimate. Cost is not shown to the user (decided by the user), though the recommendation may still weigh it internally.
+
+
+# Phase 34 — Units mode, clause-test experiment, big task (results in benchmarks/code-tasks/REPORT.md, "Giai đoạn 32")
+- Parallel execution is NOT built. Findings: every node of a run shares one execution lock (`execute_node`), one container and one working directory, so even the studio's "parallel departments" run one at a time. Next step if wanted: a per-node working directory in the supervisor plus a lock that lets sandbox nodes overlap; the strict xfail `test_units_run_at_the_same_time` marks the spot.
+- Built instead: `rigor="units"` (planner returns >= 3 units that each own separate files and a shared contract; overlapping plans are rejected and the model is shown why; one integration node mounts the units' files via `mount_artifacts_from`). Runs one unit after another.
+- Fixed from the big task: capsule fields now clipped to schema limits; a sandbox node with declared deliverables cannot be VERIFIED before those files exist.
+- Clause-test requirement (`min_added_tests`) measured worse than none; kept as an opt-in node field, default 0.
+- Not done: question-quality evaluation for Phase 33, a visual check of the question card, the real parallel engine change, one benchmark task only for the units mode (n = 3).

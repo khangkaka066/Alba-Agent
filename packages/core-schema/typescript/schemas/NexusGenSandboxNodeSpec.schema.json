@@ -107,6 +107,22 @@
       "title": "Max Rounds",
       "type": "integer"
     },
+    "min_added_tests": {
+      "default": 0,
+      "maximum": 20,
+      "minimum": 0,
+      "title": "Min Added Tests",
+      "type": "integer"
+    },
+    "mount_artifacts_from": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Mount Artifacts From",
+      "type": "array"
+    },
     "on_failure": {
       "default": "fail",
       "enum": [

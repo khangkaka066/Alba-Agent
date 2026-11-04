@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from architect.adaptive import Assessment, assess, build_solo_workflow, strong_model
+from architect.units import MAX_UNITS, MIN_UNITS, UnitsDraft, build_units_workflow
 from hooks.claims import deliverables_in
 from nexus_core_schema_templates.studios import STUDIO_BLUEPRINTS, STUDIO_BY_ID, StudioBlueprint, build_studio_graph, detect_studio
 from nexus_core_schema.models import (
@@ -129,7 +130,7 @@ class _StudioDraft(BaseModel):
     design_reasoning: list[str] = Field(default_factory=list, max_length=12)
 
 
-RigorRequest = Literal["minimal", "standard", "full_studio", "auto", "solo"]
+RigorRequest = Literal["minimal", "standard", "full_studio", "auto", "solo", "units"]
 _FRONTIER_MODEL_HINTS = ("opus", "sonnet", "gpt-5", "gpt-4.1", "gemini-2.5-pro", "gemini-3-pro", "o3", "o4")
 JsonGenerator = Callable[[str, type[BaseModel]], Awaitable[Any]]
 _DraftT = TypeVar("_DraftT", bound=BaseModel)
@@ -226,6 +227,8 @@ class MetaArchitectService:
         studio = (STUDIO_BY_ID[studio_id] if studio_id else detect_studio(prompt)) if existing_workflow_spec is None else None
         effective: RigorRequest = rigor or ("full_studio" if studio is not None else "minimal")
         level_note: dict[str, str] = {}
+        if effective == "units" and existing_workflow_spec is None:
+            return await self._generate_units(prompt, workspace_context, workflow_id=workflow_id or uuid4(), version=version, preferred_model=preferred_model)
         if effective in ("auto", "solo") and existing_workflow_spec is None:
             if effective == "auto" and studio is not None:
                 effective = "full_studio"
@@ -235,7 +238,7 @@ class MetaArchitectService:
                     return self._generate_solo(prompt, workspace_context, assessment, workflow_id=workflow_id or uuid4(), version=version, preferred_model=preferred_model)
                 effective = "minimal"
                 level_note = {"level": "team", "level_reason": assessment.reason}
-        elif effective in ("auto", "solo"):
+        elif effective in ("auto", "solo", "units"):
             effective = "minimal"
         if effective != "minimal" and existing_workflow_spec is None:
             return await self._generate_studio(
@@ -282,6 +285,43 @@ class MetaArchitectService:
             **level_note,
         }
         return validated, summary
+
+    async def _generate_units(
+        self,
+        prompt: str,
+        context: ArchitectWorkspaceContext,
+        *,
+        workflow_id: UUID,
+        version: int,
+        preferred_model: str | None,
+    ) -> tuple[WorkflowSpec, dict[str, Any]]:
+        models = context.available_models
+        model = preferred_model if preferred_model in models else (models[0] if models else "openai/gpt-4.1-mini")
+        draft = await self._draft(
+            "Split this request into independent units that different people could build separately, then one integration step. "
+            f"Use {MIN_UNITS} to {MAX_UNITS} units. Write `contract`: the exact module and file names, function and class signatures, "
+            "data formats and error types every unit relies on, precise enough that a unit can be built and tested without seeing the others. "
+            "Give every unit the files only it owns in `owned_paths` (relative paths, no test files, no file owned twice) and its instructions. "
+            "If the request cannot be split like this, still return the best split you can. Return JSON only.\n" + json.dumps({"requirement": prompt}, ensure_ascii=False),
+            UnitsDraft,
+        )
+        strong = strong_model(models, model, _FRONTIER_MODEL_HINTS)
+        spec = self._validator(build_units_workflow(
+            draft, workflow_id=workflow_id, tenant_id=context.tenant_id, workspace_id=context.workspace_id, version=version,
+            unit_model=model, integrate_model=strong,
+        ))
+        sandboxes = [node for node in spec.nodes if isinstance(node, NexusGenSandboxNodeSpec)]
+        agents = [
+            {"id": f"{node.id}_{part}", "role": f"{node.label} · {part}", "model": node.coder_model if part == "coder" else node.reviewer_model,
+             "tools": [], "knowledge_capsules": []}
+            for node in sandboxes for part in ("coder", "reviewer")
+        ]
+        summary = {
+            "summary": draft.summary, "design_reasoning": draft.design_reasoning, "agents": agents, "tools": [], "knowledge_capsules": [],
+            "agent_count": len(agents), "level": "units",
+            "level_reason": f"{len(draft.units)} units that each own separate files, then one integration step",
+        }
+        return spec, summary
 
     def _generate_solo(
         self,

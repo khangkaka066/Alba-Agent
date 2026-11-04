@@ -35,4 +35,3 @@ A drop (mdlite 8/10 to 3/10) after a change is not caused by the change until a 
 
 ## A temp folder inside the working directory makes copy-the-workspace tools recurse
 The Docker provider hid this with a separate /tmp tmpfs. Anything that replaces a container's separate temp space on the host needs the scratch directory OUTSIDE the directory that is copied, exported or listed.
-\n

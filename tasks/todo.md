@@ -388,12 +388,12 @@ Goal: run agent code on the user's own machine without Docker, with the layered 
 - Server-side dependencies (Postgres RLS, Redis, Celery, Qdrant) are a separate step (Stage B) and are NOT part of Stage A.
 
 ## Stage A — policy and sandbox (macOS only)
-- [ ] `execution_policy.py`: rule model with Deny > Ask > Allow precedence; a Strict profile that ignores the allowlist; default rules deny reads of `.env`, `~/.ssh`, `~/.aws`, keychains and `.git/config` credentials; no allowlisted domains by default.
-- [ ] Sensitive-write rule: creating or editing executable or config files (hooks, `.vscode`, shell rc, `sandbox.json`-style files) is an Ask, never an Allow (the Antigravity RCE chain).
-- [ ] `LocalSandboxProvider` implementing `ComputerProvider`: per-run directory under a temp root, commands run through `sandbox-exec` with a generated profile (write only inside the run directory, no network unless the policy grants it), timeout and output cap as in the Docker provider.
-- [ ] Wire as a provider name `local`, chosen by configuration; `docker` stays the default.
+- [x] `execution_policy.py`: rule model with Deny > Ask > Allow precedence; a Strict profile that ignores the allowlist; default rules deny reads of `.env`, `~/.ssh`, `~/.aws`, keychains and `.git/config` credentials; no allowlisted domains by default.
+- [x] Sensitive-write rule: creating or editing executable or config files (hooks, `.vscode`, shell rc, `sandbox.json`-style files) is an Ask, never an Allow (the Antigravity RCE chain).
+- [x] `LocalSandboxProvider` implementing `ComputerProvider`: per-run directory under a temp root, commands run through `sandbox-exec` with a generated profile (write only inside the run directory, no network unless the policy grants it), timeout and output cap as in the Docker provider.
+- [x] Wire as a provider name `local`, chosen by configuration; `docker` stays the default.
 - [ ] Approval flow: an Ask result reuses the existing approval cards; headless callers (benchmark, service keys) get Deny, never a hang.
-- [ ] Behaviour tests (direct, not benchmark): `cat .env` is blocked, writing outside the run directory fails, a network call fails with no grant, `python -m unittest` runs, files uploaded and downloaded round-trip, a path escape (`../`, symlink) is rejected, timeout kills the process tree.
+- [x] Behaviour tests (direct, not benchmark): `cat .env` is blocked, writing outside the run directory fails, a network call fails with no grant, `python -m unittest` runs, files uploaded and downloaded round-trip, a path escape (`../`, symlink) is rejected, timeout kills the process tree.
 - [ ] Docs: what the local mode does and does NOT protect (no per-host network filter, macOS only).
 
 ## Gates before moving on (stop and re-plan if any fails)
@@ -409,4 +409,9 @@ Goal: run agent code on the user's own machine without Docker, with the layered 
 - [ ] Windows isolation approach, bundling the Python backend into the Electron app, dmg/exe.
 
 ## Review
-(to be filled in after each stage)
+### Stage A, first part (done in this branch)
+- Built: `execution_policy.py`, `local_provider.py` (Seatbelt), plugin `sandbox.local` (listed but disabled in `default.yaml`), `NEXUS_SANDBOX_PROVIDER` picks the default provider (still `docker`). Enable with a patch file (`sandbox-local` `disabled: false`) plus `NEXUS_SANDBOX_PROVIDER=local`, and the API must run on the macOS host, not in a container.
+- Checks: 48 new tests pass on macOS (policy text, then real commands under the sandbox); 346 passed / 31 skipped in the Linux test container (macOS-only tests skip there); mypy back at the 22-error baseline after fixing a platform-narrowing error. Gate 2 partly met: all 83 benchmark tasks give the validated outcome through the local provider (reference solution passes the hidden tests, untouched starter fails), 11 s for 166 runs, host Python 3.12 versus 3.11 in Docker with no difference seen.
+- Found while testing (kept as comments in the code): a bare "exit code != 0" passes when the sandbox profile itself is broken, so blocking tests now require the kernel's "not permitted" message; Seatbelt regex does not accept `A-Za-z` ranges; a deny of all of `file-read*` makes the shell's `cd` fail; mixing `file-read*` with `file-read-data` lets the narrower allow override an earlier deny.
+- NOT done: (1) gate 2 with a real agent run: needs the API and worker on the macOS host (Postgres/Redis/Qdrant can stay in Docker for that), which is the Stage B work or a manual host setup; (2) the approval flow still has no approver: an Ask is refused when nobody can answer, there is no card in the UI yet; (3) the docs page; (4) no memory or process limits (Docker had 2 GB and 64 processes), only the timeout.
+

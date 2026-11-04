@@ -50,6 +50,20 @@ def public_error(error: BaseException) -> str:
         return str(error)[:300]
     return "The run failed unexpectedly. See the worker log for details."
 
+MAX_SANDBOX_INPUT_PATH_LENGTH = 200
+MAX_SANDBOX_INPUT_PATH_DEPTH = 8
+
+
+def sandbox_input_path_error(name: str) -> str | None:
+    """Why `name` cannot be a sandbox input path, or None. Folders are allowed; leaving the working directory is not."""
+    if not name or len(name) > MAX_SANDBOX_INPUT_PATH_LENGTH or "\x00" in name or "\\" in name:
+        return "Sandbox input paths must be non-empty relative paths without backslashes"
+    parts = name.split("/")
+    if name.startswith("/") or len(parts) > MAX_SANDBOX_INPUT_PATH_DEPTH or any(part in ("", ".", "..") for part in parts):
+        return "Sandbox input paths must stay inside the working directory (no absolute paths, '.', '..' or empty folders)"
+    return None
+
+
 MAX_UNDECLARED_FILES = 20
 MAX_UNDECLARED_BYTES = 25_000_000
 
@@ -787,8 +801,9 @@ class FlowCompiler:
                     for supplied_name, supplied_content in supplied_files.items():
                         if not isinstance(supplied_name, str) or not isinstance(supplied_content, str):
                             raise ValueError("Sandbox files must contain text file values")
-                        if supplied_name != supplied_name.rsplit("/", 1)[-1] or supplied_name != supplied_name.rsplit("\\", 1)[-1]:
-                            raise ValueError("Sandbox input filenames must not contain paths")
+                        path_error = sandbox_input_path_error(supplied_name)
+                        if path_error:
+                            raise ValueError(path_error)
                         input_files[supplied_name] = supplied_content.encode("utf-8")
                 uploaded_name = state.input_data.get("filename")
                 if not isinstance(uploaded_name, str) or uploaded_name != uploaded_name.rsplit("/", 1)[-1] or uploaded_name != uploaded_name.rsplit("\\", 1)[-1]:

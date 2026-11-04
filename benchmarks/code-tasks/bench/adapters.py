@@ -12,6 +12,7 @@ import subprocess
 import uuid
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -262,7 +263,11 @@ class NexusAgentAdapter:
     def run(self, task_prompt: str, workspace: Path, timeout_seconds: int) -> AgentOutcome:
         deadline = time.monotonic() + timeout_seconds
         outcome = AgentOutcome()
-        files = {p.name: p.read_text(encoding="utf-8") for p in workspace.iterdir() if p.is_file()}
+        files = {
+            path.relative_to(workspace).as_posix(): path.read_text(encoding="utf-8")
+            for path in sorted(workspace.rglob("*"))
+            if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
+        }
         try:
             token = self._new_token()
             token_issued = time.monotonic()
@@ -303,12 +308,14 @@ class NexusAgentAdapter:
                 # output but the run is recorded as completed_unverified and does not count as a claim of success.
                 local = name[len("unverified/"):] if name.startswith("unverified/") else name
                 unverified = unverified or local != name
-                if not local or "/" in local:
+                target = (workspace / local).resolve()
+                if not local or workspace.resolve() not in target.parents:
                     continue
-                request = urllib.request.Request(f"{self.api_url}/api/v1/runs/{run_id}/artifacts/{name}",
+                request = urllib.request.Request(f"{self.api_url}/api/v1/runs/{run_id}/artifacts/{urllib.parse.quote(name, safe='/')}",
                                                  headers={"Authorization": f"Bearer {token}"})
                 with urllib.request.urlopen(request, timeout=60) as response:
-                    (workspace / local).write_bytes(response.read())
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(response.read())
             if unverified and status == "completed":
                 status = "completed_unverified"
                 outcome.raw["status"] = status

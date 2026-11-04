@@ -16,3 +16,8 @@
 ## Chấm điểm: lỗi của bộ chấm không được tính là lỗi của agent
 - Lỗi: `bench/grade.py` ghi `FAIL 0/0` khi Docker nghẽn và test ẩn không chạy; một lời giải đúng (impl-021) bị tính là rớt và là "tuyên bố sai".
 - Quy tắc: trước khi phân tích vì sao một tác vụ rớt, chạy lại test ẩn trên workspace đã lưu. Verdict mà không có dòng "Ran N tests" là `INFRA`, không phải `FAIL`.
+
+## Bộ đo: kiểm tra đầu vào trước khi kết luận về năng lực
+- Lỗi: bốn tác vụ nhiều file cho NexusAgent 0/4 qua ba lượt đo. Nguyên nhân là adapter chỉ gửi file ở thư mục gốc và backend cấm đường dẫn, nên agent nhận sandbox thiếu package; "completed" nhưng số test đạt y hệt starter.
+- Quy tắc: khi một run báo hoàn thành mà workspace không đổi (số test đạt bằng starter), coi là lỗi bộ đo hoặc đầu vào trước, không phải lỗi agent. Kiểm tra mỗi hệ thống nhận đúng cùng đầu vào.
+- Test ẩn phải suy ra được từ đề. Nếu một cách đọc hợp lệ của đề làm rớt test, sửa test, ghi lại, và chấm lại tất cả hệ thống theo cùng một test.

@@ -10,7 +10,7 @@ import base64
 import hashlib
 import json
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from uuid import uuid4
 
 from .evidence import Evidence, Level
@@ -39,7 +39,7 @@ passed = failed = 0
 details = []
 if not tampered:
     for name in sorted(PROTECTED):
-        module = name[:-3]
+        module = name[:-3].replace("/", ".")
         suite = unittest.defaultTestLoader.loadTestsFromName(module)
         result = unittest.TextTestRunner(stream=io.StringIO(), verbosity=0).run(suite)
         if result.testsRun:
@@ -77,7 +77,7 @@ def protected_test_hashes(input_files: dict[str, bytes]) -> dict[str, str]:
     """SHA-256 of every staged file that looks like a test module."""
     return {
         name: hashlib.sha256(content).hexdigest()
-        for name, content in input_files.items() if _TEST_NAME.match(name)
+        for name, content in input_files.items() if _TEST_NAME.match(PurePosixPath(name).name)
     }
 
 

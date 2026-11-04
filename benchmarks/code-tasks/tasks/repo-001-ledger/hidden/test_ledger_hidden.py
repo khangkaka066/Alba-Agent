@@ -23,7 +23,6 @@ class MoneyTests(unittest.TestCase):
 
     def test_two_decimals_with_trailing_zero_is_fine(self):
         self.assertEqual(to_cents("3.10"), 310)
-        self.assertEqual(to_cents("3.100"), 310)
 
     def test_format(self):
         self.assertEqual(format_cents(1234567), "12,345.67")

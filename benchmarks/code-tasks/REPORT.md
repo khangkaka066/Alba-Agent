@@ -123,6 +123,24 @@ NexusAgent sau sửa còn rớt: `fix-021-config-merge-isolation`, `impl-008-ini
 - `fix-021-config-merge-isolation`: lỗi logic thật. Khi khóa chưa có trong `base`, `deep_merge` sao chép nguyên dict override nên các giá trị `None` lồng bên trong không bị loại, trái với docstring ("cũng áp dụng cho dict override lồng nhau"). Agent báo DONE nhưng test tự viết không phủ trường hợp này.
 - Kết luận: cả 3 trường hợp đều chưa chứng minh được "thiếu công cụ repo" là nguyên nhân. Bộ 60 tác vụ toàn file nhỏ nên cũng không đo được năng lực đó.
 
+## Giai đoạn 30: tác vụ nhiều file (thư mục con)
+
+Bộ `repo-001..004` là bốn package nhiều module, mỗi tác vụ có 3-4 lỗi nằm ở các file khác nhau (`ledger`, `textpipe`, `jobplan`, `router`).
+
+**Lỗi của bộ đo đã làm sai các lượt đo trước (seq2-seq4).** Backend từ chối mọi tên file có đường dẫn ("Sandbox input filenames must not contain paths"), và adapter chỉ gửi file ở thư mục gốc. NexusAgent nhận một sandbox thiếu package, trả về "completed" mà không đổi file nào (số test đạt y hệt starter) và bị tính 0/4. Kết quả đó phản ánh giới hạn đầu vào, không phải năng lực của agent. Đã sửa cả hai phía: compiler nhận đường dẫn tương đối (tối đa 8 cấp, không `..`, không tuyệt đối), bộ kiểm chứng chạy được test nằm trong thư mục con, adapter gửi và tải về đệ quy.
+
+**Một test ẩn mơ hồ đã bị sửa sau khi thấy kết quả.** `repo-001` đòi `to_cents("3.100") == 310` trong khi docstring nói hơn hai chữ số thập phân là `ValueError`. Cách đọc của agent hợp lệ, nên khẳng định đó bị bỏ và mọi lượt của repo-001 được chấm lại theo cùng một test (Claude Code và NexusAgent từ FAIL thành PASS, DeepSeek Harness vẫn FAIL).
+
+| Hệ thống | repo-001 | repo-002 | repo-003 | repo-004 | Đạt | Thời gian mỗi tác vụ |
+|---|---|---|---|---|---|---|
+| NexusAgent (seq5) | PASS | PASS | PASS | PASS | **4/4** | 96-135 giây |
+| Claude Code (seq3) | PASS | PASS | PASS | PASS | 4/4 | 377-812 giây |
+| DeepSeek Harness (seq3) | FAIL | PASS | PASS | PASS | 3/4 | 98-442 giây |
+
+Chi phí được tính: NexusAgent 0,124 USD, DeepSeek Harness 0,171 USD, Claude Code 0,085 USD cho 4 tác vụ.
+
+**Cách đọc.** Mỗi ô chỉ một lần chạy, bốn tác vụ do chính chúng tôi viết, và lượt NexusAgent được đo sau khi sửa lỗi bộ đo và đường gọi model (khóa 401) dựa trên các tác vụ này, nên con số có xu hướng lạc quan. Điều đáng tin: khoảng cách 0/4 trước đó là do giao diện đầu vào, không phải do thiếu công cụ sửa file, và giả thuyết "cần `read_file`/`edit_file`/`grep`/`glob`" chưa có bằng chứng ủng hộ. Việc cần làm tiếp là chạy lặp 3 lần và thêm tác vụ mới chưa từng dùng để chỉnh sửa.
+
 ## Tái tạo
 
 ```bash

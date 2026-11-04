@@ -25,6 +25,7 @@ from app.models.scope import scoped_session
 from nexus_core_schema.models import RuntimeEventType
 
 from .docker_supervisor import OutputSink, SandboxExecution
+from .execution_policy import Decision, approved_commands
 
 Visibility = Literal["shared", "private"]
 BrowserHook = Callable[["ComputerHandle", str, dict[str, str]], Awaitable[bytes | None]]
@@ -492,6 +493,7 @@ class ComputerSandboxSupervisor:
         approval_guard: BoundaryGuard | None = None,
     ) -> SandboxExecution:
         handle = await self.get(access, computer_id)
+        provider = self._provider(handle.provider)
         if boundary is None:
             try:
                 tokens = shlex.split(command)
@@ -499,12 +501,22 @@ class ComputerSandboxSupervisor:
                 raise ValueError("Shell command has invalid quoting") from error
             if any(token in ("rm", "rmdir", "mkfs", "shred", "shutdown", "reboot") for token in tokens):
                 boundary = "destructive_command"
-        if boundary is not None:
-            guard = approval_guard or self._boundary_guard
-            if guard is None:
-                raise PermissionError("Sensitive computer actions require an approval guard")
-            await guard(access, boundary, command)
-        result = await self._provider(handle.provider).shell(handle, command, timeout_seconds, sink)
+            else:
+                # A provider with its own execution policy (the local one) can ask for a person to confirm; that reuses the same approval.
+                evaluate = getattr(provider, "evaluate_command", None)
+                if evaluate is not None and evaluate(command).decision is Decision.ASK:
+                    boundary = "external_action"
+        approval = approved_commands.set(approved_commands.get() | {command}) if boundary is not None else None
+        try:
+            if boundary is not None:
+                guard = approval_guard or self._boundary_guard
+                if guard is None:
+                    raise PermissionError("Sensitive computer actions require an approval guard")
+                await guard(access, boundary, command)
+            result = await provider.shell(handle, command, timeout_seconds, sink)
+        finally:
+            if approval is not None:
+                approved_commands.reset(approval)
         await self._audit(access, computer_id, "computer.shell", {
             "command_sha256": hashlib.sha256(command.encode()).hexdigest(), "exit_code": result.exit_code,
         })

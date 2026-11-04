@@ -14,7 +14,8 @@ from uuid import uuid4
 import pytest
 
 from nexus_computer_sandbox import ComputerAccess, ComputerHandle
-from nexus_computer_sandbox.execution_policy import Decision, ExecutionPolicy, Verdict
+from nexus_computer_sandbox import ComputerSandboxSupervisor
+from nexus_computer_sandbox.execution_policy import Decision, ExecutionPolicy, approved_commands
 from nexus_computer_sandbox.local_provider import EXIT_BLOCKED, LocalSandboxProvider, seatbelt_profile
 
 POLICY = ExecutionPolicy()
@@ -81,12 +82,12 @@ DENIED = "not permitted"
 
 
 class Fixture:
-    def __init__(self, root: Path, approver: object = None) -> None:
+    def __init__(self, root: Path) -> None:
         self.home = root / "home"
         self.home.mkdir()
         (self.home / ".ssh").mkdir()
         (self.home / ".ssh" / "id_rsa").write_text("PRIVATE")
-        self.provider = LocalSandboxProvider(root / "computers", approver=approver, home=self.home)  # type: ignore[arg-type]
+        self.provider = LocalSandboxProvider(root / "computers", home=self.home)
         access = ComputerAccess(uuid4(), uuid4())
         self.handle = ComputerHandle(uuid4(), access, "private", "local")
         self.output: list[str] = []
@@ -155,24 +156,90 @@ def test_an_ask_is_refused_when_nobody_can_answer(tmp_path: Path) -> None:
 
 
 @needs_macos
-def test_an_approved_ask_runs_and_a_declined_one_does_not(tmp_path: Path) -> None:
-    seen: list[Verdict] = []
+def test_an_approved_command_runs_and_only_that_command(tmp_path: Path) -> None:
+    fixture = Fixture(tmp_path)
+    command = "echo hello && crontab -l 2>/dev/null; true"
+    token = approved_commands.set(frozenset({command}))
+    try:
+        code, out, _ = asyncio.run(fixture.run(command))
+        other, _, err = asyncio.run(fixture.run("echo other && crontab -l"))
+    finally:
+        approved_commands.reset(token)
+    assert code == 0 and "hello" in out
+    assert other == EXIT_BLOCKED and "needs approval" in err  # an approval covers the command that was approved, nothing else
 
-    async def yes(_command: str, verdict: Verdict) -> bool:
-        seen.append(verdict)
-        return True
 
-    async def no(_command: str, _verdict: Verdict) -> bool:
-        return False
+@needs_macos
+def test_an_approved_network_command_gets_the_network_and_the_next_one_does_not(tmp_path: Path) -> None:
+    fixture = Fixture(tmp_path)
+    probe = "python3 -c \"import socket; s=socket.socket(); s.settimeout(2); print(s.connect_ex(('127.0.0.1', 9)))\" # curl"
+    token = approved_commands.set(frozenset({probe}))
+    try:
+        code, out, err = asyncio.run(fixture.run(probe))
+    finally:
+        approved_commands.reset(token)
+    assert code == 0, err  # not "Operation not permitted": the port is closed, but the connect attempt itself was allowed
+    assert out.strip() not in ("", "1"), out  # 1 is EPERM; a refused connection is 61 on macOS, a timeout 35
+    code, _, err = asyncio.run(fixture.run("python3 -c \"import socket; socket.create_connection(('127.0.0.1', 9), 2)\""))
+    assert code != 0 and DENIED in err
 
-    (tmp_path / "a").mkdir()
-    (tmp_path / "b").mkdir()
-    approved = Fixture(tmp_path / "a", approver=yes)
-    code, out, _ = asyncio.run(approved.run("echo hello && crontab -l 2>/dev/null; true"))
-    assert code == 0 and "hello" in out and seen and seen[0].decision is Decision.ASK
-    declined = Fixture(tmp_path / "b", approver=no)
-    code, out, _ = asyncio.run(declined.run("echo hello && crontab -l"))
-    assert code == EXIT_BLOCKED and "hello" not in out
+
+class GuardedSupervisor(ComputerSandboxSupervisor):
+    """The real execute_shell without a database: the computer is a handle held in memory."""
+
+    def __init__(self, handle: ComputerHandle, provider: LocalSandboxProvider) -> None:  # noqa: D107
+        self._providers = {"local": provider}
+        self._run_users = {}
+        self._browser_hook = None
+        self._boundary_guard = None
+        self._default_provider = "local"
+        self._handle_in_memory = handle
+        self.audited: list[str] = []
+
+    async def get(self, access: ComputerAccess, computer_id: object) -> ComputerHandle:
+        return self._handle_in_memory
+
+    async def _audit(self, access: ComputerAccess, computer_id: object, action: str, details: dict[str, str | int]) -> None:  # type: ignore[override]
+        self.audited.append(action)
+
+
+@needs_macos
+def test_the_supervisor_sends_an_ask_through_the_approval_guard_before_running_it(tmp_path: Path) -> None:
+    fixture = Fixture(tmp_path)
+    supervisor = GuardedSupervisor(fixture.handle, fixture.provider)
+    asked: list[tuple[str, str]] = []
+    decision = {"allow": False}
+
+    async def guard(_access: ComputerAccess, boundary: str, command: str) -> None:
+        asked.append((boundary, command))
+        if not decision["allow"]:
+            raise PermissionError("a person has not approved this")
+
+    async def sink(_stream: str, _text: str) -> None:
+        return None
+
+    command = "echo done >> .zshrc"
+    with pytest.raises(PermissionError):
+        asyncio.run(supervisor.execute_shell(fixture.handle.access, fixture.handle.id, command, 20, sink, approval_guard=guard))
+    assert asked == [("external_action", command)] and "computer.shell" not in supervisor.audited
+    decision["allow"] = True
+    result = asyncio.run(supervisor.execute_shell(fixture.handle.access, fixture.handle.id, command, 20, sink, approval_guard=guard))
+    assert result.exit_code == 0 and supervisor.audited == ["computer.shell"]
+    harmless = asyncio.run(supervisor.execute_shell(fixture.handle.access, fixture.handle.id, "echo fine", 20, sink, approval_guard=guard))
+    assert harmless.exit_code == 0 and len(asked) == 2  # an ordinary command inside the sandbox does not ask
+    assert approved_commands.get() == frozenset()  # the approval does not outlive the call
+
+
+@needs_macos
+def test_without_a_guard_an_ask_is_an_error_not_a_hang(tmp_path: Path) -> None:
+    fixture = Fixture(tmp_path)
+    supervisor = GuardedSupervisor(fixture.handle, fixture.provider)
+
+    async def sink(_stream: str, _text: str) -> None:
+        return None
+
+    with pytest.raises(PermissionError):
+        asyncio.run(supervisor.execute_shell(fixture.handle.access, fixture.handle.id, "pip install requests", 20, sink))
 
 
 @needs_macos
@@ -220,3 +287,11 @@ def test_a_timeout_kills_the_command_and_its_children(tmp_path: Path) -> None:
     import subprocess
 
     assert subprocess.run(["pgrep", "-f", "sleep 3607"], capture_output=True, text=True, check=False).stdout.strip() == ""
+
+
+@needs_macos
+def test_one_file_cannot_grow_past_the_size_cap(tmp_path: Path) -> None:
+    fixture = Fixture(tmp_path)
+    code, _, _ = asyncio.run(fixture.run("python3 -c \"f=open('big.bin','wb'); f.seek(2**31); f.write(b'x'); f.close()\""))
+    assert code != 0
+    assert (fixture.provider._directory(fixture.handle) / "big.bin").stat().st_size < 2**31  # noqa: SLF001

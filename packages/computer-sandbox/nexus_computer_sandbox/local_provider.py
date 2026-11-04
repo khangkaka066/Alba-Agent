@@ -6,27 +6,26 @@ What the sandbox enforces, whatever the command says:
 - no network, unless the person approved a command that needs it, and then only for that one command. Seatbelt cannot filter by
   host: the network is open or closed.
 
-What it does not do: it works on macOS only (``sandbox-exec`` is deprecated by Apple but still shipped), it does not limit memory or
-process count the way the Docker provider does, and a command still sees the rest of the host filesystem read-only.
+What it does not do: it works on macOS only (``sandbox-exec`` is deprecated by Apple but still shipped), it caps the size of one file but not
+memory or process count (macOS enforces neither reliably, unlike the Docker provider), and a command still sees the rest of the host filesystem read-only.
 """
 
 from __future__ import annotations
 
 import asyncio
 import os
+import resource
 import signal
 import sys
 from pathlib import Path
 from time import monotonic
-from typing import Awaitable, Callable
 
 from .docker_supervisor import OutputSink, SandboxExecution
-from .execution_policy import Decision, ExecutionPolicy, Verdict
+from .execution_policy import Decision, ExecutionPolicy, Verdict, approved_commands
 from .supervisor import ComputerHandle, DockerSandboxProvider
 
-Approver = Callable[[str, Verdict], Awaitable[bool]]
-
 SANDBOX_EXEC = "/usr/bin/sandbox-exec"
+MAX_FILE_BYTES = 1 << 30  # one file cannot grow past 1 GiB; macOS does not enforce a memory or process-count cap that holds
 EXIT_BLOCKED = 126  # the shell's own code for "found but not allowed to run"
 
 # Under the person's home: credentials and history that no agent command needs.
@@ -72,6 +71,10 @@ def seatbelt_profile(run_directory: Path, computers_root: Path, home: Path, netw
     return "\n".join(lines) + "\n"
 
 
+def _limit_file_size() -> None:
+    resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_FILE_BYTES, MAX_FILE_BYTES))
+
+
 def _environment(run_directory: Path, interpreter_directory: Path) -> dict[str, str]:
     """Only what a command needs. The host environment holds API keys and tokens, so none of it is passed on."""
     temporary = run_directory / ".tmp"
@@ -89,14 +92,13 @@ class LocalSandboxProvider(DockerSandboxProvider):
     name = "local"
 
     def __init__(
-        self, host_root: Path, policy: ExecutionPolicy | None = None, approver: Approver | None = None,
+        self, host_root: Path, policy: ExecutionPolicy | None = None,
         interpreter: Path | None = None, home: Path | None = None,
     ) -> None:
         if not seatbelt_available():
             raise RuntimeError("The local sandbox needs macOS sandbox-exec; use the docker provider on this machine")
         super().__init__(host_root)
         self._policy = policy or ExecutionPolicy()
-        self._approver = approver  # None means nobody can answer (benchmark, service keys): an ask is a refusal, never a wait
         self._interpreter_directory = (interpreter or Path(sys.executable)).resolve().parent
         self._home = (home or Path.home()).resolve()
 
@@ -111,6 +113,10 @@ class LocalSandboxProvider(DockerSandboxProvider):
         # The private temp folder is scratch space (the Docker provider keeps /tmp outside the shared directory), not a deliverable.
         return tuple(name for name in await super().files(handle) if not name.startswith(".tmp/"))
 
+    def evaluate_command(self, command: str) -> Verdict:
+        """What the supervisor asks before running a command, so an Ask can go through the existing approval boundary first."""
+        return self._policy.evaluate(command)
+
     async def _blocked(self, command: str, reason: str, started: float, handle: ComputerHandle) -> SandboxExecution:
         return SandboxExecution(EXIT_BLOCKED, "", f"Blocked by the execution policy: {reason}\n", await self.files(handle), monotonic() - started)
 
@@ -118,18 +124,18 @@ class LocalSandboxProvider(DockerSandboxProvider):
         if handle.external_id is None or not command.strip() or not 1 <= timeout_seconds <= 3600:
             raise ValueError("Computer, command, and timeout must be valid")
         started = monotonic()
-        verdict = self._policy.evaluate(command)
+        verdict = self.evaluate_command(command)
         if verdict.decision is Decision.DENY:
             return await self._blocked(command, verdict.reason, started, handle)
-        if verdict.decision is Decision.ASK:
-            if self._approver is None or not await self._approver(command, verdict):
-                return await self._blocked(command, f"{verdict.reason} (needs approval)", started, handle)
+        if verdict.decision is Decision.ASK and command not in approved_commands.get():
+            # Nobody approved it (a benchmark, a service key, a caller without a guard): a refusal, never a wait.
+            return await self._blocked(command, f"{verdict.reason} (needs approval)", started, handle)
         run_directory = self._directory(handle).resolve()
         profile = seatbelt_profile(run_directory, self._root, self._home, network=verdict.needs_network and verdict.decision is Decision.ASK)
         process = await asyncio.create_subprocess_exec(
             SANDBOX_EXEC, "-p", profile, "/bin/sh", "-c", command,
             cwd=run_directory, env=_environment(run_directory, self._interpreter_directory),
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True, preexec_fn=_limit_file_size,
         )
         chunks: dict[str, list[str]] = {"stdout": [], "stderr": []}
 

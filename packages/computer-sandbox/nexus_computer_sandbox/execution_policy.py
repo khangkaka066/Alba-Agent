@@ -13,6 +13,7 @@ command that is not denied needs an approval.
 from __future__ import annotations
 
 import re
+from contextvars import ContextVar
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -22,6 +23,11 @@ class Decision(StrEnum):
     ASK = "ask"
     ALLOW = "allow"
 
+
+# Commands a person has just approved, set by the supervisor around one call after the approval guard accepted it. A context variable
+# rather than a parameter so the provider interface stays the same for Docker and the cloud drivers, and so an approval cannot leak into
+# another request that runs at the same time.
+approved_commands: ContextVar[frozenset[str]] = ContextVar("approved_commands", default=frozenset())
 
 _RANK = {Decision.DENY: 0, Decision.ASK: 1, Decision.ALLOW: 2}
 

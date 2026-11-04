@@ -11,6 +11,7 @@ import { failureDetails, failureFacts } from "@/lib/history.mjs";
 import { classifyArtifact, isFinished, liveActivity, stepLabel } from "@/lib/workspace.mjs";
 import { AttachmentBar, atWordStart } from "./attachments";
 import { FileGlyph } from "./file-glyph";
+import { ProposalCard } from "./plan-proposal";
 import { useWorkspace, type ChatMessage } from "./workspace-context";
 
 /** What to do with a finished task's results: give them to the next team, or start something new from them. */
@@ -157,6 +158,8 @@ export function Composer({ onNavigate }: { onNavigate: (page: "intelligence" | "
         ? <div className="bubble bubble--user" key={message.id}>{message.text}{message.attached && message.attached.length > 0 && <small className="bubble__attached">📎 {message.attached.join(", ")}</small>}</div>
         : message.role === "team" ? <TeamPill key={message.id} message={message} />
         : <p className="bubble bubble--note" key={message.id} role="status">{message.text}</p>)}
+      {workspace.proposal && <ProposalCard proposal={workspace.proposal.card} disabled={workspace.busy}
+        onBuild={(answers) => void workspace.answerProposal(answers)} onSkip={() => void workspace.answerProposal(null)} />}
       <ChannelsHint onOpen={() => onNavigate("integrations")} />
       <InsightBanner onOpen={() => onNavigate("intelligence")} />
     </div>

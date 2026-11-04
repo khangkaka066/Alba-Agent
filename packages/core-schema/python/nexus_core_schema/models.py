@@ -152,6 +152,9 @@ class NexusGenSandboxNodeSpec(Contract):
     verification_command: str = Field(min_length=1)
     # What to do when the code ran but no executable evidence proves it: hand it over clearly labelled, or fail the run.
     on_unverified: Literal["deliver_labeled", "fail"] = "deliver_labeled"
+    # What to do when verification does not pass: fail the run, or finish the node with the evidence so a router after
+    # it can send the work to a stronger team. A node that continues exports no files of its own.
+    on_failure: Literal["fail", "continue"] = "fail"
     consensus_config: ConsensusConfigSpec = Field(default_factory=ConsensusConfigSpec)
     join: JoinMode = "any"
     expected_artifact_paths: tuple[ArtifactPath, ...] = Field(default=(), max_length=64)

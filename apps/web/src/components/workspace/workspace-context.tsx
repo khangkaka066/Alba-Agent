@@ -6,6 +6,7 @@ import { useModels } from "@/components/model-context";
 import { apiRequest, readError, type JsonRecord } from "@/lib/api";
 import { getDesktop, type FolderInfo } from "@/lib/desktop";
 import { readSse } from "@/lib/sse";
+import type { PlanProposal, ProposalAnswers } from "./plan-proposal";
 import {
   classifyArtifact, fileStatuses, flattenWorkspaceFiles, initialRunState, isFinished, reduceRunEvent, teamSummary,
   type FileStatus, type RunState, type RuntimeEvent, type TeamSummary,
@@ -23,6 +24,8 @@ export type RunFailure = { failed_node_id: string | null; failed_node_label: str
 type RunDetail = { status: string; conversation_id: string | null; failure: RunFailure | null };
 type Thread = { id: string; messages: Array<{ id: string; role: ChatMessage["role"]; text: string; run_id: string | null; workflow_id: string | null; meta?: { attachments?: Array<{ name: string }> } }> };
 const MAX_ATTACHMENTS = 20;
+type TaskJob = { task: string; inputFiles: Record<string, string>; rigor: Rigor; options?: { studioId?: string }; sent: Attachment[] };
+export type PendingProposal = { card: PlanProposal; job: TaskJob };
 
 type WorkspaceValue = {
   token: string;
@@ -44,6 +47,10 @@ type WorkspaceValue = {
   decisions: Record<string, Decision>;
   folder: FolderInfo | null;
   busy: boolean;
+  /** Questions and options waiting for the person's answer before a team is built; null when nothing is asked. */
+  proposal: PendingProposal | null;
+  /** Build the team with the answers, or with only the stated assumptions when null. */
+  answerProposal: (answers: ProposalAnswers | null) => Promise<void>;
   startTask: (prompt: string, rigor: Rigor, options?: { studioId?: string }) => Promise<void>;
   attachRun: (workflowId: string, runId: string) => void;
   openWorkflow: (workflowId: string) => void;
@@ -105,6 +112,7 @@ export function WorkspaceProvider({ token, children }: { token: string; children
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [folder, setFolder] = useState<FolderInfo | null>(null);
   const [busy, setBusy] = useState(false);
+  const [proposal, setProposal] = useState<PendingProposal | null>(null);
   const folderMap = useRef<Record<string, string>>({});
   const previous = useRef<Artifact[]>([]);
   const previousToken = useRef("");
@@ -159,7 +167,7 @@ export function WorkspaceProvider({ token, children }: { token: string; children
   // Back to the empty, centred prompt.
   const newTask = useCallback(() => {
     previous.current = artifactsRef.current;
-    setMessages([]); setConversationId(null); setFailure(null); setAttachments([]); chosenByHand.current = false; setWorkflowId(null); setRunId(null); setSpec(null); setRun(initialRunState()); setArtifacts([]); setSelected(null); setDecisions({}); setView("workbench");
+    setProposal(null); setMessages([]); setConversationId(null); setFailure(null); setAttachments([]); chosenByHand.current = false; setWorkflowId(null); setRunId(null); setSpec(null); setRun(initialRunState()); setArtifacts([]); setSelected(null); setDecisions({}); setView("workbench");
   }, []);
 
   // Open a saved workflow on the canvas without starting a run (for example from the Intelligence page).
@@ -169,9 +177,23 @@ export function WorkspaceProvider({ token, children }: { token: string; children
     void apiRequest<JsonRecord>(`/api/v1/workflows/${nextWorkflow}`, token).then(setSpec).catch(() => undefined);
   }, [token]);
 
+  const submitTask = useCallback(async (job: TaskJob, extra: JsonRecord) => {
+    const response = await apiRequest<GenerateResponse>("/api/v1/architect/generate-workflow", token, {
+      method: "POST",
+      body: JSON.stringify({ user_requirement_prompt: job.task, auto_run: true, ...(conversationRef.current ? { conversation_id: conversationRef.current } : {}), ...(model.current ? { preferred_model: model.current } : {}), ...(job.options?.studioId ? { studio_id: job.options.studioId } : {}), ...(job.sent.length ? { input_artifacts: job.sent.map((item) => ({ run_id: item.run_id, filename: item.filename })) } : {}), ...(job.rigor === "auto" ? {} : { rigor: job.rigor }), ...(Object.keys(job.inputFiles).length ? { input_files: job.inputFiles } : {}), ...extra }),
+    });
+    if (!response.run_id) throw new Error(translate.current("workspace.notRun"));
+    attach(String(response.workflow_spec.id), response.run_id, response.workflow_spec);
+    setFailure(null);
+    setAttachments([]); chosenByHand.current = false; // the files went with this task; the next follow-up starts from its results
+    if (response.conversation_id) setConversationId(response.conversation_id);
+    setMessages((current) => [...current, { id: crypto.randomUUID(), role: "team", text: response.summary ?? translate.current("chat.teamBuilt"), runId: response.run_id, workflowId: String(response.workflow_spec.id) }]);
+  }, [attach, token]);
+
   const startTask = useCallback(async (prompt: string, rigor: Rigor, options?: { studioId?: string }) => {
     if (!token) { note(translate.current("workspace.starting")); return; }
     setBusy(true);
+    setProposal(null); // a new message replaces any question that is still waiting
     const sent = attachments;
     setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text: prompt, attached: sent.map((item) => item.filename.split("/").pop() ?? item.filename) }]);
     try {
@@ -183,19 +205,33 @@ export function WorkspaceProvider({ token, children }: { token: string; children
         inputFiles = flat.files; folderMap.current = flat.map;
         if (Object.keys(flat.files).length) task += WORKSPACE_NOTE;
       } else folderMap.current = {};
-      const response = await apiRequest<GenerateResponse>("/api/v1/architect/generate-workflow", token, {
-        method: "POST",
-        body: JSON.stringify({ user_requirement_prompt: task, auto_run: true, ...(conversationRef.current ? { conversation_id: conversationRef.current } : {}), ...(model.current ? { preferred_model: model.current } : {}), ...(options?.studioId ? { studio_id: options.studioId } : {}), ...(sent.length ? { input_artifacts: sent.map((item) => ({ run_id: item.run_id, filename: item.filename })) } : {}), ...(rigor === "auto" ? {} : { rigor }), ...(Object.keys(inputFiles).length ? { input_files: inputFiles } : {}) }),
-      });
-      if (!response.run_id) throw new Error(translate.current("workspace.notRun"));
-      attach(String(response.workflow_spec.id), response.run_id, response.workflow_spec);
-      setFailure(null);
-      setAttachments([]); chosenByHand.current = false; // the files went with this task; the next follow-up starts from its results
-      if (response.conversation_id) setConversationId(response.conversation_id);
-      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "team", text: response.summary ?? translate.current("chat.teamBuilt"), runId: response.run_id, workflowId: String(response.workflow_spec.id) }]);
+      const job: TaskJob = { task, inputFiles, rigor, options, sent };
+      // Only the first message of a task is worth interrupting; a follow-up continues work the person already shaped.
+      if (rigor === "auto" && !options?.studioId && !conversationRef.current) {
+        const card = await apiRequest<PlanProposal>("/api/v1/architect/propose", token, {
+          method: "POST",
+          body: JSON.stringify({ user_requirement_prompt: task, input_file_names: Object.keys(inputFiles), ...(model.current ? { preferred_model: model.current } : {}) }),
+        }).catch(() => null); // asking is a courtesy: if it fails the task is built as asked
+        if (card && card.status === "needs_input") { setProposal({ card, job }); return; }
+      }
+      await submitTask(job, {});
     } catch (error) { note(readError(error)); }
     finally { setBusy(false); }
-  }, [attach, attachments, folder, note, token]);
+  }, [attachments, folder, note, submitTask, token]);
+
+  // The person answered the questions (or took the recommendation); build the team with their decisions.
+  const answerProposal = useCallback(async (answers: ProposalAnswers | null) => {
+    if (!proposal) return;
+    setBusy(true);
+    try {
+      await submitTask(proposal.job, {
+        assumptions: proposal.card.assumptions.slice(0, 6),
+        ...(answers ? { decisions: answers.decisions.slice(0, 6), ...(answers.level ? { plan_level: answers.level } : {}) } : {}),
+      });
+      setProposal(null);
+    } catch (error) { note(readError(error)); }
+    finally { setBusy(false); }
+  }, [note, proposal, submitTask]);
 
   // One SSE stream per run feeds the composer, terminal, progress and the canvas pill.
   useEffect(() => {
@@ -339,7 +375,7 @@ export function WorkspaceProvider({ token, children }: { token: string; children
   }, [newTask, token]);
 
   const value: WorkspaceValue = {
-    token, messages, workflowId, runId, spec, conversationId, failure, attachments, addAttachment, removeAttachment, team: teamSummary(spec), run, artifacts, statuses, selected, view, decisions, folder, busy,
+    token, messages, workflowId, runId, spec, conversationId, failure, attachments, addAttachment, removeAttachment, team: teamSummary(spec), run, artifacts, statuses, selected, view, decisions, folder, busy, proposal, answerProposal,
     startTask, attachRun, openWorkflow, openRun, newTask, retry, deleteTask, select: setSelected, setView, openFolder, beforeText, fetchArtifact, accept, reject, download, dismissApproval,
   };
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

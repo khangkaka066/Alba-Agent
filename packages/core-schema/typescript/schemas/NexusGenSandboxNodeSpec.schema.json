@@ -107,6 +107,15 @@
       "title": "Max Rounds",
       "type": "integer"
     },
+    "on_failure": {
+      "default": "fail",
+      "enum": [
+        "fail",
+        "continue"
+      ],
+      "title": "On Failure",
+      "type": "string"
+    },
     "on_unverified": {
       "default": "deliver_labeled",
       "enum": [

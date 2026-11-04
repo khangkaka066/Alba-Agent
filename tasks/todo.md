@@ -304,3 +304,67 @@ every architect design verifies with `python -m compileall .`, the LLM reviewer 
 - Root cause of the infrastructure failures: the persistent computer supervisor created one `sleep`-forever container per run and nothing removed it. Fixed with release-at-node-end (reference counted per run), re-provisioning on the same row, an orphan reaper by label, a per-process concurrency cap and provisioning retries.
 - The fix caused a regression, caught by the benchmark: `read_run_file` required a running computer, so deliverables were lost after release while the run still reported completion. Fixed (host-backed files stay readable; an unreadable reported file now fails the run). Lesson: a silent `except ... continue` around an export hides lost work.
 - Still open: held-out and harder benchmark with repeats, the 3 remaining failures, no integration test for re-provision and reaper against a real database, speed (median 193 s vs 55 s), GitHub connection, OAuth login.
+
+# Phase 32 — Adaptive team size: solo for light tasks, sequential or parallel team for heavy ones (solo + repair DONE; parallel NOT built)
+
+## Progress notes (Phase 32)
+- Calibration on 70 tasks / 241 solo-system records: static signals predict solo effort weakly (best usable one, prompt length, Spearman 0.48) and predict failure not at all (<= 0.2). So the router is only a gate for "plain code or calculation request" vs everything else; the real mechanism is run solo, verify, repair on failure.
+- Built: `on_failure: continue` on sandbox nodes (compiler no longer raises, the attempt's files are evidence not a deliverable), `architect/adaptive.py` (assess, solo graph start -> solo -> gate -> repair), `rigor` = auto|solo (API default is auto; service default unchanged), `nexus_auto` benchmark system.
+- Result: 10/10 on the multi-file tasks, then 11/12 on four repeats of ledger, stock and mdlite (one run each of the 10; the stock miss was a verified-but-wrong solo result, so the gate never fired). 1 repair attempt ran in real runs and rescued a solo that "did not run cleanly and had no tests". Small sample, one model; not evidence of superiority over the earlier chain.
+- Not built, on purpose: the parallel team. Two engine gaps first: a sandbox node cannot see files written by an earlier node of the same run (only the original inputs and node summaries), and shipped tests are staged for every node, so a worker holding one module could never verify against the whole suite. No measurement so far shows a task here that needs a team (the heaviest solo run used 12.9k output tokens).
+- Lesson: the old "nexus" column for repo-001..004 includes runs from before the nested-path fix and must not be used as a baseline.
+- Static undefined-name check (`verification/names.py`, run inside both probes): a verified result with a name that is read and bound nowhere becomes FAILED with file:line. 0 false positives over the 164 known-good solution and starter folders. Then 12/15 on five repeats of stock, mdlite and scheduler (stock 5/5); the 3 misses were logic clauses the shipped tests never exercise (mdlite precedence twice, one scheduler), each a false claim, and the repair branch did not fire in any of the 20 latest runs because the solo probe said verified. Remaining weakness is clause coverage, not names. I could not show from the records that the name check itself fired.
+
+## Findings that shape the design
+- A one-task probe (repo-001, gpt-6-luna) gave all three systems 14/14. Claude Code ran solo (0 subagent calls), dsh made 2 subagent calls, NexusAgent built a 3-node sequential chain (6 agents, 505 s vs 240 s and 297 s; timings are noisy, three systems ran at once).
+- `rigor="minimal"` is told to produce "a short ordered workflow", so it never runs anything in parallel, and it always pays an architect model call first.
+- The engine already supports fan-out and fan-in: the studio DAG runs departments in parallel with `join="all"` and artifact contracts (`expected_artifact_paths`). Files move between nodes as run artifacts, mounted as `upstream/` into the next sandbox (1 MiB budget).
+- `GenerateWorkflowRequest.input_files` still rejects nested names even though `sandbox_files` on a run accepts them.
+
+## Plan
+- [ ] `architect/complexity.py`: deterministic assessment (prompt size, number and size of input files, deliverable paths named, units the prompt lists) returning level solo | sequential | parallel plus a reason. No model call unless the signals disagree.
+- [ ] `architect/solo.py`: build a `WorkflowSpec` of start + one sandbox node without calling the architect (saves its latency and cost for light tasks).
+- [ ] API: `rigor` gains `auto` (new default), `solo`, `parallel`; `minimal`/`standard`/`full_studio` keep their meaning. Response reports the chosen level and why.
+- [ ] Parallel planner: one model call that returns units with owned paths and an interface contract; reject plans whose owned paths overlap or that have fewer than 3 units; build contract node -> N sandbox nodes -> integrator (`join="all"`) -> verification.
+- [ ] Escalation: a solo run that ends FAILED/UNVERIFIED is retried once at the next level with the failure evidence; never more than one escalation.
+- [ ] Tests: classifier table, disjoint-path validation, solo spec compiles, parallel spec compiles and runs in order with a fake supervisor.
+- [ ] Benchmark: `--mode auto|solo|sequential|parallel` in the adapter; run the 10 repo tasks plus one larger parallelisable task; report pass rate, false claims, wall time, tokens, and how often the router chose each level and was wrong.
+
+## Success criteria (written before measuring)
+- Light tasks: no accuracy loss versus today and a lower median time.
+- Heavy task: parallel beats sequential on wall time without losing accuracy; otherwise parallel stays opt-in.
+- Misroute rate reported; if solo-then-escalate is no better than always-sequential, the router is removed.
+
+## Open risks
+- Parallel workers need the same interface understanding; the contract node is what prevents drift, and it is the part most likely to fail.
+- `NEXUS_SANDBOX_MAX_CONCURRENT` and Docker memory (about 6 GB) cap how many workers really run at once.
+- 1 MiB upstream budget limits how much one integrator can receive.
+
+# Phase 33 — Clarify, propose and recommend before building a team (backend + web built; not yet seen in a browser)
+
+## Progress notes (Phase 33)
+- Built: `architect/clarify.py` (limits enforced in code: <= 4 questions, 2-4 choices, one recommendation per group, distinct levels, no cost field, invalid card retried then built instead of blocked), `POST /api/v1/architect/propose`, `generate-workflow` accepts `decisions`, `assumptions`, `plan_level` and records them on the conversation message and audit log, web `ProposalCard` in the chat (first message of a task only, never for hand-off studio buttons or follow-ups), vi/en strings.
+- Deviations from the plan: the proposal card itself is not stored (stateless endpoint; the decisions are stored with the user message), types live in the architect module instead of core-schema, and the speed shown is a label (fast/medium/slow) rather than seconds.
+- Checks: 12 new clarify tests, 266 backend tests pass, mypy back at the 22-error baseline, web lint/tsc/55 tests pass.
+- Not done: the question-quality evaluation (remove one clause from 8 tasks and see whether a question surfaces it), and a visual check of the card in a running browser.
+Goal: for a request that is unclear or has several reasonable ways to be built, ask a few targeted questions, then show 2–3 options with a recommended one, like Claude Code's plan mode. A clear request skips all of it.
+
+## Findings that shape the design
+- `ConversationMessage.role` is checked to `user|team|note` and has a JSONB `meta`, so clarification and proposal cards can be `team` messages with `meta.kind` and need no migration.
+- `POST /api/v1/architect/generate-workflow` builds and starts the team in one call; the quickbar, the Copilot and the benchmark adapter all call it directly. Anything new must stay opt-in so automatic callers (service keys, benchmark) are never blocked waiting for an answer.
+- Phase 32's complexity assessment decides how many options are worth showing (a light task gets none).
+
+## Plan
+- [ ] Schema in core-schema: `ClarifyQuestion{id, text, options[{label, description, recommended}], allow_other}`, `PlanOption{id, level, summary, agents, est_seconds, tradeoffs, recommended, reason}` (no cost field: the user is not shown cost), `PlanProposal{assumptions, questions, options}`.
+- [ ] `architect/clarify.py`: one model call returning `PlanProposal`; hard limits (≤4 questions, 2–4 options each, exactly one recommended per question and per proposal); drop any question whose answer is already in the prompt or the input files; `status = ready` when nothing needs asking.
+- [ ] API: `POST /v1/architect/propose` (returns proposal or `ready`), and `generate-workflow` accepts `answers` and `chosen_option_id`; default `interactive=false` keeps today's behaviour for service keys.
+- [ ] Persist the proposal and the answers as conversation messages (`meta.kind = clarification | proposal | answer`), so a thread resumes where it stopped and the audit log records what was chosen.
+- [ ] Answers are appended to the requirement as an explicit "Decisions made with the user" block that the architect must treat as binding.
+- [ ] Web: question cards with a recommended badge, free-text "Other", and a one-click "Use recommended"; the quickbar shows a compact version.
+- [ ] Tests: limits and one-recommended invariant, clear prompts skip questions, answers reach the architect prompt, non-interactive callers are never blocked, tenant scoping on the stored messages.
+- [ ] Evaluation (weak by nature, say so): take 8 fully specified tasks, remove one binding clause from each prompt, and score (a) did a question surface the missing clause, (b) questions asked per task on the untouched prompts (burden; target ≤1 on average), (c) pass rate when a scripted user answers with the recommended option versus no clarification.
+
+## Open risks
+- Over-asking is the failure users notice first; the default must be "ready" unless an answer would change the plan.
+- A model-written recommendation can be confidently wrong; options must state the trade-off, not only a verdict.
+- The time estimate in the options is only as good as the Phase 32 calibration data; label it as an estimate. Cost is not shown to the user (decided by the user), though the recommendation may still weigh it internally.

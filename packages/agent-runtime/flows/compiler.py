@@ -850,15 +850,23 @@ class FlowCompiler:
                 )
                 output = json_safe(asdict(sandbox_result))
                 delivered_unverified = False
+                handed_on = False
+                output["verified"] = sandbox_result.exit_code == 0
                 if sandbox_result.exit_code != 0:
                     reason = sandbox_result.verification.get("reason")
-                    if not (sandbox_result.verification.get("status") == "unverified" and node.on_unverified == "deliver_labeled"):
-                        raise RuntimeError(f"Sandbox verification failed: {reason}" if reason else "Sandbox verification failed")
-                    delivered_unverified = True
-                    state.unverified_nodes.append(node.id)
-                    if self._sandbox_file_reader is not None:
-                        # Kept apart from verified artifacts so nobody mistakes a candidate for a proven result.
-                        output["unverified_files"] = await self._export_undeclared(state, input_files, sandbox_result.artifacts, "unverified/")
+                    if node.on_failure == "continue":
+                        # A router after this node decides what happens next; the attempt's files are evidence, not a deliverable.
+                        handed_on = True
+                        output["failure_reason"] = str(reason) if reason else "verification did not pass"
+                    else:
+                        if not (sandbox_result.verification.get("status") == "unverified" and node.on_unverified == "deliver_labeled"):
+                            raise RuntimeError(f"Sandbox verification failed: {reason}" if reason else "Sandbox verification failed")
+                        delivered_unverified = True
+                        state.unverified_nodes.append(node.id)
+                        if self._sandbox_file_reader is not None:
+                            # Kept apart from verified artifacts so nobody mistakes a candidate for a proven result.
+                            output["unverified_files"] = await self._export_undeclared(state, input_files, sandbox_result.artifacts, "unverified/")
+                delivered_unverified = delivered_unverified or handed_on
                 if node.expected_artifact_paths and not delivered_unverified:
                     exported: dict[str, bytes] = {}
                     produced = {name.lstrip("./") for name in sandbox_result.artifacts}

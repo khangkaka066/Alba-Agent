@@ -25,6 +25,7 @@ from app.routers.providers import PLATFORM_PROVIDERS
 from app.routers.workflows import _check_scope, _sync_learning_policies
 from bots.runner import cron_matches
 from flows.compiler import FlowCompiler
+from architect.clarify import ClarifyService, Decision, decisions_block
 from architect.team_generator import (
     ArchitectWorkspaceContext,
     KnowledgeBaseDescriptor,
@@ -63,7 +64,9 @@ class GenerateWorkflowRequest(BaseModel):
     preferred_model: str | None = Field(default=None, max_length=200)
     budget_tier: Literal["FREE", "PRO", "ENTERPRISE"] | None = None
     auto_run: bool = True
-    rigor: Literal["minimal", "standard", "full_studio"] | None = None
+    # None means "auto": plain code and calculation requests get one coder and reviewer with a repair step, anything
+    # else gets the planned team (or a studio when the request names a domain). "minimal" always plans a team.
+    rigor: Literal["auto", "solo", "minimal", "standard", "full_studio"] | None = None
     # Text files from a mounted local folder; the sandbox receives them as flat files, so names carry no path.
     input_files: dict[str, str] = Field(default_factory=dict, max_length=64)
     # Continue an existing thread; without it a new conversation is started for this request.
@@ -72,6 +75,11 @@ class GenerateWorkflowRequest(BaseModel):
     input_artifacts: list[ArtifactRef] = Field(default_factory=list, max_length=20)
     # Build a specific studio instead of detecting one from the request (used by the hand-off buttons).
     studio_id: str | None = Field(default=None, max_length=100)
+    # Answers to the questions /propose asked, and what was assumed where nobody answered. They are appended to the
+    # requirement as binding decisions and kept with the conversation. `plan_level` is the option the person chose.
+    decisions: list[Decision] = Field(default_factory=list, max_length=6)
+    assumptions: list[str] = Field(default_factory=list, max_length=6)
+    plan_level: Literal["solo", "team", "studio"] | None = None
 
     @field_validator("input_files")
     @classmethod
@@ -228,6 +236,11 @@ async def _workspace_context(request: Request, context: TenantContext, preferred
 
 def _service(request: Request, context: TenantContext, workspace: ArchitectWorkspaceContext,
              preferred_model: str | None) -> MetaArchitectService:
+    return MetaArchitectService(_json_generator(request, context, workspace, preferred_model), FlowCompiler.validate)
+
+
+def _json_generator(request: Request, context: TenantContext, workspace: ArchitectWorkspaceContext,
+                    preferred_model: str | None) -> Callable[[str, type[BaseModel]], Awaitable[Any]]:
     services = get_services(request)
     candidates = _approved_chat_models(set(workspace.available_models))
     configured = preferred_model or os.environ.get("NEXUS_ARCHITECT_MODEL")
@@ -258,7 +271,26 @@ def _service(request: Request, context: TenantContext, workspace: ArchitectWorks
 
         return await _json_with_retry(ask)
 
-    return MetaArchitectService(generate_json, FlowCompiler.validate)
+    return generate_json
+
+
+class ProposeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    user_requirement_prompt: str = Field(min_length=1, max_length=12_000)
+    preferred_model: str | None = Field(default=None, max_length=200)
+    input_file_names: list[str] = Field(default_factory=list, max_length=64)
+
+
+@router.post("/propose")
+async def propose_plan(body: ProposeRequest, request: Request, context: BUILD) -> dict[str, Any]:
+    """Questions and options for a request that needs them; `ready` for one that does not. Never builds or runs anything."""
+    workspace = await _workspace_context(request, context, body.preferred_model)
+    names = tuple(name[:120] for name in body.input_file_names)
+    try:
+        proposal = await ClarifyService(_json_generator(request, context, workspace, body.preferred_model)).propose(body.user_requirement_prompt, names)
+    except ValueError as error:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
+    return proposal.model_dump(mode="json")
 
 
 @router.post("/generate-workflow")
@@ -270,10 +302,15 @@ async def generate_workflow(body: GenerateWorkflowRequest, request: Request, con
         async with scoped_session(get_services(request).engine, context.tenant_id, context.workspace_id) as session:
             known = set((await session.scalars(select(WorkflowRun.id).where(WorkflowRun.id.in_([item.run_id for item in body.input_artifacts])))).all())
         sources = resolve_sources([(item.run_id, item.filename) for item in body.input_artifacts], context, known)
+    task_text = body.user_requirement_prompt + decisions_block(body.decisions, body.assumptions)
+    if len(task_text) > 12_000:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "The request and the decisions together exceed 12,000 characters")
+    chosen_rigor = body.rigor or {"solo": "solo", "team": "minimal", "studio": "full_studio"}.get(body.plan_level or "", "auto")
     try:
         spec, summary = await service.generate_workflow(
-            body.user_requirement_prompt + describe_for_architect(sources), workspace, preferred_model=body.preferred_model,
-            budget_tier=body.budget_tier, rigor=body.rigor, studio_id=body.studio_id,
+            task_text + describe_for_architect(sources), workspace, preferred_model=body.preferred_model,
+            budget_tier=body.budget_tier, rigor=cast(Any, chosen_rigor), studio_id=body.studio_id,
+            input_file_names=tuple(body.input_files),
         )
     except ValueError as error:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
@@ -298,13 +335,14 @@ async def generate_workflow(body: GenerateWorkflowRequest, request: Request, con
         session.add(WorkflowRun(
             id=run_id, tenant_id=context.tenant_id, workspace_id=context.workspace_id,
             workflow_id=spec.id, status="queued",
-            input_data={"task": body.user_requirement_prompt, **({"sandbox_files": body.input_files} if body.input_files else {}),
+            input_data={"task": task_text, **({"sandbox_files": body.input_files} if body.input_files else {}),
                         **({"upstream_artifacts": upstream} if upstream else {})},
         ))
         session.add(AuditLog(
             tenant_id=context.tenant_id, workspace_id=context.workspace_id,
             actor_id=context.user_id, action="architect.workflow_run_queued", target_type="workflow_run",
-            target_id=run_id, details={"workflow_id": str(spec.id)},
+            target_id=run_id, details={"workflow_id": str(spec.id), "level": summary.get("level"), "decisions": len(body.decisions),
+                                       "plan_level": body.plan_level},
         ))
         await session.flush()
         await _sync_learning_policies(session, spec, context)
@@ -313,10 +351,17 @@ async def generate_workflow(body: GenerateWorkflowRequest, request: Request, con
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation is not visible in this workspace")
         if conversation is None:
             conversation = await start_conversation(session, context, body.user_requirement_prompt)
-        await append_message(session, conversation, "user", body.user_requirement_prompt,
-                             meta={"attachments": [{"run_id": entry["source_run_id"], "filename": entry["source_filename"], "name": entry["name"]} for entry in upstream]} if upstream else None)
+        user_meta: dict[str, Any] = {}
+        if upstream:
+            user_meta["attachments"] = [{"run_id": entry["source_run_id"], "filename": entry["source_filename"], "name": entry["name"]} for entry in upstream]
+        if body.decisions or body.assumptions:
+            user_meta["decisions"] = [item.model_dump() for item in body.decisions]
+            user_meta["assumptions"] = list(body.assumptions)
+            user_meta["plan_level"] = body.plan_level
+        await append_message(session, conversation, "user", body.user_requirement_prompt, meta=user_meta or None)
         await append_message(session, conversation, "team", str(summary.get("summary") or spec.name), run_id=run_id, workflow_id=spec.id,
-                             meta={"agent_count": summary.get("agent_count"), "studio": summary.get("studio")})
+                             meta={"agent_count": summary.get("agent_count"), "studio": summary.get("studio"),
+                                   "level": summary.get("level"), "level_reason": summary.get("level_reason")})
         conversation_id = conversation.id
     try:
         await services.dispatcher.workflow(context.tenant_id, context.workspace_id, run_id)

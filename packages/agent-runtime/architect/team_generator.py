@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from architect.adaptive import Assessment, assess, build_solo_workflow, strong_model
 from hooks.claims import deliverables_in
 from nexus_core_schema_templates.studios import STUDIO_BLUEPRINTS, STUDIO_BY_ID, StudioBlueprint, build_studio_graph, detect_studio
 from nexus_core_schema.models import (
@@ -128,7 +129,7 @@ class _StudioDraft(BaseModel):
     design_reasoning: list[str] = Field(default_factory=list, max_length=12)
 
 
-RigorRequest = Literal["minimal", "standard", "full_studio"]
+RigorRequest = Literal["minimal", "standard", "full_studio", "auto", "solo"]
 _FRONTIER_MODEL_HINTS = ("opus", "sonnet", "gpt-5", "gpt-4.1", "gemini-2.5-pro", "gemini-3-pro", "o3", "o4")
 JsonGenerator = Callable[[str, type[BaseModel]], Awaitable[Any]]
 _DraftT = TypeVar("_DraftT", bound=BaseModel)
@@ -215,6 +216,7 @@ class MetaArchitectService:
         version: int = 1,
         rigor: RigorRequest | None = None,
         studio_id: str | None = None,
+        input_file_names: Sequence[str] = (),
     ) -> tuple[WorkflowSpec, dict[str, Any]]:
         prompt = user_requirement_prompt.strip()
         if not prompt or len(prompt) > 12_000:
@@ -223,6 +225,18 @@ class MetaArchitectService:
             raise ValueError(f"Unknown studio: {studio_id}")
         studio = (STUDIO_BY_ID[studio_id] if studio_id else detect_studio(prompt)) if existing_workflow_spec is None else None
         effective: RigorRequest = rigor or ("full_studio" if studio is not None else "minimal")
+        level_note: dict[str, str] = {}
+        if effective in ("auto", "solo") and existing_workflow_spec is None:
+            if effective == "auto" and studio is not None:
+                effective = "full_studio"
+            else:
+                assessment = Assessment("solo", "a single coder and reviewer was requested") if effective == "solo" else assess(prompt, input_file_names)
+                if assessment.level == "solo":
+                    return self._generate_solo(prompt, workspace_context, assessment, workflow_id=workflow_id or uuid4(), version=version, preferred_model=preferred_model)
+                effective = "minimal"
+                level_note = {"level": "team", "level_reason": assessment.reason}
+        elif effective in ("auto", "solo"):
+            effective = "minimal"
         if effective != "minimal" and existing_workflow_spec is None:
             return await self._generate_studio(
                 prompt, workspace_context, studio or _fallback_studio(prompt), effective,
@@ -265,8 +279,39 @@ class MetaArchitectService:
                              for agent in node.agents for tool_id in agent.tool_ids}),
             "knowledge_capsules": sorted({str(capsule_id) for node in validated.nodes if isinstance(node, CrewNodeSpec)
                                            for agent in node.agents for capsule_id in agent.knowledge_capsule_ids}),
+            **level_note,
         }
         return validated, summary
+
+    def _generate_solo(
+        self,
+        prompt: str,
+        context: ArchitectWorkspaceContext,
+        assessment: Assessment,
+        *,
+        workflow_id: UUID,
+        version: int,
+        preferred_model: str | None,
+    ) -> tuple[WorkflowSpec, dict[str, Any]]:
+        models = context.available_models
+        model = preferred_model if preferred_model in models else (models[0] if models else "openai/gpt-4.1-mini")
+        repair_model = strong_model(models, model, _FRONTIER_MODEL_HINTS)
+        title = " ".join(prompt.split())[:70]
+        spec = self._validator(build_solo_workflow(
+            workflow_id=workflow_id, tenant_id=context.tenant_id, workspace_id=context.workspace_id, version=version,
+            name=f"Code task: {title}", model=model, repair_model=repair_model,
+        ))
+        agents = [
+            {"id": f"{node.id}_{part}", "role": f"{node.label} · {part}", "model": node.coder_model if part == "coder" else node.reviewer_model,
+             "tools": [], "knowledge_capsules": []}
+            for node in spec.nodes if isinstance(node, NexusGenSandboxNodeSpec) for part in ("coder", "reviewer")
+        ]
+        summary = {
+            "summary": "One coder and reviewer work in a sandbox until the checks pass; a repair attempt on the strongest model runs only if they do not.",
+            "design_reasoning": [assessment.reason], "agents": agents, "tools": [], "knowledge_capsules": [],
+            "agent_count": 2, "level": "solo", "level_reason": assessment.reason,
+        }
+        return spec, summary
 
     async def _generate_studio(
         self,

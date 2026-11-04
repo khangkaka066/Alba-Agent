@@ -229,6 +229,7 @@ class NexusAgentAdapter:
 
     name = "nexus"
     plain_prompt = False  # nexus_plain: the task text alone, no RESULT-line rules
+    rigor = "minimal"  # nexus_auto: let the product choose between one coder/reviewer with a repair step and a planned team
 
     def __init__(self, endpoint: Endpoint, api_url: str = "http://127.0.0.1:8000") -> None:
         self.endpoint = endpoint
@@ -272,7 +273,7 @@ class NexusAgentAdapter:
             token = self._new_token()
             token_issued = time.monotonic()
             generated = self._call("POST", "/api/v1/architect/generate-workflow", {
-                "user_requirement_prompt": self._prompt(task_prompt), "preferred_model": self.model_ref, "rigor": "minimal",
+                "user_requirement_prompt": self._prompt(task_prompt), "preferred_model": self.model_ref, "rigor": self.rigor,
                 "auto_run": False}, token, timeout=min(300, timeout_seconds))
             spec = self._pin_model(generated["workflow_spec"])  # type: ignore[index]
             spec["name"] = f"{str(spec['name'])[:80]} [{uuid.uuid4().hex[:8]}]"
@@ -335,6 +336,13 @@ class NexusAgentAdapter:
             outcome.infra_error = message if looks_like_infra(message) or isinstance(error, (urllib.error.URLError, TimeoutError)) else ""
             outcome.error = "" if outcome.infra_error else message
         return outcome
+
+
+class NexusAgentAutoAdapter(NexusAgentAdapter):
+    """The product's own choice of team size (rigor=auto), with every model still forced to the benchmark model."""
+
+    name = "nexus_auto"
+    rigor = "auto"
 
 
 class NexusAgentPlainAdapter(NexusAgentAdapter):

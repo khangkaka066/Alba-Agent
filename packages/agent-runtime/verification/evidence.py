@@ -34,6 +34,8 @@ class Evidence:
     discriminates: bool = False
     mutants: int = 0
     killed: int = 0
+    # `file:line name` for names the program files read but never define: tests cannot vouch for lines they do not run.
+    undefined: tuple[str, ...] = ()
 
     @property
     def ran(self) -> int:
@@ -59,6 +61,7 @@ class VerificationReport:
             "details": list(evidence.details) if evidence else [],
             "mutants": evidence.mutants if evidence else 0,
             "killed": evidence.killed if evidence else 0,
+            "undefined": list(evidence.undefined) if evidence else [],
         }
 
 
@@ -107,6 +110,9 @@ def decide(evidence: Evidence | None, *, execution_ok: bool) -> VerificationRepo
     """Verified only by executed tests that all passed; compile or review output is never evidence."""
     if evidence is not None and evidence.tampered:
         return VerificationReport(Status.FAILED, evidence.level, f"protected test files were changed: {', '.join(evidence.tampered)}", evidence)
+    if evidence is not None and evidence.undefined:
+        shown = ", ".join(evidence.undefined[:5])
+        return VerificationReport(Status.FAILED, evidence.level, f"the code reads names that are never defined or imported ({shown}); that raises NameError when the line runs", evidence)
     if evidence is not None and evidence.level is Level.SELF_TESTS and execution_ok:
         return _decide_self_tests(evidence)
     if evidence is None or evidence.ran == 0:

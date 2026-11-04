@@ -1175,6 +1175,19 @@ html[data-theme="light"] .evolution-ops code { background: #eceef5; }
 .bubble { max-width: 92%; padding: 9px 12px; border-radius: 12px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .bubble--user { align-self: flex-end; border: 1px solid #3a3a3a; background: #262626; color: #f1f1f1; }
 .bubble--note { margin: 0; align-self: flex-start; color: #e5b680; font-size: 12px; }
+.ask-card { display: grid; gap: 10px; padding: 12px; border: 1px solid #3d4a66; border-radius: 12px; background: #1c2029; }
+.ask-title { margin: 0; color: #f1f1f1; font-size: 13px; font-weight: 600; }
+.ask-assumptions { margin: 0; color: #9a9a9a; font-size: 12px; line-height: 1.5; }
+.ask-group { display: grid; gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.ask-group legend { padding: 0; margin-bottom: 4px; color: #d8d8d8; font-size: 12px; font-weight: 600; }
+.ask-choice { display: flex; align-items: flex-start; gap: 8px; padding: 7px 9px; border: 1px solid #2f2f2f; border-radius: 9px; background: #191919; color: #cfcfcf; font-size: 12px; line-height: 1.45; cursor: pointer; }
+.ask-choice:has(input:checked) { border-color: #5a6b94; background: #20263a; }
+.ask-choice input[type="radio"] { margin-top: 3px; }
+.ask-choice span { display: grid; gap: 2px; min-width: 0; }
+.ask-choice small { color: #9a9a9a; font-size: 11px; }
+.ask-badge { justify-self: start; padding: 0 6px; border-radius: 999px; background: #2b3a5c; color: #b9c8f0; font-size: 10px; font-style: normal; }
+.ask-other { width: 100%; min-height: 28px; border: 1px solid #333; border-radius: 7px; background: #202020; color: #f1f1f1; font-size: 12px; }
+.ask-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .team-pill { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid #2f2f2f; border-radius: 12px; background: #1d1d1d; }
 .team-pill.is-active { border-color: #3d4a66; background: #1c2029; }
 .team-pill-head { display: flex; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; color: #f1f1f1; font: inherit; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer; }

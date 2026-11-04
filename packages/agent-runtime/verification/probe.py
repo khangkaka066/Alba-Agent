@@ -16,6 +16,8 @@ from uuid import uuid4
 from .evidence import Evidence, Level
 
 _MARKER = "NEXUS_EVIDENCE"
+# Pasted into every probe so the scan runs inside the sandbox, in a script the coder cannot edit.
+_NAMES_SOURCE = Path(__file__).with_name("names.py").read_text(encoding="utf-8")
 _TEST_NAME = re.compile(r"^(test_[A-Za-z0-9_]*|[A-Za-z0-9_]*_test)\.py$")
 
 _PROBE = '''\
@@ -69,7 +71,8 @@ if not tampered:
         failed += counter.bad
 print()
 print("NEXUS_EVIDENCE " + NONCE + " " + json.dumps(
-    {"passed": passed, "failed": failed, "tampered": tampered, "details": details[:8]}))
+    {"passed": passed, "failed": failed, "tampered": tampered, "details": details[:8],
+     "undefined": scan_undefined(os.getcwd())}))
 '''
 
 
@@ -85,7 +88,7 @@ def build_probe(protected: dict[str, str]) -> tuple[str, str]:
     """Return `(probe_source, nonce)`; the nonce is fresh per probe so stray output cannot pose as evidence."""
     nonce = uuid4().hex
     source = _PROBE.replace("__PROTECTED__", repr(json.dumps(protected, sort_keys=True))).replace("__NONCE__", repr(nonce))
-    return source, nonce
+    return _NAMES_SOURCE + "\n" + source, nonce
 
 
 def parse_probe_output(stdout: str, nonce: str) -> Evidence | None:
@@ -99,6 +102,7 @@ def parse_probe_output(stdout: str, nonce: str) -> Evidence | None:
             return Evidence(
                 Level.EXISTING_TESTS, int(raw["passed"]), int(raw["failed"]),
                 tuple(str(item) for item in raw.get("tampered", ())), tuple(str(item) for item in raw.get("details", ())),
+                undefined=tuple(str(item) for item in raw.get("undefined", ())),
             )
         except (ValueError, KeyError, TypeError):
             return None
@@ -114,6 +118,7 @@ names = sorted(name for name in os.listdir(".") if name.endswith(".py") and os.p
 tests = [name for name in names if TEST_NAME.match(name)]
 sources = [name for name in names if name not in tests and not name.startswith("attempt_")]
 outcome = gate(os.getcwd(), sources, tests, BASELINE) if tests and sources else {"ran": 0, "passed": False, "discriminates": False, "mutants": 0, "killed": 0}
+outcome["undefined"] = scan_undefined(os.getcwd())
 print()
 print("NEXUS_EVIDENCE " + NONCE + " " + json.dumps(outcome))
 '''
@@ -127,7 +132,8 @@ def build_self_test_probe(staged: dict[str, bytes]) -> tuple[str, str]:
     nonce = uuid4().hex
     baseline = {name: base64.b64encode(content).decode("ascii") for name, content in staged.items() if name.endswith(".py")}
     driver = _SELF_TEST_DRIVER.replace("__NONCE__", repr(nonce)).replace("__BASELINE__", repr(json.dumps(baseline, sort_keys=True)))
-    return (Path(__file__).with_name("mutation.py").read_text(encoding="utf-8") + "\n" + driver), nonce
+    # mutation.py opens with `from __future__`, which must stay the first statement of the script.
+    return (Path(__file__).with_name("mutation.py").read_text(encoding="utf-8") + "\n" + _NAMES_SOURCE + "\n" + driver), nonce
 
 
 def parse_self_test_output(stdout: str, nonce: str) -> Evidence | None:
@@ -141,6 +147,7 @@ def parse_self_test_output(stdout: str, nonce: str) -> Evidence | None:
             return Evidence(
                 Level.SELF_TESTS, ran if passed else 0, 0 if passed else ran,
                 discriminates=bool(raw["discriminates"]), mutants=int(raw["mutants"]), killed=int(raw["killed"]),
+                undefined=tuple(str(item) for item in raw.get("undefined", ())),
             )
         except (ValueError, KeyError, TypeError):
             return None

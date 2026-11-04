@@ -116,7 +116,9 @@ def test_the_default_plugin_list_boots_and_a_capability_can_be_switched_off_and_
         await kernel.handles["infrastructure"].stop()
         assert {key for key, handle in kernel.handles.items() if handle.state is PluginState.ACTIVE} == {"tools"}
         await kernel.handles["infrastructure"].start()
-        assert all(handle.state is PluginState.ACTIVE for handle in kernel.handles.values())
+        # The local sandbox is listed but off until a patch enables it, so it never starts on a machine without macOS sandboxing.
+        assert all(handle.state is PluginState.ACTIVE for key, handle in kernel.handles.items() if key != "sandbox-local")
+        assert kernel.handles["sandbox-local"].state is not PluginState.ACTIVE
         await kernel.close()
         assert not root._services
 

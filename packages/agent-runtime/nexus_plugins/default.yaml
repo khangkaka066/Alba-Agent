@@ -14,5 +14,8 @@ plugins:
     plugin: sandbox.supervisor
   - id: sandbox-docker
     plugin: sandbox.docker
+  - id: sandbox-local  # macOS only, no Docker; enable with a patch (disabled: false) and NEXUS_SANDBOX_PROVIDER=local
+    plugin: sandbox.local
+    disabled: true
   - id: sandbox-runner
     plugin: sandbox.runner

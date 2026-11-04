@@ -302,6 +302,8 @@ class ComputerSandboxSupervisor:
         self._browser_hook = browser_hook
         self._boundary_guard = boundary_guard
         self._run_users: dict[UUID, int] = {}
+        # Which provider a new computer gets when the caller does not say. Docker stays the default; "local" is an explicit choice.
+        self._default_provider = os.environ.get("NEXUS_SANDBOX_PROVIDER", "docker")
 
     def add_provider(self, provider: ComputerProvider) -> Callable[[], None]:
         """Make a provider selectable by name; the returned callable withdraws it again."""
@@ -339,9 +341,10 @@ class ComputerSandboxSupervisor:
             cast(Visibility, row.visibility), row.provider, row.external_id,
         )
 
-    async def create(self, access: ComputerAccess, visibility: Visibility = "private", provider: str = "docker") -> ComputerHandle:
+    async def create(self, access: ComputerAccess, visibility: Visibility = "private", provider: str | None = None) -> ComputerHandle:
         if visibility == "private" and access.bot_id is None and access.run_id is None:
             raise ValueError("Private computers require a bot or run owner")
+        provider = provider or self._default_provider
         driver = self._provider(provider)
         row = SandboxComputer(
             id=uuid4(), tenant_id=access.tenant_id, workspace_id=access.workspace_id,

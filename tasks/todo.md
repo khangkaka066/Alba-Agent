@@ -376,3 +376,37 @@ Goal: for a request that is unclear or has several reasonable ways to be built, 
 - Fixed from the big task: capsule fields now clipped to schema limits; a sandbox node with declared deliverables cannot be VERIFIED before those files exist.
 - Clause-test requirement (`min_added_tests`) measured worse than none; kept as an opt-in node field, default 0.
 - Not done: question-quality evaluation for Phase 33, a visual check of the question card, the real parallel engine change, one benchmark task only for the units mode (n = 3).
+
+
+# Phase 35 — Local execution mode with an execution policy (branch `feature/local-execution-policy`)
+Goal: run agent code on the user's own machine without Docker, with the layered approach Cursor and Antigravity use: an OS-level sandbox, a Deny > Ask > Allow policy, secret-file protection, no network by default. Stays opt-in; the Docker and hosted paths remain the default and are not touched.
+
+## Findings that shape the design
+- `ComputerProvider` (`packages/computer-sandbox/nexus_computer_sandbox/supervisor.py:51`) is a Protocol (create, destroy, shell, upload, download, files, screen_frame) with `DockerSandboxProvider` and cloud drivers behind it, and the supervisor has `add_provider`. A local provider plugs in without changing the engine.
+- Docker today also gives the run a fixed Python image. A local provider runs the host interpreter, so reproducibility of the verification probe must be re-checked (benchmark below).
+- Seatbelt (`sandbox-exec`) exists only on macOS, is marked deprecated by Apple, and cannot filter the network per host: network is all-or-nothing. Windows is not researched; do not claim support.
+- Server-side dependencies (Postgres RLS, Redis, Celery, Qdrant) are a separate step (Stage B) and are NOT part of Stage A.
+
+## Stage A — policy and sandbox (macOS only)
+- [ ] `execution_policy.py`: rule model with Deny > Ask > Allow precedence; a Strict profile that ignores the allowlist; default rules deny reads of `.env`, `~/.ssh`, `~/.aws`, keychains and `.git/config` credentials; no allowlisted domains by default.
+- [ ] Sensitive-write rule: creating or editing executable or config files (hooks, `.vscode`, shell rc, `sandbox.json`-style files) is an Ask, never an Allow (the Antigravity RCE chain).
+- [ ] `LocalSandboxProvider` implementing `ComputerProvider`: per-run directory under a temp root, commands run through `sandbox-exec` with a generated profile (write only inside the run directory, no network unless the policy grants it), timeout and output cap as in the Docker provider.
+- [ ] Wire as a provider name `local`, chosen by configuration; `docker` stays the default.
+- [ ] Approval flow: an Ask result reuses the existing approval cards; headless callers (benchmark, service keys) get Deny, never a hang.
+- [ ] Behaviour tests (direct, not benchmark): `cat .env` is blocked, writing outside the run directory fails, a network call fails with no grant, `python -m unittest` runs, files uploaded and downloaded round-trip, a path escape (`../`, symlink) is rejected, timeout kills the process tree.
+- [ ] Docs: what the local mode does and does NOT protect (no per-host network filter, macOS only).
+
+## Gates before moving on (stop and re-plan if any fails)
+1. Existing test suite passes; mypy stays at the 22-error baseline in 8 files.
+2. Benchmark under the local provider versus the Docker baseline, same tasks and model: repo tasks `nexus_auto` baseline 12/15, `minisql` 2/3. Samples are small, so only a large drop is detectable; a drop means find the cause (blocked pip, blocked path, interpreter difference) before continuing.
+3. The behaviour tests above are the main safety evidence, not the benchmark.
+4. No code edits while a measurement runs (bind mounts; see lessons).
+
+## Stage B — lightweight single-user profile (only after Stage A is accepted)
+- [ ] Embedded database instead of Postgres, in-process queue instead of Redis/Celery, Qdrant optional. Tenant isolation currently rests on RLS: the embedded profile needs application-level tenant filtering plus tests; the Postgres path stays the default. Scan: 7 Postgres-specific files, 16 RLS statements, 17 Redis files, Celery tasks in `apps/api/app/workers/jobs.py`, 6 Qdrant files.
+
+## Stage C — packaging (unresearched)
+- [ ] Windows isolation approach, bundling the Python backend into the Electron app, dmg/exe.
+
+## Review
+(to be filled in after each stage)

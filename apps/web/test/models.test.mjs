@@ -56,3 +56,28 @@ test("a typed model is kept only while its provider is connected", () => {
   assert.equal(resolveSelection(models, "anthropic/claude-opus-4-6", "openai/gpt-4.1-mini", ["openai"]), "openai/gpt-4.1-mini");
   assert.equal(resolveSelection(models, "not a model", null, ["openai"]), "openai/gpt-4.1-mini");
 });
+
+import { loadRecent, pickerView, rememberRecent } from "../src/lib/models.mjs";
+
+const sample = [
+  { id: "openai/gpt-5.4", provider: "openai", model: "gpt-5.4", group: "OpenAI", local: false },
+  { id: "openai/gpt-5-mini", provider: "openai", model: "gpt-5-mini", group: "OpenAI", local: false },
+  { id: "deepseek/deepseek-chat", provider: "deepseek", model: "deepseek-chat", group: "DeepSeek", local: false },
+];
+
+test("recent models keep the newest first, without repeats, and are capped", () => {
+  const data = {};
+  const storage = { getItem: (key) => data[key] ?? null, setItem: (key, value) => { data[key] = value; } };
+  for (const id of ["a/1", "b/2", "c/3", "a/1", "d/4"]) rememberRecent(storage, id);
+  assert.deepEqual(loadRecent(storage), ["d/4", "a/1", "c/3"]);
+  assert.deepEqual(loadRecent({ getItem: () => "not json" }), []);
+});
+
+test("pickerView shows recent models that still run plus one row per provider; a search flattens to matches", () => {
+  const view = pickerView(sample, ["deepseek/deepseek-chat", "gone/model"]);
+  assert.deepEqual(view.recent.map((item) => item.id), ["deepseek/deepseek-chat"]);
+  assert.deepEqual(view.providers.map((group) => [group.name, group.models.length]), [["OpenAI", 2], ["DeepSeek", 1]]);
+  const found = pickerView(sample, ["deepseek/deepseek-chat"], "MINI");
+  assert.deepEqual(found.matches.map((item) => item.id), ["openai/gpt-5-mini"]);
+  assert.deepEqual(found.providers, []);
+});

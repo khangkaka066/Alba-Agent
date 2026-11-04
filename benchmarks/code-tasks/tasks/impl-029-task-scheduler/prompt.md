@@ -1,0 +1,12 @@
+Our job runner keeps tens of thousands of delayed jobs in memory and polls for the next one to run. Implement the `TaskScheduler` class in `scheduler.py`. It must use heaps (lazy deletion is fine) so that `schedule`, `cancel`, `reschedule` and `pop_due` take roughly O(log n) amortised time.
+
+`TaskScheduler(clock)` takes a zero-argument callable returning the current time in seconds (a float). Never use the real time, only call `clock()`. Time never goes backwards. A task is **due** when `run_at <= clock()` (a task whose `run_at` equals the current time is due).
+
+- `schedule(task_id, run_at, priority=0)`: adds a pending task. `task_id` is a hashable id (normally a string); `run_at` is a number; `priority` is an int, **higher means more important**. If `task_id` is already pending, `ValueError` is raised and nothing changes. An id that has been popped or cancelled may be scheduled again.
+- `cancel(task_id) -> bool`: removes a pending task; `True` if it was pending, `False` otherwise.
+- `reschedule(task_id, run_at, priority=None)`: changes the run time of a pending task, and its priority too when `priority` is not `None` (otherwise the priority is kept). The task keeps its original place in the insertion order used for tie-breaking (see below). Raises `KeyError` if `task_id` is not pending. It works the same for a task that is already due, and moving a due task into the future makes it not due any more.
+- `pop_due() -> task_id | None`: reads the clock once, and among all due tasks picks the one with the **highest priority**; ties are broken by the **earliest `run_at`**, and remaining ties by **insertion order** (the task scheduled first wins). That task is removed and returned. Returns `None` if no task is due. A not-yet-due task never blocks a due one, whatever its priority.
+- `pop_all_due() -> list`: reads the clock exactly once and pops every task that is due at that moment, returning them in the order repeated `pop_due()` calls would have returned them. Tasks that are not due stay pending.
+- `seconds_until_next() -> float | None`: `None` if nothing is pending; otherwise `max(0.0, earliest_run_at - clock())` where `earliest_run_at` is the smallest `run_at` among all pending tasks regardless of priority.
+- `run_at_of(task_id)`: the pending task's current `run_at`; `KeyError` if it is not pending.
+- `len(scheduler)` is the number of pending tasks and `task_id in scheduler` tells whether a task is pending.

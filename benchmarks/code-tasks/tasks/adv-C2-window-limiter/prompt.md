@@ -1,0 +1,9 @@
+Implement a sliding-window rate limiter in `limiter.py`. Time is always passed in by the caller (a number of seconds, any float/int); never read a real clock.
+
+`WindowLimiter(limit, window)`: at most `limit` units of cost may be admitted per key in any window of `window` seconds. `limit` is an int >= 1 and `window` a number > 0, otherwise `ValueError`.
+
+- `allow(key, now, cost=1) -> bool`: decides whether a request of `cost` units (int >= 1, otherwise `ValueError`) at time `now` is admitted. An earlier admitted request made at time `t` counts against the budget while `t > now - window`; at `t <= now - window` it has expired (so a request exactly `window` seconds later sees the budget freed). The request is admitted, and recorded, only if the units still counted plus `cost` are `<= limit`. Rejected requests are not recorded and do not consume budget. A request with `cost > limit` is always rejected.
+- `remaining(key, now) -> int`: how many units could be admitted right now, i.e. `limit` minus the units still counted at `now`. It never changes any state.
+- `retry_after(key, now, cost=1) -> float | None`: how many seconds from `now` until `allow(key, t, cost)` would succeed, assuming no other requests happen in between: `0` if it would succeed at `now`, `None` if `cost > limit`. It never changes any state.
+- Keys are independent. Time per key must not go backwards: if `now` is smaller than the largest `now` already given to `allow` for that key, `allow` raises `ValueError` and nothing changes. `remaining` and `retry_after` use the same rule against that key's last `allow` time (a key that never had `allow` called has no such bound).
+- Memory: a key whose requests have all expired must not keep growing stored state; after a long idle gap the stored data for that key should not contain the old requests.

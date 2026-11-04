@@ -1,0 +1,1 @@
+{"id": "fix-012-order-fulfilment", "category": "fix", "difficulty": 2, "protected": ["test_fulfilment.py"]}

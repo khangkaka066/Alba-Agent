@@ -7,7 +7,7 @@ from uuid import UUID
 from nexus_core_schema.models import (
     AgentSpec,
     ApprovalGateNodeSpec,
-    AutoGenSandboxNodeSpec,
+    NexusGenSandboxNodeSpec,
     CrewNodeSpec,
     RAGNodeSpec,
     StartNodeSpec,
@@ -42,8 +42,8 @@ def _crew(identifier: str, label: str, agent: AgentSpec, task: TaskSpec) -> Crew
     return CrewNodeSpec(id=identifier, label=label, agents=(agent,), tasks=(task,))
 
 
-def _sandbox(identifier: str, label: str, instructions: str, verify: str = "python -m compileall -q /workspace") -> AutoGenSandboxNodeSpec:
-    return AutoGenSandboxNodeSpec(
+def _sandbox(identifier: str, label: str, instructions: str, verify: str = "python -m compileall -q /workspace") -> NexusGenSandboxNodeSpec:
+    return NexusGenSandboxNodeSpec(
         id=identifier, label=label, coder_model=DEFAULT_MODEL, reviewer_model=DEFAULT_MODEL,
         coder_instructions=instructions,
         reviewer_instructions="Inspect the output and command results. Correct errors, validate artifacts, and report limitations. Never claim a check passed unless its command exited successfully.",

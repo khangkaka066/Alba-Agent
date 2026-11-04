@@ -162,7 +162,7 @@
       "title": "ApprovalGateNodeSpec",
       "type": "object"
     },
-    "AutoGenSandboxNodeSpec": {
+    "NexusGenSandboxNodeSpec": {
       "additionalProperties": false,
       "properties": {
         "coder_instructions": {
@@ -235,6 +235,15 @@
           "title": "Max Rounds",
           "type": "integer"
         },
+        "on_unverified": {
+          "default": "deliver_labeled",
+          "enum": [
+            "deliver_labeled",
+            "fail"
+          ],
+          "title": "On Unverified",
+          "type": "string"
+        },
         "requires_visual_evidence": {
           "default": false,
           "title": "Requires Visual Evidence",
@@ -296,7 +305,7 @@
         "reviewer_model",
         "verification_command"
       ],
-      "title": "AutoGenSandboxNodeSpec",
+      "title": "NexusGenSandboxNodeSpec",
       "type": "object"
     },
     "ConsensusConfigSpec": {
@@ -944,7 +953,7 @@
             "crew": "#/$defs/CrewNodeSpec",
             "rag": "#/$defs/RAGNodeSpec",
             "router": "#/$defs/RouterNodeSpec",
-            "sandbox": "#/$defs/AutoGenSandboxNodeSpec",
+            "sandbox": "#/$defs/NexusGenSandboxNodeSpec",
             "start": "#/$defs/StartNodeSpec"
           },
           "propertyName": "kind"
@@ -957,7 +966,7 @@
             "$ref": "#/$defs/CrewNodeSpec"
           },
           {
-            "$ref": "#/$defs/AutoGenSandboxNodeSpec"
+            "$ref": "#/$defs/NexusGenSandboxNodeSpec"
           },
           {
             "$ref": "#/$defs/ApprovalGateNodeSpec"

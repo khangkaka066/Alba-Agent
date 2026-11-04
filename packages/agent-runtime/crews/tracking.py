@@ -1,6 +1,6 @@
 """Which agent of a crew was working, and which one raised the error.
 
-CrewAI reports a failure for the crew as a whole. Wrapping each agent's `execute_task` on the built instances (nothing global,
+NexusAI reports a failure for the crew as a whole. Wrapping each agent's `execute_task` on the built instances (nothing global,
 so crews running side by side in one process never mix) lets the run record name the agent instead of only its department.
 """
 

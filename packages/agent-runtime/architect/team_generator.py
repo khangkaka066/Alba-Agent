@@ -5,17 +5,17 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Any, Literal, Mapping
+from typing import Any, Literal, Mapping, TypeVar
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from hooks.claims import deliverables_in
 from nexus_core_schema_templates.studios import STUDIO_BLUEPRINTS, STUDIO_BY_ID, StudioBlueprint, build_studio_graph, detect_studio
 from nexus_core_schema.models import (
     AgentSpec,
     ApprovalGateNodeSpec,
-    AutoGenSandboxNodeSpec,
+    NexusGenSandboxNodeSpec,
     CrewNodeSpec,
     KnowledgeCapsuleSpec,
     LearningEdgeSpec,
@@ -131,6 +131,7 @@ class _StudioDraft(BaseModel):
 RigorRequest = Literal["minimal", "standard", "full_studio"]
 _FRONTIER_MODEL_HINTS = ("opus", "sonnet", "gpt-5", "gpt-4.1", "gemini-2.5-pro", "gemini-3-pro", "o3", "o4")
 JsonGenerator = Callable[[str, type[BaseModel]], Awaitable[Any]]
+_DraftT = TypeVar("_DraftT", bound=BaseModel)
 Validator = Callable[[WorkflowSpec], WorkflowSpec]
 
 
@@ -156,6 +157,23 @@ class MetaArchitectService:
     def __init__(self, json_generator: JsonGenerator, validator: Validator | None = None) -> None:
         self._generate_json = json_generator
         self._validator = validator or self._validate_graph
+
+    async def _draft(self, prompt: str, schema: type[_DraftT]) -> _DraftT:
+        """Ask for a draft; when it breaks the schema, show the model its own errors and ask again (2 repairs)."""
+        problem = ""
+        last_error: ValidationError | None = None
+        for _ in range(3):
+            asked = prompt if not problem else (
+                f"{prompt}\n\nYour previous JSON was rejected by validation:\n{problem}\n"
+                "Return the full corrected JSON only, with exactly the documented fields."
+            )
+            try:
+                return schema.model_validate(await self._generate_json(asked, schema))
+            except ValidationError as error:
+                problem = "; ".join(f"{'.'.join(str(part) for part in item['loc'])}: {item['msg']}" for item in error.errors()[:8])
+                last_error = error
+        assert last_error is not None
+        raise last_error
 
     @staticmethod
     def _validate_graph(spec: WorkflowSpec) -> WorkflowSpec:
@@ -229,11 +247,11 @@ class MetaArchitectService:
                 "output_schema_names": list(workspace_context.output_schema_names),
             },
         }
-        draft = _WorkflowDraft.model_validate(await self._generate_json(
+        draft = await self._draft(
             "Decompose the goal into a short ordered executable workflow. Use crew for tool-backed production and review, sandbox for code or calculations, and approval before sensitive actions. When the user asks to create media, include a production Crew task that actually calls media_generation and report_exporter and returns real artifact filenames; a plan alone is incomplete. Use only listed models, tools, and knowledge bases. Give every Crew agent tailored role, goal and backstory and each task a compact JSON output_fields map. Return JSON only.\n" +
             json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             _WorkflowDraft,
-        ))
+        )
         spec = self._assemble(draft, prompt, workspace_context, workflow_id or (existing_workflow_spec.id if existing_workflow_spec else uuid4()),
                               (existing_workflow_spec.version + 1 if existing_workflow_spec else version), preferred_model)
         validated = self._validator(spec)
@@ -269,13 +287,13 @@ class MetaArchitectService:
         )
         probe = build_studio_graph(blueprint, studio_rigor, model=default_model, director_model=director_model)
         department_keys = [item["id"] for item in probe.departments if item["id"] != "direction"]
-        draft = _StudioDraft.model_validate(await self._generate_json(
+        draft = await self._draft(
             "Adapt a production studio to the user's request. Keep it short. Return JSON only with: name, summary, "
             "direction (the creative or product vision in 2-4 sentences), objectives (a map from department id to one "
             "or two sentences of project-specific direction for that department), design_reasoning (up to 5 bullets). "
             f"Studio: {blueprint.title}. Department ids: {json.dumps(department_keys)}.\nRequest: {prompt}",
             _StudioDraft,
-        ))
+        )
         objectives = {key: value for key, value in draft.objectives.items() if key in department_keys}
         objectives["direction"] = draft.direction
         tools = {tool.id for tool in context.mcp_tools} | set(context.builtin_tool_ids)
@@ -292,7 +310,7 @@ class MetaArchitectService:
             for node in spec.nodes if isinstance(node, CrewNodeSpec) for agent in node.agents
         ]
         for node in spec.nodes:
-            if isinstance(node, AutoGenSandboxNodeSpec):
+            if isinstance(node, NexusGenSandboxNodeSpec):
                 agents.extend({"id": f"{node.id}_{part}", "role": f"{node.label} · {part}", "tier": "specialist",
                                "model": node.coder_model if part == "coder" else node.reviewer_model, "tools": list(node.tool_ids),
                                "knowledge_capsules": []} for part in ("coder", "reviewer"))
@@ -381,17 +399,7 @@ class MetaArchitectService:
                     assigned_task = stage.tasks[min(agent_index, len(stage.tasks) - 1)].description if stage.tasks else ""
                     text_for_skills = f"{agent.role} {agent.goal} {stage.purpose} {assigned_task}"
                     text_for_skills = text_for_skills.lower()
-                    skill_rules = {
-                        "deep-web-research-and-fact-checking": ("research", "fact", "source", "citation", "web"),
-                        "python-data-science-and-visualization": ("csv", "data", "chart", "statistic", "forecast", "pandas", "excel"),
-                        "financial-and-kpi-analysis": ("finance", "financial", "revenue", "margin", "kpi", "cohort"),
-                        "full-stack-code-audit-and-testing": ("code", "test", "audit", "security", "software", "pytest"),
-                        "executive-report-and-document-authoring": ("report", "executive", "memo", "document", "write"),
-                        "sql-and-database-analytics": ("sql", "database", "query", "table"),
-                        "seo-and-omnichannel-marketing-copy": ("seo", "marketing", "keyword", "campaign", "copy"),
-                        "ai-video-script-and-ffmpeg-post-production": ("video", "ffmpeg", "storyboard", "subtitle"),
-                    }
-                    skill_rules.update(context.skill_keywords)
+                    skill_rules = dict(context.skill_keywords)
                     skill_ids = [slug for slug, terms in skill_rules.items() if slug in context.skill_slugs and any(term.lower() in text_for_skills for term in terms)][:3]
                     tool_rules = {
                         "web_search": ("web", "search", "research", "news"), "web_scraper": ("web", "page", "scrape"),
@@ -462,24 +470,19 @@ class MetaArchitectService:
                 nodes.append(CrewNodeSpec(id=node_id, label=stage.label, agents=tuple(agents), tasks=tuple(tasks), consensus_config=consensus_config))
             elif stage.kind == "sandbox":
                 sandbox_text = f"{stage.label} {stage.purpose} {stage.coder_instructions}".lower()
-                sandbox_skill_rules = {
-                    "python-data-science-and-visualization": ("csv", "data", "chart", "python", "pandas"),
-                    "full-stack-code-audit-and-testing": ("code", "test", "audit", "security", "pytest"),
-                    "ai-video-script-and-ffmpeg-post-production": ("video", "ffmpeg", "subtitle"),
-                }
-                sandbox_skill_rules.update(context.skill_keywords)
+                sandbox_skill_rules = dict(context.skill_keywords)
                 sandbox_skills = [slug for slug, terms in sandbox_skill_rules.items() if slug in context.skill_slugs and any(term.lower() in sandbox_text for term in terms)][:3]
                 sandbox_tools = tuple(tool_id for tool_id in ("sandbox_shell", "document_parser", "chart_generator") if tool_id in builtin_tool_ids and any(term in sandbox_text for term in {
                     "sandbox_shell": ("shell", "python", "code", "command"),
                     "document_parser": ("csv", "document", "file", "excel"),
                     "chart_generator": ("chart", "plot", "visualization"),
                 }[tool_id]))
-                nodes.append(AutoGenSandboxNodeSpec(
+                nodes.append(NexusGenSandboxNodeSpec(
                     id=node_id, label=stage.label, coder_model=stage.model if stage.model in available_models else default_model,
                     reviewer_model=stage.model if stage.model in available_models else default_model,
                     coder_instructions=stage.coder_instructions or stage.purpose,
                     reviewer_instructions=stage.reviewer_instructions or "Check correctness, safety and verification output.",
-                    sandbox_provider="docker", max_rounds=6, timeout_seconds=600,
+                    sandbox_provider="docker", max_rounds=10, timeout_seconds=600,
                     verification_command="python -m compileall .",
                     skill_ids=tuple(sandbox_skills), tool_ids=sandbox_tools,
                 ))
@@ -514,12 +517,12 @@ class MetaArchitectService:
         prompt = user_requirement_prompt.strip()
         if not prompt or len(prompt) > 12_000:
             raise ValueError("Bot job description must contain 1 to 12,000 characters")
-        draft = _BotDraft.model_validate(await self._generate_json(
+        draft = await self._draft(
             "Design one persistent teammate and a useful scheduled markdown routine. Choose only an available model. Return JSON only.\n" +
             json.dumps({"job_description": prompt, "models": list(workspace_context.available_models),
                         "preferred_model": preferred_model, "timezone": timezone,
                         "cron_expression": cron_expression}, ensure_ascii=False), _BotDraft,
-        ))
+        )
         if preferred_model is not None:
             if preferred_model not in workspace_context.available_models:
                 raise ValueError("Preferred bot model is not available in this workspace")

@@ -23,7 +23,8 @@ from app.models.scope import scoped_session
 from app.handoff import carry_upstream
 from app.routers.common import conflict, get_services, not_found
 from app.routers.conversations import append_message, start_conversation
-from nexus_core_schema.models import WorkflowSpec
+from nexus_core_schema.models import NexusGenSandboxNodeSpec, WorkflowSpec
+from verification import is_compile_only
 from nexus_core_schema.models import RuntimeEvent
 from flows.compiler import FlowCompiler
 from nexus_core_schema.artifacts import artifact_directory, artifact_file, list_artifacts, MEDIA_TYPES
@@ -110,7 +111,12 @@ async def list_workflows(request: Request, context: READ) -> list[WorkflowSpec]:
 @router.post("/api/v1/workflows/validate")
 async def validate_workflow(spec: WorkflowSpec, context: BUILD) -> dict[str, object]:
     _check_scope(spec, context)
-    return {"valid": True, "node_count": len(spec.nodes), "edge_count": len(spec.edges)}
+    # A compile-only command is never counted as evidence; the runtime discovers executable tests instead.
+    warnings = [
+        f"{node.id}: verification_command only compiles; it is not evidence, so results rely on discovered tests"
+        for node in spec.nodes if isinstance(node, NexusGenSandboxNodeSpec) and is_compile_only(node.verification_command)
+    ]
+    return {"valid": True, "node_count": len(spec.nodes), "edge_count": len(spec.edges), "warnings": warnings}
 
 
 @router.post("/api/v1/workflows/import", status_code=status.HTTP_201_CREATED, response_model=WorkflowSpec)

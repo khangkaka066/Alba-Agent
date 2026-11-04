@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TeammateWorkspace } from "@/components/teammates/teammate-workspace";
 import { LearningTransferRadar } from "@/components/learning-transfer-radar";
 import { FinOpsDistillationPanel } from "@/components/finops-distillation-panel";
-import { IntegrationsPage } from "@/components/integrations/integrations-page";
+import { CustomizePage } from "@/components/integrations/customize-page";
 import { ModelProvider } from "@/components/model-context";
 import { ModelPicker } from "@/components/model-picker";
-import { SettingsTabs } from "@/components/providers/settings-tabs";
+import { GeneralSettings } from "@/components/settings/general-settings";
 import { FileExplorer } from "@/components/workspace/file-explorer";
 import { LanguageSwitch } from "@/components/language-switch";
 import { useLocale } from "@/components/locale-provider";
@@ -22,7 +22,7 @@ import { getDesktop } from "@/lib/desktop";
 import { actionFor, formatCombo, loadBindings, saveBindings, type Bindings } from "@/lib/shortcuts.mjs";
 
 type WorkspaceScope = { tenant_id: string; workspace_id: string };
-export type NavPage = "studio" | "settings" | "integrations" | "teammates" | "intelligence";
+export type NavPage = "studio" | "general" | "settings" | "integrations" | "teammates" | "intelligence";
 
 const emptyScope = { tenant_id: "", workspace_id: "" };
 
@@ -78,6 +78,7 @@ function IntegrationDialog({ kind, token, onClose }: { kind: "api-key" | "widget
 
 const pagePaths: Record<NavPage, string> = {
   studio: "/studio",
+  general: "/settings",
   integrations: "/settings/integrations",
   settings: "/settings/providers",
   teammates: "/teammates",
@@ -85,31 +86,38 @@ const pagePaths: Record<NavPage, string> = {
 };
 
 
-// The rail has one destination, Work, with Settings pinned at the bottom. Outputs live in the Work view and its file tree;
-// integrations (channels, MCP, skills) live under Settings.
-const NAV_ITEMS: Array<{ page: NavPage; icon: "studio"; action: string }> = [
-  { page: "studio", icon: "studio", action: "nav-studio" },
-];
-const NAV_TARGETS: Record<string, NavPage> = { "nav-studio": "studio", "nav-integrations": "integrations", "nav-settings": "settings" };
-// Expert pages live under Settings, so Settings stays highlighted while they are open.
-const SETTINGS_FAMILY: NavPage[] = ["settings", "integrations", "teammates", "intelligence"];
+// The rail starts with New chat, Automations and Customize above the task list, with Settings pinned at the bottom.
+// Integrations (channels, MCP, skills) open from Customize.
+const NAV_TARGETS: Record<string, NavPage> = { "nav-studio": "studio", "nav-integrations": "integrations", "nav-settings": "general" };
+// Settings has its own navigation: General, Models, and the expert pages (teammates, learning metrics).
+const SETTINGS_FAMILY: NavPage[] = ["general", "settings", "teammates", "intelligence"];
 
-function NavGlyph({ name }: { name: "studio" | "settings" }) {
+type NavIcon = "studio" | "newSession" | "customize" | "general" | "models" | "teammates" | "intelligence" | "back" | "shortcuts" | "logout";
+
+function NavGlyph({ name }: { name: NavIcon }) {
   const paths: Record<typeof name, React.ReactNode> = {
     studio: <><path d="M4 5.5h16v10.5H9l-4.5 3.5V5.5z" /><path d="M8.5 10h7" /></>,
-    settings: <><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4m9.2 9.2L18 18m0-12-1.4 1.4m-9.2 9.2L6 18" /><circle cx="12" cy="12" r="4" /></>,
+    general: <><path d="M10.54 5.15L10.69 2.69 L13.31 2.69 L13.46 5.15A7 7 0 0 1 15.81 6.13L17.66 4.49 L19.51 6.34 L17.87 8.19A7 7 0 0 1 18.85 10.54L21.31 10.69 L21.31 13.31 L18.85 13.46A7 7 0 0 1 17.87 15.81L19.51 17.66 L17.66 19.51 L15.81 17.87A7 7 0 0 1 13.46 18.85L13.31 21.31 L10.69 21.31 L10.54 18.85A7 7 0 0 1 8.19 17.87L6.34 19.51 L4.49 17.66 L6.13 15.81A7 7 0 0 1 5.15 13.46L2.69 13.31 L2.69 10.69 L5.15 10.54A7 7 0 0 1 6.13 8.19L4.49 6.34 L6.34 4.49 L8.19 6.13A7 7 0 0 1 10.54 5.15Z" /><circle cx="12" cy="12" r="3" /></>,
+    models: <path d="M12 3 20 7.5v9L12 21 4 16.5v-9zM12 12l8-4.5M12 12 4 7.5M12 12v9" />,
+    teammates: <><circle cx="9" cy="8.5" r="3" /><path d="M3.5 19c.5-3 3-4.8 5.5-4.8s5 1.8 5.5 4.8M16 6a2.6 2.6 0 0 1 0 5M17.5 14.4c1.9.5 3 2.1 3.3 4.6" /></>,
+    intelligence: <path d="M4 19V5M4 19h16M8 15v-4M12 15V8M16 15v-6" />,
+    back: <path d="M19 12H5M11 6l-6 6 6 6" />,
+    shortcuts: <><rect x="3.5" y="6" width="17" height="12" rx="2.5" /><path d="M7.5 10h.01M12 10h.01M16.5 10h.01M8 14h8" /></>,
+    logout: <path d="M10 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H10M9 12h11M16 8l4 4-4 4" />,
+    newSession: <path d="M4 12 20 4l-4 16-4.5-6.5z" />,
+    customize: <><rect x="4" y="4" width="6.5" height="6.5" rx="1.5" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" /><path d="M16.75 4v6.5M13.5 7.25H20" /></>,
   };
   return <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
 
 /** Sidebar toggle and search, drawn as the two icons that sit beside the logo (and float in the corner when the sidebar is hidden). */
-function HeaderButtons({ collapsed, onToggle, onSearch, toggleHint, searchHint }: { collapsed: boolean; onToggle: () => void; onSearch: () => void; toggleHint: string; searchHint: string }) {
+function HeaderButtons({ collapsed, onToggle, onSearch }: { collapsed: boolean; onToggle: () => void; onSearch: () => void }) {
   const { t } = useLocale();
   const icon = { className: "header-icon", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
   return <div className="header-buttons">
-    <button className="header-button" onClick={onToggle} aria-label={t(collapsed ? "shell.showSidebar" : "shell.hideSidebar")} aria-expanded={!collapsed} title={`${t(collapsed ? "shell.showSidebar" : "shell.hideSidebar")} (${toggleHint})`}>
+    <button className="header-button" onClick={onToggle} aria-label={t(collapsed ? "shell.showSidebar" : "shell.hideSidebar")} aria-expanded={!collapsed} title={t(collapsed ? "shell.showSidebar" : "shell.hideSidebar")}>
       <svg {...icon}><rect x="3.5" y="5" width="17" height="14" rx="2.5" /><path d="M9.5 5v14" /></svg></button>
-    <button className="header-button" onClick={onSearch} aria-label={t("shell.search")} title={`${t("shell.search")} (${searchHint})`}>
+    <button className="header-button" onClick={onSearch} aria-label={t("shell.search")} title={t("shell.search")}>
       <svg {...icon}><circle cx="10.8" cy="10.8" r="6.2" /><path d="m15.5 15.5 4.7 4.7" /></svg></button>
   </div>;
 }
@@ -129,7 +137,7 @@ function CommandPalette({ onClose, onNavigate, hint, onConnect }: { onClose: () 
   const commands: Array<{ label: string; hint: string; run: () => void }> = [
     { label: t("palette.work"), hint: hint("nav-studio"), run: () => onNavigate("studio") },
     { label: t("page.integrations"), hint: hint("nav-integrations"), run: () => onNavigate("integrations") },
-    { label: t("page.settings"), hint: hint("nav-settings"), run: () => onNavigate("settings") },
+    { label: t("page.settings"), hint: hint("nav-settings"), run: () => onNavigate("general") },
     { label: t("palette.teammates"), hint: t("palette.advanced"), run: () => onNavigate("teammates") },
     { label: t("palette.intelligence"), hint: t("palette.advanced"), run: () => onNavigate("intelligence") },
     ...(onConnect ? [{ label: t("palette.signIn"), hint: t("palette.account"), run: onConnect }] : []),
@@ -147,6 +155,73 @@ function EvolutionHost({ token, onOpened }: { token: string; onOpened: () => voi
 function TeammatesHost({ token, scope, onConnect }: { token: string; scope: WorkspaceScope; onConnect: () => void }) {
   const workspace = useWorkspace();
   return <TeammateWorkspace token={token} scope={scope} incomingApprovals={workspace.run.approvals} onApprovalResolved={workspace.dismissApproval} onConnect={onConnect} />;
+}
+
+/** The signed-in account at the foot of the sidebar; it opens a small menu with Settings, Shortcuts and Log out. */
+function AccountRow({ token, inSettings, onSettings, onClose, onShortcuts, onLogout }: { token: string; inSettings: boolean; onSettings: () => void; onClose: () => void; onShortcuts: () => void; onLogout: (() => void) | null }) {
+  const { t } = useLocale();
+  const [account, setAccount] = useState<{ email: string; display_name: string } | null>(null);
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!token) { setAccount(null); return; }
+    let stopped = false;
+    void apiRequest<{ email: string; display_name: string }>("/api/v1/auth/me", token).then((value) => { if (!stopped) setAccount(value); }).catch(() => undefined);
+    return () => { stopped = true; };
+  }, [token]);
+  useEffect(() => {
+    if (!open) return;
+    const away = (event: MouseEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", escape);
+    return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", escape); };
+  }, [open]);
+  const label = account?.email || account?.display_name || t("account.signedOut");
+  const choose = (run: () => void) => () => { setOpen(false); run(); };
+  const item = (icon: NavIcon, text: string, run: () => void) => <button type="button" role="menuitem" className="account-menu__item" onClick={choose(run)}><NavGlyph name={icon} /><span>{text}</span></button>;
+  return <div className="account-wrap" ref={root}>
+    {open && <div className="account-menu" role="menu" aria-label={t("account.open")}>
+      {inSettings ? item("general", t("account.menu.close"), onClose) : item("general", t("page.settings"), onSettings)}
+      <div className="account-menu__rule" />
+      {item("shortcuts", t("shell.shortcutsTitle"), onShortcuts)}
+      {onLogout && <><div className="account-menu__rule" />{item("logout", t("account.menu.logout"), onLogout)}</>}
+    </div>}
+    <button type="button" className={`account-row ${open ? "is-active" : ""}`} aria-haspopup="menu" aria-expanded={open} title={t("account.open")} aria-label={t("account.open")} onClick={() => setOpen((value) => !value)}>
+      <span className="account-avatar" aria-hidden="true">{(account?.display_name || account?.email || "?").charAt(0).toUpperCase()}</span>
+      <span className="account-email">{label}</span>
+    </button>
+  </div>;
+}
+
+/** Settings navigation: back to the work screen, a search over the sections, and one entry per section. */
+function SettingsNav({ page, navigate }: { page: NavPage; navigate: (page: NavPage) => void }) {
+  const { t } = useLocale();
+  const [query, setQuery] = useState("");
+  const sections: Array<{ page: NavPage; icon: NavIcon; label: string }> = [
+    { page: "general", icon: "general", label: t("settings.nav.general") },
+    { page: "settings", icon: "models", label: t("settings.nav.models") },
+    { page: "teammates", icon: "teammates", label: t("page.teammates") },
+    { page: "intelligence", icon: "intelligence", label: t("page.intelligence") },
+  ];
+  const shown = sections.filter((section) => section.label.toLowerCase().includes(query.trim().toLowerCase()));
+  return <>
+    <button type="button" className="settings-back" onClick={() => navigate("studio")}><NavGlyph name="back" /><span>{t("settings.back")}</span></button>
+    <label className="settings-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.2" /><path d="m15.5 15.5 4.7 4.7" /></svg>
+      <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("settings.search")} aria-label={t("settings.search")} /></label>
+    <nav className="main-nav" aria-label={t("page.settings")}>{shown.map((section) => <button key={section.page} type="button" className={`nav-link ${page === section.page ? "is-active" : ""}`} aria-current={page === section.page ? "page" : undefined} onClick={() => navigate(section.page)}><NavGlyph name={section.icon} /><span className="nav-link__label">{section.label}</span></button>)}</nav>
+  </>;
+}
+
+/** The entry points above the session list: start a session, and the places that shape the assistant. */
+function SidebarActions({ page, navigate }: { page: NavPage; navigate: (page: NavPage) => void }) {
+  const { t } = useLocale();
+  const workspace = useWorkspace();
+  const items: Array<{ icon: NavIcon; label: string; active: boolean; run: () => void }> = [
+    { icon: "newSession", label: t("shell.newSession"), active: false, run: () => { workspace.newTask(); navigate("studio"); } },
+    { icon: "customize", label: t("shell.customize"), active: page === "integrations", run: () => navigate("integrations") },
+  ];
+  return <nav className="main-nav" aria-label={t("shell.screens")}>{items.map((item) => <button key={item.icon} type="button" className={`nav-link ${item.active ? "is-active" : ""}`} aria-current={item.active ? "page" : undefined} onClick={item.run}><NavGlyph name={item.icon} /><span className="nav-link__label">{item.label}</span></button>)}</nav>;
 }
 
 type LocalSession = { access_token: string; tenant_id: string; workspace_id: string; expires_in: number };
@@ -270,25 +345,18 @@ export function StudioApp({ initialPage = "studio" }: { initialPage?: NavPage })
   const currentScope = useMemo(() => scope, [scope]);
   const connect = localMode === false ? () => setAccountOpen(true) : null;
 
-  const navLink = (target: NavPage, icon: "studio" | "settings", label: string, shortcut: string) => {
-    const active = target === "settings" ? SETTINGS_FAMILY.includes(page) : page === target;
-    return <a key={target} href={pagePaths[target]} className={`nav-link ${active ? "is-active" : ""}`} aria-current={active ? "page" : undefined}
-      onClick={(event) => { event.preventDefault(); navigate(target); }}><NavGlyph name={icon} /><span className="nav-link__label">{label}</span>{shortcut && <kbd>{shortcut}</kbd>}</a>;
-  };
-
   return <ModelProvider token={token}><WorkspaceProvider token={token}><div className={`app-shell app-shell--chat ${collapsed ? "app-shell--collapsed" : ""} ${mobileNavOpen ? "app-shell--mobile-nav-open" : ""}`}>
     <aside className="sidebar" aria-label={t("shell.sidebar")}>
-      <div className="brand-row"><a className="brand" href="/studio" onClick={(event) => { event.preventDefault(); navigate("studio"); }} aria-label="NexusAgent"><span className="brand-symbol"><NexusAgentLogo size={34} /></span><span className="brand-copy"><strong>NexusAgent</strong></span></a><HeaderButtons collapsed={collapsed} onToggle={toggleSidebar} onSearch={() => setCommandOpen(true)} toggleHint={hint("toggle-sidebar")} searchHint={hint("palette")} /></div>
-      <nav className="main-nav" aria-label={t("shell.screens")}>{NAV_ITEMS.map((item) => navLink(item.page, item.icon, t(`page.${item.page}`), hint(item.action)))}</nav>
-      <FileExplorer onOpened={() => navigate("studio")} />
-      <div className="sidebar-bottom">{navLink("settings", "settings", t("page.settings"), hint("nav-settings"))}</div>
+      {!SETTINGS_FAMILY.includes(page) && <div className="brand-row"><a className="brand" href="/studio" onClick={(event) => { event.preventDefault(); navigate("studio"); }} aria-label="NexusAgent"><span className="brand-symbol"><NexusAgentLogo size={34} /></span><span className="brand-copy"><strong>NexusAgent</strong></span></a><HeaderButtons collapsed={collapsed} onToggle={toggleSidebar} onSearch={() => setCommandOpen(true)} /></div>}
+      {SETTINGS_FAMILY.includes(page) ? <SettingsNav page={page} navigate={navigate} /> : <><SidebarActions page={page} navigate={navigate} /><FileExplorer onOpened={() => navigate("studio")} /></>}
+      <div className="sidebar-bottom"><AccountRow token={token} inSettings={SETTINGS_FAMILY.includes(page)} onSettings={() => navigate("general")} onClose={() => navigate("studio")} onShortcuts={() => setHelpOpen(true)} onLogout={localMode === false && token ? () => { saveToken(""); setAccountOpen(true); } : null} /></div>
     </aside>
     {mobileNavOpen && <button className="mobile-nav-scrim" aria-label={t("shell.closeNav")} onClick={() => setMobileNavOpen(false)} />}
-    {collapsed && <div className="header-float"><HeaderButtons collapsed onToggle={toggleSidebar} onSearch={() => setCommandOpen(true)} toggleHint={hint("toggle-sidebar")} searchHint={hint("palette")} /></div>}
+    {collapsed && <div className="header-float"><HeaderButtons collapsed onToggle={toggleSidebar} onSearch={() => setCommandOpen(true)} /></div>}
     <main className="main-area">
       <header className="app-header">
         <button className="mobile-nav-toggle" aria-label={t("shell.openNav")} onClick={() => setMobileNavOpen(true)}><span /><span /><span /></button>
-        <h1 className="app-header__title">{t(`page.${page}`)}</h1>
+        {page === "studio" && <h1 className="app-header__title">{t(`page.${page}`)}</h1>}
         <span className="app-header__spacer" />
         <ModelPicker onOpenSettings={() => navigate("settings")} />
         <LanguageSwitch />
@@ -296,8 +364,9 @@ export function StudioApp({ initialPage = "studio" }: { initialPage?: NavPage })
       </header>
       <div className={`content-area content-area--${page}`}>
         {page === "studio" && <WorkspaceApp scope={currentScope} shortcutHint={hint("toggle-canvas")} onConnect={() => setAccountOpen(true)} onModal={setModal} onNavigate={navigate} />}
-        {page === "settings" && <><SettingsTabs page="settings" onNavigate={navigate} /><ProviderSettings token={token} onNavigate={navigate} /></>}
-        {page === "integrations" && <><SettingsTabs page="integrations" onNavigate={navigate} /><IntegrationsPage token={token} onConnect={() => setAccountOpen(true)} /></>}
+        {page === "general" && <GeneralSettings theme={theme} onTheme={setTheme} bindings={bindings} onBindings={changeBindings} mac={mac} />}
+        {page === "settings" && <ProviderSettings token={token} onNavigate={navigate} />}
+        {page === "integrations" && <CustomizePage token={token} onConnect={() => setAccountOpen(true)} />}
         {page === "teammates" && <TeammatesHost token={token} scope={currentScope} onConnect={() => setAccountOpen(true)} />}
         {page === "intelligence" && <><div className="page-title-row"><div><h1>{t("intelligence.title")}</h1><p>{t("intelligence.body")}</p></div></div><div className="intelligence-stack"><EvolutionHost token={token} onOpened={() => navigate("studio")} /><LearningTransferRadar token={token} /><FinOpsDistillationPanel token={token} /></div></>}
       </div>

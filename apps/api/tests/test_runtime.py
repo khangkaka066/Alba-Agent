@@ -16,7 +16,7 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from autogen_bridge.sandbox_team import AutoGenCodeExecutionTool, AutoGenSandboxRunner
+from nexusgen_bridge.sandbox_team import NexusGenCodeExecutionTool, NexusGenSandboxRunner
 from callbacks.event_bus import RuntimeEventEmitter
 from checkpoints.store import CheckpointStore
 from crews.builder import CrewBuilder
@@ -155,10 +155,10 @@ def test_hybrid_flow_executes_code_checkpoints_and_resumes() -> None:
 
             emitter = RuntimeEventEmitter(redis, tenant_id, workspace_id, run_id)
             checkpoints = CheckpointStore(app_engine, redis)
-            runner = AutoGenSandboxRunner(DockerSandboxSupervisor(root), client_factory)
+            runner = NexusGenSandboxRunner(DockerSandboxSupervisor(root), client_factory)
             tool_spec = next(node for node in spec.nodes if node.id == "calculate")
             assert tool_spec.kind == "sandbox"
-            tool = AutoGenCodeExecutionTool(
+            tool = NexusGenCodeExecutionTool(
                 runner, tool_spec, RuntimeEventEmitter(redis, tenant_id, workspace_id, uuid4())
             )
             assert tool.name == "nexus_code_execution"
@@ -192,7 +192,7 @@ def test_hybrid_flow_executes_code_checkpoints_and_resumes() -> None:
                 events: list[str] = []
                 while message := await pubsub.get_message(ignore_subscribe_messages=True, timeout=0.2):
                     events.append(RuntimeEvent.model_validate_json(message["data"]).type)
-                assert RuntimeEventType.AUTOGEN_CODE_GENERATED in events
+                assert RuntimeEventType.NEXUSGEN_CODE_GENERATED in events
                 assert RuntimeEventType.SANDBOX_TERMINAL_OUTPUT in events
                 assert RuntimeEventType.APPROVAL_REQUIRED in events
                 assert RuntimeEventType.RUN_COMPLETED in events

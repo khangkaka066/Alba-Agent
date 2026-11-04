@@ -1,0 +1,22 @@
+# dsh profile patch for the benchmark: ShopAIKey as the only provider, telemetry off.
+# Secrets are never written here; the key is read from BENCH_API_KEY at run time.
+- id: session-telemetry-otel
+  disabled: true
+
+- id: llm-pi-ai
+  config:
+    providers:
+      shopaikey:
+        displayName: ShopAIKey
+        apiKeyEnv: BENCH_API_KEY
+        api: openai-completions
+        baseURL: !!js process.env.BENCH_OPENAI_BASE_URL
+        models:
+          - id: gpt-6-luna
+            contextWindow: 200000
+            maxTokens: 16000
+
+- id: agent-default-model
+  config:
+    provider: shopaikey
+    model: gpt-6-luna

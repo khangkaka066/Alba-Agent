@@ -1,0 +1,1 @@
+`python -m unittest test_lru` fails: `LRUStore` in `lru.py` sometimes evicts the wrong entry. Read the class docstring for the intended behaviour, find the root cause and fix it so the store is correct for any sequence of `put`, `get`, `peek`, `delete` and `pop_oldest` calls, not only the ones in the visible test. Do not modify `test_lru.py`.

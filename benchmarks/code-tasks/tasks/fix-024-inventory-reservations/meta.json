@@ -1,0 +1,1 @@
+{"id": "fix-024-inventory-reservations", "category": "fix", "difficulty": 3, "protected": ["test_reservations.py"]}

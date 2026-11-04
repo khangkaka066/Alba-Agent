@@ -10,7 +10,7 @@ from uuid import uuid4
 import pytest
 
 from flows.compiler import FlowCompiler
-from nexus_core_schema.models import AutoGenSandboxNodeSpec, CrewNodeSpec, WorkflowSpec
+from nexus_core_schema.models import NexusGenSandboxNodeSpec, CrewNodeSpec, WorkflowSpec
 from nexus_core_schema_templates.catalog import TEMPLATE_BY_ID
 from nexus_core_schema_templates.studios import STUDIO_BY_ID, build_studio_graph, detect_studio
 
@@ -31,7 +31,7 @@ def test_each_next_team_compiles_with_the_advertised_size_and_declares_its_chann
     spec = FlowCompiler.validate(_spec(blueprint, "full_studio"))
     assert graph.agent_count == agents and spec.modes.channels == channels
     assert TEMPLATE_BY_ID[blueprint.id].title == blueprint.title
-    assert {node.id for node in spec.nodes if isinstance(node, AutoGenSandboxNodeSpec)} == {dept.key for dept in blueprint.wave_two}
+    assert {node.id for node in spec.nodes if isinstance(node, NexusGenSandboxNodeSpec)} == {dept.key for dept in blueprint.wave_two}
     assert FlowCompiler.validate(_spec(blueprint, "standard")).modes.rigor == "standard"
 
 
@@ -50,7 +50,7 @@ def test_the_analytics_team_is_told_never_to_invent_numbers() -> None:
     spec = _spec(ANALYTICS, "full_studio")
     assert "never invent data" in {rule.pattern: rule.rule for rule in spec.modes.path_rules}["analytics/**"]
     sandbox = next(node for node in spec.nodes if node.id == "analysis_build")
-    assert isinstance(sandbox, AutoGenSandboxNodeSpec) and "labelled an assumption" in sandbox.coder_instructions and "upstream/" in sandbox.coder_instructions
+    assert isinstance(sandbox, NexusGenSandboxNodeSpec) and "labelled an assumption" in sandbox.coder_instructions and "upstream/" in sandbox.coder_instructions
     assert ANALYTICS.channels == ()
 
 

@@ -1,0 +1,1 @@
+{"id": "fix-015-inventory-cache", "category": "fix", "difficulty": 3, "protected": ["test_inventory.py"]}

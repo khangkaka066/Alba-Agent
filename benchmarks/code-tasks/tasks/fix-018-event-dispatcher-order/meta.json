@@ -1,0 +1,1 @@
+{"id": "fix-018-event-dispatcher-order", "category": "fix", "difficulty": 2, "protected": ["test_dispatcher.py"]}

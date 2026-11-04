@@ -1,0 +1,1 @@
+{"id": "fix-030-schedule-overlap-edges", "category": "fix", "difficulty": 1, "protected": ["test_bookings.py"]}

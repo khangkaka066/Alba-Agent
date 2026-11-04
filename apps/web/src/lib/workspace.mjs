@@ -139,7 +139,7 @@ export function reduceRunEvent(state, event) {
       return state;
     }
     case "CREW_AGENT_THOUGHT": return { ...state, thoughts: keep(state.thoughts, { id: event.id, node, text: String(p.content ?? p.thought ?? p.message ?? "") }, 80) };
-    case "AUTOGEN_CODE_GENERATED": return { ...state, thoughts: keep(state.thoughts, { id: event.id, node, text: "", textKey: "run.codeWritten", code: String(p.code ?? p.content ?? "") }, 80) };
+    case "NEXUSGEN_CODE_GENERATED": return { ...state, thoughts: keep(state.thoughts, { id: event.id, node, text: "", textKey: "run.codeWritten", code: String(p.code ?? p.content ?? "") }, 80) };
     case "TOOL_INVOKED": return { ...state, tools: keep(state.tools, { id: event.id, node, name: String(p.tool ?? p.name ?? "tool") }, 80) };
     case "SANDBOX_TERMINAL_OUTPUT": return { ...state, terminal: keep(state.terminal, { id: event.id, stream: String(p.stream ?? "stdout"), text: String(p.content ?? p.output ?? "") }, 400) };
     case "SANDBOX_SCREEN_FRAME": return { ...state, frame: typeof p.data_base64 === "string" ? `data:${String(p.mime_type ?? "image/png")};base64,${p.data_base64}` : state.frame };

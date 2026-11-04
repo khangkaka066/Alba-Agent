@@ -3,3 +3,5 @@ export function statusTone(status: string): "ok" | "bad" | "busy" | "wait" | "id
 export function orderTasks<T extends RunRow>(runs: T[] | null | undefined, currentRunId: string | null, limit?: number): T[];
 export function failureFacts(failure: unknown): Array<{ key: "where" | "agent" | "message"; value: string }>;
 export function failureDetails(failure: unknown): string;
+export function ageLabel(iso: string, now?: number): string;
+export function filterTasks<T extends { name: string }>(tasks: T[], query?: string): T[];

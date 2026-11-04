@@ -1,0 +1,1 @@
+{"id": "fix-008-config-merge", "category": "fix", "difficulty": 2, "protected": ["test_config.py"]}

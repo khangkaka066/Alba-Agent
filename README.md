@@ -80,12 +80,22 @@ You need Docker Compose, and either an AI subscription you already use (ChatGPT,
 
 ```bash
 git clone https://github.com/khangkaka066/Nexus-Agent.git && cd Nexus-Agent
+./scripts/quickstart.sh
+```
+
+The script checks Docker (it must answer and have about 6 GB of memory or more, otherwise runs time out), creates `.env` with generated secrets, fills the sandbox settings on Linux, and starts the stack. It never overwrites an existing `.env`: only keys that are still empty are filled. `./scripts/quickstart.sh --check` only reports problems.
+
+<details><summary>Manual setup</summary>
+
+```bash
 cp .env.example .env
 openssl rand -hex 32      # paste into: NEXUS_POSTGRES_PASSWORD, NEXUS_RUNTIME_DB_PASSWORD,
                           #             NEXUS_REDIS_PASSWORD, NEXUS_SECRET_KEY, NEXUS_API_KEY_PEPPER
 openssl rand -base64 32   # paste into: NEXUS_CREDENTIAL_ENCRYPTION_KEY_BASE64
 docker compose up -d --build
 ```
+
+</details>
 
 Open **http://localhost:3000**. There is no sign-up in local mode: a *Local Workspace* is created for you. Then:
 
@@ -159,7 +169,7 @@ flowchart TB
     API --> PG[("PostgreSQL + RLS")]
     API --> RD[("Redis: events")]
     API --> WK["Worker (Celery)"]
-    WK --> RT["Runtime: CrewAI Flows + AutoGen"]
+    WK --> RT["Runtime: NexusAI Flows + NexusGen"]
     RT --> SB["Docker sandbox"]
     RT --> QD[("Qdrant: RAG")]
     RT --> GW["Model gateway (LiteLLM)"]
@@ -172,7 +182,7 @@ The runtime is assembled from plugins: connections, model access, checkpoints, t
 | `apps/web` | Next.js interface |
 | `apps/api` | FastAPI control plane, auth, billing, workers |
 | `apps/desktop` | Electron shell with local folder mounting |
-| `packages/agent-runtime` | Flow compiler, crews, AutoGen bridge, time travel, consensus, plugin kernel |
+| `packages/agent-runtime` | Flow compiler, crews, NexusGen bridge, time travel, consensus, plugin kernel |
 | `packages/learning-transfer` | Knowledge capsules, scope firewall, self-healing prompts |
 | `packages/model-gateway` | Providers, subscription connectors, pricing, FinOps |
 | `packages/computer-sandbox` | Docker and cloud sandbox providers |
@@ -259,4 +269,4 @@ If NexusAgent saves you time, a star helps other people find it, and sharing a s
 - Only permissively licensed dependencies are used (checked in CI); see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - Released under the [MIT License](LICENSE).
 
-<sub>**Topics:** multi-agent, ai-agents, agent-orchestration, llm, workflow-automation, crewai, autogen, mcp, rag, human-in-the-loop, docker-sandbox, self-hosted, fastapi, nextjs, multi-tenant, ai-workflow-builder.</sub>
+<sub>**Topics:** multi-agent, ai-agents, agent-orchestration, llm, workflow-automation, mcp, rag, human-in-the-loop, docker-sandbox, self-hosted, fastapi, nextjs, multi-tenant, ai-workflow-builder.</sub>

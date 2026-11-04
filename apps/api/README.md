@@ -28,7 +28,7 @@ celery -A app.workers.jobs:celery_app worker --loglevel=INFO
 celery -A app.workers.jobs:celery_app beat --loglevel=INFO
 ```
 
-The worker reads `NEXUS_REDIS_HOST` / `NEXUS_REDIS_PASSWORD`, `NEXUS_DB_*`, `NEXUS_CREDENTIAL_ENCRYPTION_KEY_BASE64`, `NEXUS_MODEL_RATES_JSON`, `NEXUS_OUTPUT_SCHEMAS_JSON`, and `NEXUS_COMPUTER_ROOT`. Add output schema models as a JSON map from model name to field/type map. `NEXUS_MODEL_RATES_JSON` is optional: a model without a price, and every subscription-plan credential, runs at `cost_usd = 0` with `billing_mode = SUBSCRIPTION_INCLUDED`. Sandbox model calls also require `NEXUS_AUTOGEN_API_KEY` (or a workspace credential) and an optional OpenAI-compatible `NEXUS_AUTOGEN_API_BASE`.
+The worker reads `NEXUS_REDIS_HOST` / `NEXUS_REDIS_PASSWORD`, `NEXUS_DB_*`, `NEXUS_CREDENTIAL_ENCRYPTION_KEY_BASE64`, `NEXUS_MODEL_RATES_JSON`, `NEXUS_OUTPUT_SCHEMAS_JSON`, and `NEXUS_COMPUTER_ROOT`. Add output schema models as a JSON map from model name to field/type map. `NEXUS_MODEL_RATES_JSON` is optional: a model without a price, and every subscription-plan credential, runs at `cost_usd = 0` with `billing_mode = SUBSCRIPTION_INCLUDED`. Sandbox model calls also require `NEXUS_GEN_API_KEY` (or a workspace credential) and an optional OpenAI-compatible `NEXUS_GEN_API_BASE`.
 
 Routine scheduling registers only tenant-scoped Redis keys. The beat task reads each registered workspace and then uses `scoped_session` and forced PostgreSQL RLS for routine queries. A single Beat process should run for each deployment.
 

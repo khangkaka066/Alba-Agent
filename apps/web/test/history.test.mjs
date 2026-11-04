@@ -25,3 +25,22 @@ test("a failure reads as where it stopped, which agent when known, and what went
   assert.equal(failureDetails(failure), "ValueError\na.py:1 in run");
   for (const none of [null, undefined, "x", {}]) { assert.deepEqual(failureFacts(none), []); assert.equal(failureDetails(none), ""); }
 });
+
+import { ageLabel, filterTasks } from "../src/lib/history.mjs";
+
+test("ageLabel is compact and steps through minutes, hours, days and weeks", () => {
+  const now = Date.parse("2026-11-04T12:00:00Z");
+  const ago = (ms) => new Date(now - ms).toISOString();
+  assert.equal(ageLabel(ago(10_000), now), "now");
+  assert.equal(ageLabel(ago(5 * 60_000), now), "5m");
+  assert.equal(ageLabel(ago(3 * 3_600_000), now), "3h");
+  assert.equal(ageLabel(ago(2 * 86_400_000), now), "2d");
+  assert.equal(ageLabel(ago(15 * 86_400_000), now), "2w");
+  assert.equal(ageLabel("not a date", now), "");
+});
+
+test("filterTasks keeps tasks whose name contains the query, ignoring case", () => {
+  const tasks = [{ name: "Fix parser" }, { name: "Write docs" }];
+  assert.deepEqual(filterTasks(tasks, "DOCS"), [{ name: "Write docs" }]);
+  assert.deepEqual(filterTasks(tasks, "  "), tasks);
+});

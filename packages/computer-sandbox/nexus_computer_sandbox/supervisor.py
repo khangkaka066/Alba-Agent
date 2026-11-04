@@ -5,11 +5,13 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import logging
 import os
 import re
 import shlex
 import stat
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from time import monotonic
 from typing import AsyncGenerator, Awaitable, Callable, Literal, Protocol, cast
@@ -111,6 +113,7 @@ class DockerSandboxProvider:
         directory = self._directory(handle)
         directory.mkdir(parents=True, exist_ok=True)
         name = f"nexus-computer-{handle.id.hex}"
+        await self._docker("rm", "-f", name)  # a leftover from an earlier provisioning of this computer would hold the name
         command = (
             # No network namespace connectivity prevents reaching host loopback,
             # RFC1918 services, and cloud metadata endpoints from user code.
@@ -142,6 +145,28 @@ class DockerSandboxProvider:
         exit_code, _, stderr = await self._docker("rm", "-f", handle.external_id)
         if exit_code != 0 and "No such container" not in stderr:
             raise RuntimeError(f"Could not stop computer: {stderr.strip()}")
+
+    async def run_owned_containers(self) -> tuple[tuple[str, UUID, UUID, UUID, float], ...]:
+        """Containers owned by a run, as (name, tenant, workspace, run, age in seconds). Bot and shared computers are not listed."""
+        exit_code, listing, _ = await self._docker("ps", "-aq", "--filter", "label=nexus.run_id")
+        identifiers = listing.split()
+        if exit_code != 0 or not identifiers:
+            return ()
+        template = '{{.Name}}|{{.Created}}|{{index .Config.Labels "nexus.tenant_id"}}|{{index .Config.Labels "nexus.workspace_id"}}|{{index .Config.Labels "nexus.run_id"}}'
+        exit_code, detail, _ = await self._docker("inspect", "-f", template, *identifiers)
+        if exit_code != 0:
+            return ()
+        now = datetime.now(timezone.utc)
+        found: list[tuple[str, UUID, UUID, UUID, float]] = []
+        for line in detail.splitlines():
+            name, created, tenant, workspace, run = (line.split("|") + ["", "", "", "", ""])[:5]
+            try:
+                # Docker reports nanoseconds; datetime keeps microseconds.
+                moment = datetime.fromisoformat(re.sub(r"\.(\d{6})\d*", r".\1", created.replace("Z", "+00:00")))
+                found.append((name.lstrip("/"), UUID(tenant), UUID(workspace), UUID(run), (now - moment).total_seconds()))
+            except ValueError:
+                continue  # unlabelled or malformed: not ours to remove
+        return tuple(found)
 
     async def shell(self, handle: ComputerHandle, command: str, timeout_seconds: int, sink: OutputSink) -> SandboxExecution:
         if handle.external_id is None or not command.strip() or not 1 <= timeout_seconds <= 3600:
@@ -276,6 +301,7 @@ class ComputerSandboxSupervisor:
         self._providers: dict[str, ComputerProvider] = {provider.name: provider for provider in ((docker,) if docker is not None else ()) + cloud_providers}
         self._browser_hook = browser_hook
         self._boundary_guard = boundary_guard
+        self._run_users: dict[UUID, int] = {}
 
     def add_provider(self, provider: ComputerProvider) -> Callable[[], None]:
         """Make a provider selectable by name; the returned callable withdraws it again."""
@@ -326,7 +352,7 @@ class ComputerSandboxSupervisor:
             session.add(row)
         handle = self._handle(row)
         try:
-            external_id = await driver.create(handle)
+            external_id = await self._provision(driver, handle)
         except Exception:
             async with scoped_session(self._engine, access.tenant_id, access.workspace_id) as session:
                 stored = await session.get(SandboxComputer, row.id)
@@ -340,6 +366,97 @@ class ComputerSandboxSupervisor:
             stored.status = "running"
             stored.external_id = external_id
         return ComputerHandle(handle.id, access, visibility, provider, external_id)
+
+    @staticmethod
+    async def _provision(driver: ComputerProvider, handle: ComputerHandle, attempts: int = 3) -> str:
+        """Create the instance, trying again with a short pause: a busy Docker daemon often refuses once and accepts a moment later."""
+        for attempt in range(1, attempts + 1):
+            try:
+                return await driver.create(handle)
+            except RuntimeError:
+                if attempt == attempts:
+                    raise
+                await asyncio.sleep(1.5 * attempt)
+        raise RuntimeError("Computer provisioning was not attempted")
+
+    async def _reprovision(self, access: ComputerAccess, row: SandboxComputer) -> ComputerHandle:
+        """Give a run whose computer was released a fresh instance. A run owns one row, so the row is reused."""
+        driver = self._provider(row.provider)
+        async with scoped_session(self._engine, access.tenant_id, access.workspace_id) as session:
+            stored = await session.get(SandboxComputer, row.id)
+            if stored is None:
+                raise LookupError("Computer disappeared")
+            stored.status = "provisioning"
+            handle = self._handle(stored)
+        try:
+            external_id = await self._provision(driver, handle)
+        except Exception:
+            async with scoped_session(self._engine, access.tenant_id, access.workspace_id) as session:
+                failed = await session.get(SandboxComputer, row.id)
+                if failed is not None:
+                    failed.status = "failed"
+            raise
+        async with scoped_session(self._engine, access.tenant_id, access.workspace_id) as session:
+            stored = await session.get(SandboxComputer, row.id)
+            if stored is None:
+                raise LookupError("Provisioned computer disappeared")
+            stored.status = "running"
+            stored.external_id = external_id
+        return ComputerHandle(handle.id, access, handle.visibility, handle.provider, external_id)
+
+    async def acquire_run(self, run_id: UUID) -> None:
+        """A node of this run starts using its computer; nodes of one run may overlap, so uses are counted."""
+        self._run_users[run_id] = self._run_users.get(run_id, 0) + 1
+
+    async def release_run(self, tenant_id: UUID, workspace_id: UUID, run_id: UUID) -> None:
+        """A node finished. The last one out removes the instance; the files stay in the run directory on the host."""
+        remaining = self._run_users.get(run_id, 1) - 1
+        if remaining > 0:
+            self._run_users[run_id] = remaining
+            return
+        self._run_users.pop(run_id, None)
+        await self.retire_run(tenant_id, workspace_id, run_id, host_backed_only=True)
+
+    async def retire_run(self, tenant_id: UUID, workspace_id: UUID, run_id: UUID, host_backed_only: bool = False) -> None:
+        """Remove the run's computer now, whatever is using it. Safe to repeat; the next command re-provisions.
+
+        A remote computer keeps the run's files, which are exported when the run's nodes finish, so between nodes only
+        local (host-backed) computers are removed; `host_backed_only` says so. The end of the run removes the rest.
+        """
+        async with scoped_session(self._engine, tenant_id, workspace_id) as session:
+            row = await session.scalar(select(SandboxComputer).where(SandboxComputer.run_id == run_id, SandboxComputer.status == "running"))
+        if row is None or (host_backed_only and row.provider != "docker"):
+            return
+        handle = self._handle(row)
+        try:
+            await self._provider(handle.provider).destroy(handle)
+        except Exception:
+            logging.getLogger("nexus.sandbox").exception("Run computer could not be removed", extra={"run_id": str(run_id)})
+            return
+        async with scoped_session(self._engine, tenant_id, workspace_id) as session:
+            stored = await session.get(SandboxComputer, row.id)
+            if stored is not None:
+                stored.status = "terminated"
+        await self._audit(handle.access, row.id, "computer.released", {"provider": handle.provider})
+
+    async def reap_orphans(self, older_than_seconds: int = 14_400) -> int:
+        """Remove run computers that outlived any run, such as after a crash. Returns how many were removed."""
+        provider = self._providers.get("docker")
+        if not isinstance(provider, DockerSandboxProvider):
+            return 0
+        removed = 0
+        for name, tenant_id, workspace_id, run_id, age in await provider.run_owned_containers():
+            if age < older_than_seconds or run_id in self._run_users:
+                continue
+            exit_code, _, _ = await provider._docker("rm", "-f", name)
+            if exit_code != 0:
+                continue
+            removed += 1
+            async with scoped_session(self._engine, tenant_id, workspace_id) as session:
+                row = await session.scalar(select(SandboxComputer).where(SandboxComputer.run_id == run_id, SandboxComputer.status == "running"))
+                if row is not None:
+                    row.status = "terminated"
+        return removed
 
     async def get(self, access: ComputerAccess, computer_id: UUID) -> ComputerHandle:
         async with scoped_session(self._engine, access.tenant_id, access.workspace_id) as session:
@@ -452,13 +569,14 @@ class ComputerSandboxSupervisor:
         relative = _relative_path(path)
         if relative.name.startswith("attempt_"):
             raise ValueError("Generated attempt scripts are not deliverables")
-        access = ComputerAccess(tenant_id, workspace_id, run_id=run_id)
         async with scoped_session(self._engine, tenant_id, workspace_id) as session:
-            row = await session.scalar(select(SandboxComputer).where(SandboxComputer.run_id == run_id, SandboxComputer.status == "running"))
+            row = await session.scalar(select(SandboxComputer).where(SandboxComputer.run_id == run_id, SandboxComputer.status.in_(("running", "terminated"))))
         if row is None:
-            raise FileNotFoundError("The run has no running computer")
-        handle = await self.get(access, row.id)
-        content = await self._provider(handle.provider).download(handle, relative.as_posix())
+            raise FileNotFoundError("The run has no computer")
+        if row.status != "running" and row.provider != "docker":
+            raise FileNotFoundError("The run's remote computer was already removed")
+        # A removed local computer still has its files: they live in a host directory, not in the container.
+        content = await self._provider(row.provider).download(self._handle(row), relative.as_posix())
         if len(content) > max_bytes:
             raise ValueError("Sandbox deliverable exceeds the export size limit")
         return content
@@ -475,8 +593,13 @@ class ComputerSandboxSupervisor:
             raise ValueError("Sandbox script label must be 1-48 letters, digits or underscores")
         access = ComputerAccess(tenant_id, workspace_id, run_id=run_id)
         async with scoped_session(self._engine, tenant_id, workspace_id) as session:
-            row = await session.scalar(select(SandboxComputer).where(SandboxComputer.run_id == run_id, SandboxComputer.status == "running"))
-        handle = await self.get(access, row.id) if row is not None else await self.create(access)
+            row = await session.scalar(select(SandboxComputer).where(SandboxComputer.run_id == run_id))
+        if row is None:
+            handle = await self.create(access)
+        elif row.status == "running":
+            handle = await self.get(access, row.id)
+        else:
+            handle = await self._reprovision(access, row)
         script = f"attempt_{script_label + '_' if script_label else ''}{attempt}.py"
         provider = self._provider(handle.provider)
         if sum(len(content) for content in (input_files or {}).values()) > 1_048_576:

@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import AuditLog, BotMessage, BotRoutine, PersistentBot, RoutineRun, Workflow, WorkflowRun
 from app.models.scope import scoped_session
-from autogen_bridge.sandbox_team import AutoGenSandboxRunner
+from nexusgen_bridge.sandbox_team import NexusGenSandboxRunner
 from callbacks.event_bus import RuntimeEventEmitter
 from checkpoints.approval import ActionIntent
 from checkpoints.store import CheckpointStore
@@ -107,7 +107,7 @@ class BotRunner:
         tenant_id: UUID,
         workspace_id: UUID,
         responder: BotResponder,
-        sandbox_runner: AutoGenSandboxRunner,
+        sandbox_runner: NexusGenSandboxRunner,
         crew_builder: CrewBuilder | None = None,
         boundary_requester: BoundaryRequester | None = None,
     ) -> None:

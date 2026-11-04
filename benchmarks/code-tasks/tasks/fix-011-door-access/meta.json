@@ -1,0 +1,1 @@
+{"id": "fix-011-door-access", "category": "fix", "difficulty": 2, "protected": ["test_access.py"]}

@@ -149,7 +149,7 @@ flowchart TB
     API --> PG[("PostgreSQL + RLS")]
     API --> RD[("Redis: sự kiện")]
     API --> WK["Worker (Celery)"]
-    WK --> RT["Runtime: CrewAI Flows + AutoGen"]
+    WK --> RT["Runtime: NexusAI Flows + NexusGen"]
     RT --> SB["Docker sandbox"]
     RT --> QD[("Qdrant: RAG")]
     RT --> GW["Cổng model (LiteLLM)"]
@@ -162,7 +162,7 @@ Runtime được lắp từ các plugin: kết nối, truy cập model, checkpoi
 | `apps/web` | Giao diện Next.js |
 | `apps/api` | API FastAPI, xác thực, thanh toán, worker |
 | `apps/desktop` | Ứng dụng Electron, mount thư mục dự án |
-| `packages/agent-runtime` | Biên dịch flow, crew, cầu AutoGen, time travel, consensus, plugin kernel |
+| `packages/agent-runtime` | Biên dịch flow, crew, cầu NexusGen, time travel, consensus, plugin kernel |
 | `packages/learning-transfer` | Knowledge capsule, tường lửa phạm vi, self-healing prompt |
 | `packages/model-gateway` | Provider, connector gói đăng ký, giá, FinOps |
 | `packages/computer-sandbox` | Sandbox Docker và cloud |

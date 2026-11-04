@@ -230,6 +230,25 @@ async def create_token(body: TokenRequest, request: Request) -> TokenResponse:
     return TokenResponse(access_token=issue_access_token(context))
 
 
+class AccountResponse(BaseModel):
+    email: str
+    display_name: str
+    role: str
+
+
+@router.get("/me", response_model=AccountResponse)
+async def current_account(
+    request: Request,
+    context: Annotated[TenantContext, Depends(require_role("viewer", "read"))],
+) -> AccountResponse:
+    """Who is signed in, for the account row in the sidebar."""
+    async with scoped_session(get_services(request).engine, context.tenant_id, context.workspace_id) as session:
+        user = await session.scalar(select(User).where(User.id == context.user_id))
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Account is not visible in this workspace")
+    return AccountResponse(email=user.email, display_name=user.display_name, role=context.role)
+
+
 @router.post("/keys", response_model=ServiceKeyResponse, status_code=status.HTTP_201_CREATED)
 async def create_service_key(
     body: ServiceKeyRequest,

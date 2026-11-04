@@ -67,7 +67,7 @@ test("run progress text follows the chosen language", () => {
   assert.equal(liveActivity(paused, vi), "Đang chờ bạn duyệt");
   assert.equal(liveActivity(paused, en), "Waiting for your approval");
   assert.equal(stepLabel(initialRunState(), 4, en), "Step 1/4");
-  const coded = reduceRunEvent(initialRunState(), { id: "2", type: "AUTOGEN_CODE_GENERATED", payload: { code: "print(1)" } });
+  const coded = reduceRunEvent(initialRunState(), { id: "2", type: "NEXUSGEN_CODE_GENERATED", payload: { code: "print(1)" } });
   assert.equal(liveActivity(coded, en), "Wrote code to verify the result");
 });
 

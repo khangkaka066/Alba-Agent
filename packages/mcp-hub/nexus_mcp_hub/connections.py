@@ -93,7 +93,7 @@ class MCPConnector:
             names.append(name)
         return tuple(names)
 
-    def autogen_workbench(self, connection: McpConnection) -> McpWorkbench:
+    def nexusgen_workbench(self, connection: McpConnection) -> McpWorkbench:
         self._validate(connection)
         if connection.transport == "stdio":
             assert connection.command is not None

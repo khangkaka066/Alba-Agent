@@ -131,7 +131,7 @@ def test_real_qdrant_isolation_and_metered_embeddings() -> None:
                 await rag.retrieve(KnowledgeScope(tenant_a, workspace_a, base_b), "Shared phrase")
             tool = TenantKnowledgeRetrievalTool(rag, scope_a)
             assert "tenant A" in await tool._arun("Shared phrase")
-            assert tool.for_autogen().name == "nexus_knowledge_retrieve"
+            assert tool.for_nexusgen().name == "nexus_knowledge_retrieve"
             async with admin.connect() as connection:
                 rows = await connection.execute(text("SELECT tenant_id, count(*) FROM token_usage_logs WHERE tenant_id IN (:a, :b) GROUP BY tenant_id"), {"a": tenant_a, "b": tenant_b})
                 assert {row[0] for row in rows} == {tenant_a, tenant_b}
@@ -169,7 +169,7 @@ def test_tool_hub_openapi_and_workflow_conversion() -> None:
             result = await session.call_tool(workflow_name, {"task": "via protocol"})
             assert "via protocol" in str(result.content)
         assert callable(hub.sse_app("x" * 32))
-        assert hub.autogen_workbench("https://nexus.example.test/sse", "x" * 32) is not None
+        assert hub.nexusgen_workbench("https://nexus.example.test/sse", "x" * 32) is not None
         with pytest.raises(ValueError):
             hub.sse_app("short")
 
@@ -190,7 +190,7 @@ def test_tool_hub_openapi_and_workflow_conversion() -> None:
     asyncio.run(check())
 
 
-def test_real_stdio_mcp_discovery_and_autogen_workbench() -> None:
+def test_real_stdio_mcp_discovery_and_nexusgen_workbench() -> None:
     async def check() -> None:
         fixture = Path(__file__).with_name("fixtures") / "mcp_echo_server.py"
         connector = MCPConnector(frozenset({sys.executable}), frozenset())
@@ -199,7 +199,7 @@ def test_real_stdio_mcp_discovery_and_autogen_workbench() -> None:
         names = await connector.discover(hub, connection)
         assert names == ("nexus_mcp_fixture_echo",)
         assert "hello" in await hub.crew_tools()[0]._arun(message="hello")
-        workbench = connector.autogen_workbench(connection)
+        workbench = connector.nexusgen_workbench(connection)
         await workbench.start()
         try:
             tools = await workbench.list_tools()

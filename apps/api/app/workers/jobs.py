@@ -74,6 +74,11 @@ class WorkerExecutor:
         self.services = services
 
     async def workflow(self, tenant_id: UUID, workspace_id: UUID, run_id: UUID) -> str:
+        try:
+            # Containers left by a crashed worker are found by their labels; this runs before each run so no scheduler is needed.
+            await self.services.sandbox.reap_orphans()
+        except Exception:
+            logging.getLogger("nexus.sandbox").exception("Stale sandbox computers could not be reaped")
         async with scoped_session(self.services.engine, tenant_id, workspace_id) as session:
             run = await session.scalar(select(WorkflowRun).where(WorkflowRun.id == run_id).with_for_update())
             if run is None:

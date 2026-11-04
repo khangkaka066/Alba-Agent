@@ -1,4 +1,4 @@
-"""Ensure production tools expose usable CrewAI arguments and real artifacts."""
+"""Ensure production tools expose usable NexusAI arguments and real artifacts."""
 
 from __future__ import annotations
 
@@ -10,12 +10,12 @@ from typing import Any, cast
 from nexus_builtin_tools.registry import BuiltinToolRegistry, ToolContext
 
 
-def test_crewai_media_and_report_tools_accept_flat_arguments(tmp_path: Path) -> None:
+def test_nexusai_media_and_report_tools_accept_flat_arguments(tmp_path: Path) -> None:
     async def media(kind: str, payload: dict[str, Any]) -> dict[str, str]:
         return {"kind": kind, "artifact": payload["filename"] + ".mp4"}
 
     registry = BuiltinToolRegistry(ToolContext("tenant", "workspace", "run", tmp_path, media=media))
-    tools = {tool.tool_id: tool for tool in registry.crewai_tools()}
+    tools = {tool.tool_id: tool for tool in registry.nexusai_tools()}
     video = tools["media_generation"]
     report = tools["report_exporter"]
     assert {"kind", "prompt", "filename"}.issubset(video.args_schema.model_fields)
@@ -28,11 +28,11 @@ def test_crewai_media_and_report_tools_accept_flat_arguments(tmp_path: Path) -> 
     assert report_result["artifact"] == "museum_script.md"
     assert (tmp_path / "museum_script.md").read_text() == "Museum camera script"
 
-    async def crewai_thread_call() -> dict[str, str]:
+    async def nexusai_thread_call() -> dict[str, str]:
         bound = BuiltinToolRegistry(ToolContext("tenant", "workspace", "run", tmp_path, media=media))
-        bound_video = next(tool for tool in bound.crewai_tools() if tool.tool_id == "media_generation")
+        bound_video = next(tool for tool in bound.nexusai_tools() if tool.tool_id == "media_generation")
         return cast(dict[str, str], json.loads(await asyncio.to_thread(
             bound_video.run, kind="video", prompt="Museum camera", filename="museum_thread"
         )))
 
-    assert asyncio.run(crewai_thread_call())["artifact"] == "museum_thread.mp4"
+    assert asyncio.run(nexusai_thread_call())["artifact"] == "museum_thread.mp4"

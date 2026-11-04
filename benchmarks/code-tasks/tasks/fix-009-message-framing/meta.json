@@ -1,0 +1,1 @@
+{"id": "fix-009-message-framing", "category": "fix", "difficulty": 2, "protected": ["test_framing.py"]}

@@ -12,7 +12,7 @@ from uuid import uuid4
 from crewai.tools import BaseTool
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
-from nexus_core_schema.models import AutoGenSandboxNodeSpec, CrewNodeSpec, WorkflowSpec
+from nexus_core_schema.models import NexusGenSandboxNodeSpec, CrewNodeSpec, WorkflowSpec
 
 from .domains import discover_skills, discover_tools
 from .models import SpawnSpecialist
@@ -22,7 +22,7 @@ TOOL_ID = "dynamic_team_mutator"
 MAX_SPAWNS_PER_RUN = 3
 SANDBOX_VERIFY_DEFAULT = "python -c \"print('ok')\""
 
-SubtaskExecutor = Callable[[CrewNodeSpec | AutoGenSandboxNodeSpec, str], Awaitable[dict[str, Any]]]
+SubtaskExecutor = Callable[[CrewNodeSpec | NexusGenSandboxNodeSpec, str], Awaitable[dict[str, Any]]]
 PersistHandler = Callable[["SpawnRecord", WorkflowSpec], Awaitable[dict[str, Any]]]
 
 
@@ -104,14 +104,14 @@ class DynamicSpawner:
                 raise MutationError("Only crews led by a director or department lead may reshape the team")
             department = request.department_node_id or caller
             paths = tuple(dict.fromkeys(request.expected_artifact_paths))
-            node: CrewNodeSpec | AutoGenSandboxNodeSpec
+            node: CrewNodeSpec | NexusGenSandboxNodeSpec
             if request.kind == "sandbox":
                 node = self._sandbox_node(request, paths)
             elif request.kind == "specialist":
                 node = self._specialist_node(request, caller_node, paths)
             else:
                 raise MutationError("kind must be 'specialist' or 'sandbox'")
-            taken = {path for item in spec.nodes if isinstance(item, (CrewNodeSpec, AutoGenSandboxNodeSpec)) for path in item.declared_artifact_paths()}
+            taken = {path for item in spec.nodes if isinstance(item, (CrewNodeSpec, NexusGenSandboxNodeSpec)) for path in item.declared_artifact_paths()}
             taken |= {path for earlier in self.records for path in earlier.paths}
             if set(paths) & taken:
                 raise MutationError(f"Artifact path already owned by the team: {', '.join(sorted(set(paths) & taken))}")
@@ -144,12 +144,12 @@ class DynamicSpawner:
             }],
         })
 
-    def _sandbox_node(self, request: DynamicSpawnRequest, paths: tuple[str, ...]) -> AutoGenSandboxNodeSpec:
+    def _sandbox_node(self, request: DynamicSpawnRequest, paths: tuple[str, ...]) -> NexusGenSandboxNodeSpec:
         if not paths:
             raise MutationError("A sandbox subtask must declare the files it writes")
         base = self._models[0] if self._models else "openai/gpt-4.1-mini"
         checks = " && ".join(f"test -s {path}" for path in paths)
-        return AutoGenSandboxNodeSpec.model_validate({
+        return NexusGenSandboxNodeSpec.model_validate({
             "id": f"dyn_{uuid4().hex[:8]}", "kind": "sandbox", "label": f"On-the-fly · {request.role}",
             "coder_model": base, "reviewer_model": base, "sandbox_provider": "docker", "max_rounds": 6, "timeout_seconds": 600,
             "coder_instructions": f"{request.goal} {request.task} Write each file relative to the working directory, creating folders as needed.",

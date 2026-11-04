@@ -17,7 +17,7 @@ os.environ["CREWAI_DISABLE_TELEMETRY"] = "true"
 from crewai.flow.flow import Flow, and_, listen, or_, router, start
 from pydantic import BaseModel, Field
 
-from autogen_bridge.sandbox_team import AutoGenSandboxRunner
+from nexusgen_bridge.sandbox_team import NexusGenSandboxRunner
 from callbacks.event_bus import RuntimeEventEmitter
 from checkpoints.store import CheckpointStore
 from checkpoints.failure import describe_failure
@@ -30,7 +30,7 @@ from team_evolution.dynamic_spawner import DynamicSpawner
 from nexus_core_schema.artifacts import artifact_directory, artifact_file
 from nexus_core_schema.models import (
     ApprovalGateNodeSpec,
-    AutoGenSandboxNodeSpec,
+    NexusGenSandboxNodeSpec,
     CrewNodeSpec,
     RAGNodeSpec,
     RouterNodeSpec,
@@ -78,7 +78,7 @@ class PauseRequested(Exception):
 
 
 class _FlowWorkflowState(WorkflowState):
-    """CrewAI's Flow constructor requires an empty state before applying inputs."""
+    """NexusAI's Flow constructor requires an empty state before applying inputs."""
 
     id: UUID = Field(default_factory=uuid4)
     run_id: UUID = Field(default_factory=uuid4)
@@ -232,7 +232,11 @@ class CompiledWorkflow:
         await self._checkpoints.save(flow.state)
         await self._emitter.emit(
             RuntimeEventType.RUN_COMPLETED,
-            {"completed_nodes": flow.state.completed_nodes, "node_outputs": flow.state.node_outputs},
+            {
+                "completed_nodes": flow.state.completed_nodes, "node_outputs": flow.state.node_outputs,
+                "verification": "unverified" if flow.state.unverified_nodes else "verified",
+                "unverified_nodes": flow.state.unverified_nodes,
+            },
         )
         return WorkflowState.model_validate(flow.state)
 
@@ -307,7 +311,7 @@ class FlowCompiler:
         self,
         checkpoints: CheckpointStore,
         emitter: RuntimeEventEmitter,
-        sandbox_runner: AutoGenSandboxRunner,
+        sandbox_runner: NexusGenSandboxRunner,
         crew_builder: CrewBuilder | None = None,
         rag_handler: RAGHandler | None = None,
         usage_handler: UsageHandler | None = None,
@@ -378,7 +382,9 @@ class FlowCompiler:
                 raise ValueError("A loop-back region cannot contain an approval gate")
         return spec
 
-    async def _export_undeclared(self, state: WorkflowState, input_files: dict[str, bytes], produced: tuple[str, ...]) -> list[str]:
+    async def _export_undeclared(
+        self, state: WorkflowState, input_files: dict[str, bytes], produced: tuple[str, ...], prefix: str = "",
+    ) -> list[str]:
         """Copy files an agent wrote without a declared contract into the run's artifact directory."""
         assert self._sandbox_file_reader is not None
         directory = artifact_directory(state.tenant_id, state.workspace_id, state.run_id)
@@ -388,15 +394,19 @@ class FlowCompiler:
             if len(delivered) >= MAX_UNDECLARED_FILES or name == "workspace_manifest.json" or "__pycache__" in name.split("/"):
                 continue
             try:
-                target = artifact_file(directory, name)
+                target = artifact_file(directory, prefix + name)
                 content = await self._sandbox_file_reader(state.tenant_id, state.workspace_id, state.run_id, name)
-            except (FileNotFoundError, ValueError):
+            except FileNotFoundError as error:
+                # The sandbox reported this file, so failing to read it loses a result. Completing without it would
+                # tell the user the work is done and hand back nothing.
+                raise RuntimeError(f"Sandbox produced {name} but it could not be exported") from error
+            except ValueError:
                 continue
             if not content or len(content) > MAX_UNDECLARED_BYTES or input_files.get(name) == content:
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(content)
-            delivered.append(name)
+            delivered.append(prefix + name)
         return delivered
 
     def compile(
@@ -428,7 +438,7 @@ class FlowCompiler:
                     tasks = tuple(task.model_copy(update={"description": override["prompt"]}) if "prompt" in override and index == 0 else task
                                   for index, task in enumerate(original.tasks))
                     original = original.model_copy(update={"agents": agents, "tasks": tasks})
-                elif isinstance(original, AutoGenSandboxNodeSpec):
+                elif isinstance(original, NexusGenSandboxNodeSpec):
                     original = original.model_copy(update={
                         **({"coder_model": override["model"], "reviewer_model": override["model"]} if "model" in override else {}),
                         **({"coder_instructions": override["prompt"]} if "prompt" in override else {}),
@@ -475,7 +485,7 @@ class FlowCompiler:
         node_order = _topological_order(spec)
         ownership = {
             node.id: node.declared_artifact_paths()
-            for node in spec.nodes if isinstance(node, (CrewNodeSpec, AutoGenSandboxNodeSpec))
+            for node in spec.nodes if isinstance(node, (CrewNodeSpec, NexusGenSandboxNodeSpec))
         }
         visual_required = any(getattr(node, "requires_visual_evidence", False) for node in spec.nodes)
 
@@ -521,7 +531,7 @@ class FlowCompiler:
 
         live: dict[str, WorkflowState] = {}
 
-        async def run_dynamic(sub: CrewNodeSpec | AutoGenSandboxNodeSpec, task: str) -> dict[str, Any]:
+        async def run_dynamic(sub: CrewNodeSpec | NexusGenSandboxNodeSpec, task: str) -> dict[str, Any]:
             """Execute a team member spawned mid-run by a director, with the same contract checks as any node."""
             state = live["state"]
             output: dict[str, Any]
@@ -595,7 +605,7 @@ class FlowCompiler:
                 except Exception as error:
                     setattr(error, "nexus_node", (node.id, getattr(node, "label", None) or node.id))  # lets the run record say where it stopped
                     tracker = trackers.get(node.id)
-                    agent_name = tracker.culprit if tracker is not None else ("Coder + Reviewer" if isinstance(node, AutoGenSandboxNodeSpec) else None)
+                    agent_name = tracker.culprit if tracker is not None else ("Coder + Reviewer" if isinstance(node, NexusGenSandboxNodeSpec) else None)
                     if agent_name and getattr(error, "nexus_agent", None) is None:
                         setattr(error, "nexus_agent", agent_name)
                     raise
@@ -768,7 +778,7 @@ class FlowCompiler:
                         )
                 if self._learning_outcome_handler is not None:
                     await self._learning_outcome_handler(state, node, True, crew_tokens, int((time.monotonic() - crew_started) * 1000))
-            elif isinstance(node, AutoGenSandboxNodeSpec):
+            elif isinstance(node, NexusGenSandboxNodeSpec):
                 input_files: dict[str, bytes] = {}
                 supplied_files = state.input_data.get("sandbox_files", {})
                 if supplied_files is not None:
@@ -824,9 +834,17 @@ class FlowCompiler:
                     if input_files else await self._sandbox_runner.run(task, node, self._emitter)
                 )
                 output = json_safe(asdict(sandbox_result))
+                delivered_unverified = False
                 if sandbox_result.exit_code != 0:
-                    raise RuntimeError("Sandbox verification failed")
-                if node.expected_artifact_paths:
+                    reason = sandbox_result.verification.get("reason")
+                    if not (sandbox_result.verification.get("status") == "unverified" and node.on_unverified == "deliver_labeled"):
+                        raise RuntimeError(f"Sandbox verification failed: {reason}" if reason else "Sandbox verification failed")
+                    delivered_unverified = True
+                    state.unverified_nodes.append(node.id)
+                    if self._sandbox_file_reader is not None:
+                        # Kept apart from verified artifacts so nobody mistakes a candidate for a proven result.
+                        output["unverified_files"] = await self._export_undeclared(state, input_files, sandbox_result.artifacts, "unverified/")
+                if node.expected_artifact_paths and not delivered_unverified:
                     exported: dict[str, bytes] = {}
                     produced = {name.lstrip("./") for name in sandbox_result.artifacts}
                     if self._sandbox_file_reader is not None:
@@ -837,7 +855,7 @@ class FlowCompiler:
                                 except (FileNotFoundError, ValueError):
                                     continue
                     await apply_contract(state, node, output, node.expected_artifact_paths, {}, exported)
-                elif self._sandbox_file_reader is not None:
+                elif self._sandbox_file_reader is not None and not delivered_unverified:
                     # No declared deliverables: still hand back what the sandbox actually wrote, so a plain
                     # request produces files the user can open. Unchanged mounted inputs are not deliverables.
                     delivered = await self._export_undeclared(state, input_files, sandbox_result.artifacts)
@@ -845,7 +863,7 @@ class FlowCompiler:
                         output["exported_files"] = delivered
                 attempts = sandbox_result.metrics.get("attempts", 0)
                 debug_turns = max(0, int(attempts) - 1) if isinstance(attempts, (int, float)) else 0
-                if self._capsule_handler is not None and debug_turns >= 2:
+                if self._capsule_handler is not None and debug_turns >= 2 and not delivered_unverified:
                     capsule = self._distiller.distill(DistillationCandidate(
                         tenant_id=state.tenant_id, workspace_id=state.workspace_id,
                         source_agent_id=f"{node.id}_coder", source_role="coding and verification",
@@ -860,8 +878,8 @@ class FlowCompiler:
                         await self._capsule_handler(capsule)
                 if self._usage_handler is not None:
                     for agent_name, model, prefix in (
-                        ("autogen_coder", node.coder_model, "coder"),
-                        ("autogen_reviewer", node.reviewer_model, "reviewer"),
+                        ("nexusgen_coder", node.coder_model, "coder"),
+                        ("nexusgen_reviewer", node.reviewer_model, "reviewer"),
                     ):
                         prompt_tokens = int(sandbox_result.metrics.get(f"{prefix}_prompt_tokens", 0))
                         completion_tokens = int(sandbox_result.metrics.get(f"{prefix}_completion_tokens", 0))

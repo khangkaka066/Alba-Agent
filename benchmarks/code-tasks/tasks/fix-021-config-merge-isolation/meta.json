@@ -1,0 +1,1 @@
+{"id": "fix-021-config-merge-isolation", "category": "fix", "difficulty": 3, "protected": ["test_loader.py"]}

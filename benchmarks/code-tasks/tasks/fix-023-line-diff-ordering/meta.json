@@ -1,0 +1,1 @@
+{"id": "fix-023-line-diff-ordering", "category": "fix", "difficulty": 2, "protected": ["test_patch.py"]}

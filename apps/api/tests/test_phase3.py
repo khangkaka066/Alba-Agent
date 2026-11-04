@@ -18,7 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from autogen_bridge.sandbox_team import AutoGenSandboxRunner
+from nexusgen_bridge.sandbox_team import NexusGenSandboxRunner
 from bots.runner import BotRunner, cron_matches
 from callbacks.event_bus import RuntimeEventEmitter
 from checkpoints.approval import ActionIntent, ApprovalCoordinator, BoundaryPolicy
@@ -137,14 +137,14 @@ def test_persistent_computer_lifecycle_and_agent_bridge() -> None:
                     return ReplayChatCompletionClient([response], model_info=model_info)
                 return ReplayChatCompletionClient(["APPROVED. Verified six."])
 
-            from nexus_core_schema.models import AutoGenSandboxNodeSpec
+            from nexus_core_schema.models import NexusGenSandboxNodeSpec
 
-            spec = AutoGenSandboxNodeSpec(
+            spec = NexusGenSandboxNodeSpec(
                 id="compute", label="Compute", coder_model="coder-model", reviewer_model="reviewer-model",
                 verification_command="python -c \"assert open('result.txt').read() == '6'\"",
                 max_rounds=2, timeout_seconds=30,
             )
-            result2 = await AutoGenSandboxRunner(supervisor, client_factory).run(
+            result2 = await NexusGenSandboxRunner(supervisor, client_factory).run(
                 "Write sum to result.txt", spec, RuntimeEventEmitter(redis, tenant_id, workspace_id, run_id),
                 input_files={"dataset.csv": b"value\n6\n"},
             )
@@ -213,7 +213,7 @@ def test_bot_routine_approval_resume_and_audit() -> None:
 
             runner = BotRunner(
                 app, redis, tenant_id, workspace_id, responder,
-                AutoGenSandboxRunner(ComputerSandboxSupervisor(app, DockerSandboxProvider(root)), lambda _: ReplayChatCompletionClient(["unused"])),
+                NexusGenSandboxRunner(ComputerSandboxSupervisor(app, DockerSandboxProvider(root)), lambda _: ReplayChatCompletionClient(["unused"])),
                 boundary_requester=request,
             )
             coordinator = ApprovalCoordinator(

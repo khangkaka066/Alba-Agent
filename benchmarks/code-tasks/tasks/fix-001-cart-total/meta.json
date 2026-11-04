@@ -1,0 +1,1 @@
+{"id": "fix-001-cart-total", "category": "fix", "difficulty": 1, "protected": ["test_cart.py"]}

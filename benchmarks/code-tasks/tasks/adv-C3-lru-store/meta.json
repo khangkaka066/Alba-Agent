@@ -1,0 +1,1 @@
+{"id": "adv-C3-lru-store", "category": "fix", "difficulty": 2, "protected": ["test_lru.py"]}

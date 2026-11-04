@@ -1,0 +1,1 @@
+{"id": "fix-002-pager", "category": "fix", "difficulty": 1, "protected": ["test_pager.py"]}

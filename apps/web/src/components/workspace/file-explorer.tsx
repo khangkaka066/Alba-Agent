@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "@/components/locale-provider";
 import { apiRequest, readError } from "@/lib/api";
-import { orderTasks, statusTone } from "@/lib/history.mjs";
+import { getDesktop } from "@/lib/desktop";
+import { ageLabel, filterTasks, orderTasks, statusTone } from "@/lib/history.mjs";
 import { statusLabel } from "@/lib/i18n.mjs";
 import { buildTree, classifyArtifact } from "@/lib/workspace.mjs";
 import type { TreeNode } from "@/lib/workspace.mjs";
@@ -11,6 +12,11 @@ import { FileGlyph } from "./file-glyph";
 import { useWorkspace } from "./workspace-context";
 
 type RunRow = { id: string; workflow_id: string; status: string; created_at: string; conversation_id: string | null; artifacts: Array<{ filename: string; mime_type: string }> };
+
+/** A session's icon: a folder. A repository mark joins it once repositories can be connected. */
+function sessionIcon() {
+  return <svg className="session-icon__glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>;
+}
 
 function Branch({ nodes, selected, mime, onOpen, depth = 0 }: { nodes: TreeNode[]; selected: string | null; mime: (path: string) => string; onOpen: (path: string) => void; depth?: number }) {
   return <ul className="explorer-list">{nodes.map((node) => node.kind === "dir"
@@ -31,6 +37,10 @@ export function FileExplorer({ onOpened }: { onOpened: () => void }) {
   const [tasks, setTasks] = useState<Array<{ run: RunRow; name: string }>>([]);
   const [asking, setAsking] = useState<string | null>(null);
   const [problem, setProblem] = useState("");
+  const [query, setQuery] = useState("");
+  const [filtering, setFiltering] = useState(false);
+  const [canPickFolder, setCanPickFolder] = useState(false);
+  useEffect(() => { setCanPickFolder(getDesktop() !== null); }, []);
 
   const load = useCallback(async () => {
     if (!token) return; // wait for the workspace session; the first calls would only be refused
@@ -53,26 +63,40 @@ export function FileExplorer({ onOpened }: { onOpened: () => void }) {
     catch (reason) { setProblem(readError(reason)); }
   };
 
+  const visible = filterTasks(tasks, query);
+
+  const renderTask = ({ run: row, name }: { run: RunRow; name: string }) => {
+    const current = row.id === runId;
+    const files = current ? artifacts.map((item) => ({ filename: item.filename, mime_type: item.mime_type })) : row.artifacts;
+    return <section key={row.id} className={`explorer-task ${current ? "is-current" : ""}`}>
+      <div className="explorer-task__head">
+        <button type="button" className="explorer-run" title={`${name} · ${statusLabel(t, row.status)}`} aria-current={current ? "true" : undefined} onClick={() => open(row, name)}>
+          <span className="session-icon" aria-hidden="true">{sessionIcon()}<i className={`run-dot session-dot run-dot--${statusTone(row.status) === "busy" ? "running" : row.status}`} /></span><span>{name}</span><time className="explorer-age" dateTime={row.created_at}>{ageLabel(row.created_at)}</time></button>
+        {row.conversation_id && (asking === row.id
+          ? <span className="explorer-confirm"><button type="button" onClick={() => void remove(row)}>{t("task.deleteYes")}</button><button type="button" onClick={() => setAsking(null)}>{t("common.cancel")}</button></span>
+          : <button type="button" className="explorer-delete" aria-label={t("task.delete")} title={t("task.delete")} onClick={() => setAsking(row.id)}>×</button>)}
+      </div>
+      {asking === row.id && <p className="explorer-warning">{t("task.deleteConfirm")}</p>}
+      {current && (files.length > 0
+        ? <Branch nodes={buildTree(files.map((item) => item.filename), statuses)} selected={selected} mime={(path) => files.find((item) => item.filename === path)?.mime_type ?? ""} onOpen={(path) => open(row, name, path)} />
+        : <p className="explorer-nofiles">{t(statusTone(row.status) === "bad" ? "task.noFilesFailed" : "task.noFiles")}</p>)}
+    </section>;
+  };
+
   return <nav className="explorer" aria-label={t("explorer.title")}>
-    <h3 className="explorer-title">{t("explorer.title")}</h3>
+    <div className="repo-head">
+      <h3 className="explorer-title">{t("sessions.title")}</h3>
+      <span className="repo-tools">
+        <button type="button" className="header-button" aria-label={t("repos.filter")} title={t("repos.filter")} aria-pressed={filtering} onClick={() => { setFiltering((value) => !value); setQuery(""); }}>
+          <svg className="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4" /></svg></button>
+        {canPickFolder && <button type="button" className="header-button" aria-label={t("repos.add")} title={t("repos.add")} onClick={() => void workspace.openFolder()}>
+          <svg className="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /><path d="M12 10.5v5M9.5 13h5" /></svg></button>}
+      </span>
+    </div>
+    {filtering && <input className="repo-filter" autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("repos.filterPlaceholder")} aria-label={t("repos.filter")} />}
     {tasks.length === 0 && <p className="explorer-empty">{t("explorer.empty")}</p>}
     {problem && <p className="explorer-problem" role="alert">{problem}</p>}
-    {tasks.map(({ run: row, name }) => {
-      const current = row.id === runId;
-      const files = current ? artifacts.map((item) => ({ filename: item.filename, mime_type: item.mime_type })) : row.artifacts;
-      return <section key={row.id} className={`explorer-task ${current ? "is-current" : ""}`}>
-        <div className="explorer-task__head">
-          <button type="button" className="explorer-run" title={`${name} · ${statusLabel(t, row.status)}`} aria-current={current ? "true" : undefined} onClick={() => open(row, name)}>
-            <i className={`run-dot run-dot--${statusTone(row.status) === "busy" ? "running" : row.status}`} aria-hidden="true" /><span>{name}</span></button>
-          {row.conversation_id && (asking === row.id
-            ? <span className="explorer-confirm"><button type="button" onClick={() => void remove(row)}>{t("task.deleteYes")}</button><button type="button" onClick={() => setAsking(null)}>{t("common.cancel")}</button></span>
-            : <button type="button" className="explorer-delete" aria-label={t("task.delete")} title={t("task.delete")} onClick={() => setAsking(row.id)}>×</button>)}
-        </div>
-        {asking === row.id && <p className="explorer-warning">{t("task.deleteConfirm")}</p>}
-        {files.length > 0
-          ? <Branch nodes={buildTree(files.map((item) => item.filename), current ? statuses : {})} selected={current ? selected : null} mime={(path) => files.find((item) => item.filename === path)?.mime_type ?? ""} onOpen={(path) => open(row, name, path)} />
-          : <p className="explorer-nofiles">{t(statusTone(row.status) === "bad" ? "task.noFilesFailed" : "task.noFiles")}</p>}
-      </section>;
-    })}
+    {visible.map(renderTask)}
+    {query.trim() && visible.length === 0 && tasks.length > 0 && <p className="explorer-empty">{t("repos.noMatch")}</p>}
   </nav>;
 }

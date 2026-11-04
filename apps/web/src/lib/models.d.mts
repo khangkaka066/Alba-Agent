@@ -8,3 +8,6 @@ export function resolveSelection(models: ChatModel[], remembered: string | null,
 export function groupModels(models: ChatModel[]): ModelGroup[];
 export function loadModel(storage: Pick<Storage, "getItem">): string | null;
 export function saveModel(storage: Pick<Storage, "setItem" | "removeItem">, id: string | null): void;
+export function loadRecent(storage: Pick<Storage, "getItem">): string[];
+export function rememberRecent(storage: Pick<Storage, "getItem" | "setItem">, id: string, limit?: number): void;
+export function pickerView(models: ChatModel[], recent: string[], query?: string): { recent: ChatModel[]; providers: ModelGroup[]; matches: ChatModel[] };

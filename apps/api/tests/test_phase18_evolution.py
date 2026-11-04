@@ -12,7 +12,7 @@ import pytest
 
 from flows.compiler import FlowCompiler
 from nexus_core_schema.artifacts import artifact_directory
-from nexus_core_schema.models import AutoGenSandboxNodeSpec, CrewNodeSpec, RouterNodeSpec, WorkflowSpec
+from nexus_core_schema.models import NexusGenSandboxNodeSpec, CrewNodeSpec, RouterNodeSpec, WorkflowSpec
 from nexus_core_schema_templates.studios import STUDIO_BY_ID, build_studio_graph
 from team_evolution import (
     BottleneckAnalyzer,
@@ -179,7 +179,7 @@ def test_split_divides_an_overloaded_crew_into_parallel_crews_with_fan_out_and_f
     assert {("direction", "design_part1"), ("direction", "design_part2")} <= forward
     assert {("design_part1", "engineering"), ("design_part2", "engineering")} <= forward
     engineering = next(node for node in result.spec.nodes if node.id == "engineering")
-    assert isinstance(engineering, AutoGenSandboxNodeSpec) and engineering.join == "all"
+    assert isinstance(engineering, NexusGenSandboxNodeSpec) and engineering.join == "all"
     assert len({(round(result.spec.layout[part.id].x), round(result.spec.layout[part.id].y)) for part in parts}) == 2
     assert result.spec.layout["design_part1"].x == result.spec.layout["design_part2"].x
     gate = next(node for node in result.spec.nodes if isinstance(node, RouterNodeSpec))
@@ -195,7 +195,7 @@ def test_split_extracts_code_deliverables_into_a_verifying_sandbox() -> None:
     ], [("build", "after")])
     result = TeamTopologyMutator(TOOLS).apply(spec, [SplitOverloaded(target_node_id="build", mode="extract_sandbox")])
     sandbox = next(node for node in result.spec.nodes if node.id == "build_build")
-    assert isinstance(sandbox, AutoGenSandboxNodeSpec) and sandbox.expected_artifact_paths == ("src/app.py",)
+    assert isinstance(sandbox, NexusGenSandboxNodeSpec) and sandbox.expected_artifact_paths == ("src/app.py",)
     assert "test -s src/app.py" in sandbox.verification_command and "compileall" in sandbox.verification_command
     crew = next(node for node in result.spec.nodes if node.id == "build")
     assert isinstance(crew, CrewNodeSpec) and crew.declared_artifact_paths() == ("design/notes.md",)
@@ -215,7 +215,7 @@ def test_inject_adds_a_critic_node_or_enables_swarm_consensus() -> None:
     _compiles(critic.spec)
     consensus = mutator.apply(spec, [InjectQuality(target_node_id="implementation", mode="consensus")])
     sandbox = next(item for item in consensus.spec.nodes if item.id == "implementation")
-    assert isinstance(sandbox, AutoGenSandboxNodeSpec) and sandbox.consensus_config.enabled and len(sandbox.consensus_config.models) == 2
+    assert isinstance(sandbox, NexusGenSandboxNodeSpec) and sandbox.consensus_config.enabled and len(sandbox.consensus_config.models) == 2
     assert {model.split("/")[0] for model in sandbox.consensus_config.models} == {"openai", "anthropic"}
     single = TeamTopologyMutator(TOOLS, (MODEL,)).apply(spec, [InjectQuality(target_node_id="backend", mode="consensus")])
     assert any(item.id == "backend_critic" for item in single.spec.nodes)
@@ -437,7 +437,7 @@ def test_fitness_follows_the_published_weighting() -> None:
 
 def test_run_metrics_measure_artifact_completeness_quality_and_review() -> None:
     spec = _studio("cinematic-video-documentary-studio")
-    declared = [(node.id, path) for node in spec.nodes if isinstance(node, (CrewNodeSpec, AutoGenSandboxNodeSpec)) for path in node.declared_artifact_paths()]
+    declared = [(node.id, path) for node in spec.nodes if isinstance(node, (CrewNodeSpec, NexusGenSandboxNodeSpec)) for path in node.declared_artifact_paths()]
     outputs: dict[str, Any] = {}
     for node_id, path in declared[:-1]:
         outputs.setdefault(node_id, {"artifact_contract": {"verified": [], "recovered": []}})["artifact_contract"]["verified"].append(path)

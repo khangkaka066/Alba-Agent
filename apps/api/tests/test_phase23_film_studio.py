@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 
 from app.routers import templates as template_router  # noqa: F401  (the gallery must keep importing with the new blueprint)
-from nexus_core_schema.models import AutoGenSandboxNodeSpec, CrewNodeSpec, WorkflowModesSpec, WorkflowSpec
+from nexus_core_schema.models import NexusGenSandboxNodeSpec, CrewNodeSpec, WorkflowModesSpec, WorkflowSpec
 from nexus_core_schema_templates.catalog import TEMPLATE_BY_ID
 from nexus_core_schema_templates.studios import STUDIO_BLUEPRINTS, STUDIO_BY_ID, build_studio_graph, detect_studio
 from flows.compiler import FlowCompiler
@@ -26,8 +26,8 @@ def test_the_film_studio_is_a_fifty_agent_production_with_the_departments_of_a_r
     spec = FlowCompiler.validate(_spec())
     crews = {node.id: node for node in spec.nodes if isinstance(node, CrewNodeSpec)}
     assert {"writers_room", "previs", "art", "camera", "sound", "vfx", "production", "qa", "release"} <= set(crews)
-    assert sum(len(crew.agents) for crew in crews.values()) + 2 * sum(isinstance(node, AutoGenSandboxNodeSpec) for node in spec.nodes) == 50
-    assert {node.id for node in spec.nodes if isinstance(node, AutoGenSandboxNodeSpec)} == {"edit_assembly", "delivery_pack"}
+    assert sum(len(crew.agents) for crew in crews.values()) + 2 * sum(isinstance(node, NexusGenSandboxNodeSpec) for node in spec.nodes) == 50
+    assert {node.id for node in spec.nodes if isinstance(node, NexusGenSandboxNodeSpec)} == {"edit_assembly", "delivery_pack"}
     roles = {agent.role for crew in crews.values() for agent in crew.agents}
     assert {"Director", "Director of Photography", "Production Designer", "Composer", "VFX Supervisor", "Line Producer", "Social Media Manager"} <= roles
 

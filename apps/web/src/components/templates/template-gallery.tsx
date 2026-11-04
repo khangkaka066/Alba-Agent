@@ -24,7 +24,7 @@ type InstantiatedTemplate = { workflow_id: string | null; bot_id: string | null;
 
 function previewGraph(template: TemplateEntry): { nodes: Node<StudioNodeData>[]; edges: Edge[] } {
   const nodes = (template.workflow.nodes ?? []).map((raw, index): Node<StudioNodeData> => {
-    const kind = (raw.kind === "sandbox" ? "autogen" : raw.kind) as CanvasKind;
+    const kind = (raw.kind === "sandbox" ? "nexusgen" : raw.kind) as CanvasKind;
     const position = template.layout[String(raw.id)] ?? { x: index * 260, y: 150 };
     return {
       id: String(raw.id), type: kind, position,

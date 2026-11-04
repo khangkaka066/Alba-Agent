@@ -23,6 +23,8 @@ class WorkflowState(BaseModel):
     # Files handed over by an earlier team in this workspace: name, source run, path inside this run, size, mime type and an excerpt.
     upstream_artifacts: list[dict[str, Any]] = Field(default_factory=list)
     completed_nodes: list[str] = Field(default_factory=list)
+    # Sandbox nodes whose result was delivered without executable proof; their files live under `unverified/`.
+    unverified_nodes: list[str] = Field(default_factory=list)
     active_node_id: str | None = None
     pending_approval_id: UUID | None = None
     pending_boundary: dict[str, str] | None = None

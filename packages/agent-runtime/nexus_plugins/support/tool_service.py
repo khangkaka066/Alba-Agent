@@ -44,8 +44,8 @@ class ToolRegistryService:
             raise LookupError("Run-scoped built-in tool registry is not available")
         return registry
 
-    def autogen_tools(self, tenant_id: UUID, workspace_id: UUID, run_id: UUID, tool_ids: tuple[str, ...]) -> list[Any]:
-        return self.run_registry(tenant_id, workspace_id, run_id).autogen_tools(tool_ids)
+    def nexusgen_tools(self, tenant_id: UUID, workspace_id: UUID, run_id: UUID, tool_ids: tuple[str, ...]) -> list[Any]:
+        return self.run_registry(tenant_id, workspace_id, run_id).nexusgen_tools(tool_ids)
 
     def clear(self) -> None:
         self.workspace_tools.clear()

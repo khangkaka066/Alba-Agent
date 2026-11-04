@@ -1,4 +1,4 @@
-"""Scoped native tools available to Crew agents and AutoGen function callers."""
+"""Scoped native tools available to Crew agents and NexusGen function callers."""
 from __future__ import annotations
 
 import asyncio
@@ -482,7 +482,7 @@ class BuiltinToolRegistry:
         if not workflow_id: raise ValueError("workflow_id is required")
         return await self.context.workflow_delegate(workflow_id, dict(p.get("inputs", {})))
 
-    def crewai_tools(self) -> list[Any]:
+    def nexusai_tools(self) -> list[Any]:
         """Return native BaseTool objects when the optional runtime is installed."""
         try: from crewai.tools import BaseTool
         except ImportError: return []
@@ -522,8 +522,8 @@ class BuiltinToolRegistry:
         return [NativeTool(name=item.id, description=f"{item.name}: {item.description}",
                            tool_id=item.id, args_schema=schemas.get(item.id, ToolInput)) for item in TOOLS]
 
-    def autogen_tools(self, tool_ids: Iterable[str] | None = None) -> list[Any]:
-        """Return native FunctionTool objects when AutoGen is installed."""
+    def nexusgen_tools(self, tool_ids: Iterable[str] | None = None) -> list[Any]:
+        """Return native FunctionTool objects when NexusGen is installed."""
         try: from autogen_core.tools import FunctionTool
         except ImportError: return []
         def handler_for(tool_id: str) -> Callable[[dict[str, Any]], Awaitable[str]]:

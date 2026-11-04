@@ -1,0 +1,1 @@
+{"id": "fix-025-task-graph-cycle-check", "category": "fix", "difficulty": 2, "protected": ["test_tasks.py"]}

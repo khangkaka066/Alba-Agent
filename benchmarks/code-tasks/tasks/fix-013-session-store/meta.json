@@ -1,0 +1,1 @@
+{"id": "fix-013-session-store", "category": "fix", "difficulty": 3, "protected": ["test_sessions.py"]}

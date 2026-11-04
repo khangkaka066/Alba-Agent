@@ -49,5 +49,5 @@ class TenantKnowledgeRetrievalTool(BaseTool):
             return asyncio.run(self.retrieve(query))
         raise RuntimeError("Use the async retrieval method inside a running event loop")
 
-    def for_autogen(self) -> FunctionTool:
+    def for_nexusgen(self) -> FunctionTool:
         return FunctionTool(self.retrieve, name=self.name, description=self.description)

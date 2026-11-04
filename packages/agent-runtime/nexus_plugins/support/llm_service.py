@@ -16,6 +16,7 @@ from app.models import TenantBudget
 from app.models.gateway_store import SqlGatewayStore
 from app.models.scope import scoped_session
 from nexus_model_gateway import CredentialCipher, LiteLLMEmbeddingRouter, LiteLLMRouter, ModelRate
+from nexus_model_gateway.model_profiles import profile_for
 from nexus_model_gateway.provider_presets import default_model_rates
 from nexus_model_gateway.router import Provider
 
@@ -27,6 +28,10 @@ _PLATFORM_ENVIRONMENT = (
     ("OPENAI", "OPENAI"), ("ANTHROPIC", "ANTHROPIC"), ("GEMINI", "GEMINI"), ("DEEPSEEK", "DEEPSEEK"),
     ("OPENROUTER", "OPENROUTER"), ("GROQ", "GROQ"), ("MISTRAL", "MISTRAL"), ("TOGETHER_AI", "TOGETHERAI"),
 )
+# The OpenAI and Anthropic SDKs read `<PROVIDER>_BASE_URL`, not litellm's `<PROVIDER>_API_BASE`. Without it, any call made
+# through an SDK (for example NexusAI converting an answer into a Pydantic model) goes to the vendor's own host with the
+# gateway's key and is rejected with 401.
+_SDK_BASE_URL_PROVIDERS = frozenset({"OPENAI", "ANTHROPIC"})
 
 
 def load_model_rates() -> dict[tuple[Provider, str], ModelRate]:
@@ -73,6 +78,8 @@ def configure_platform_model_keys() -> None:
             value = os.environ.get(f"NEXUS_{nexus_part}_{suffix}")
             if value:
                 os.environ.setdefault(f"{library_part}_{suffix}", value)
+                if suffix == "API_BASE" and library_part in _SDK_BASE_URL_PROVIDERS:
+                    os.environ.setdefault(f"{library_part}_BASE_URL", value)
 
 
 async def has_managed_model_credit(engine: AsyncEngine, tenant_id: UUID, workspace_id: UUID) -> bool:
@@ -117,8 +124,8 @@ class LlmService:
             self._embeddings = LiteLLMEmbeddingRouter(self.store(), self.rates, allowed_local_bases=local_model_bases())
         return self._embeddings
 
-    async def crewai_client(self, tenant_id: UUID, workspace_id: UUID, model: str) -> LLM | None:
-        """The client CrewAI agents use, built from the workspace's default credential or the managed platform key."""
+    async def nexusai_client(self, tenant_id: UUID, workspace_id: UUID, model: str) -> LLM | None:
+        """The client NexusAI agents use, built from the workspace's default credential or the managed platform key."""
         provider_name, model_name = split_model(model)
         resolved = await self.store().resolve_default_credential(tenant_id, workspace_id, cast(Provider, provider_name))
         options: dict[str, Any] = {}
@@ -142,19 +149,20 @@ class LlmService:
             options["base_url"] = api_base
         return LLM(**options)
 
-    async def autogen_client(self, model: str, tenant_id: UUID, workspace_id: UUID) -> ChatCompletionClient:
-        """The client AutoGen agents use. Provider traffic goes through the OpenAI-compatible wire."""
+    async def nexusgen_client(self, model: str, tenant_id: UUID, workspace_id: UUID) -> ChatCompletionClient:
+        """The client NexusGen agents use. Provider traffic goes through the OpenAI-compatible wire."""
         from autogen_ext.models.openai import OpenAIChatCompletionClient
 
         provider_name, model_name = split_model(model)
         default = await self.store().resolve_default_credential(tenant_id, workspace_id, cast(Provider, provider_name))
         if default is None and not await has_managed_model_credit(self.engine, tenant_id, workspace_id):
             raise ValueError("Managed model credit or a workspace provider key is required")
-        key = default.api_key if default else os.environ.get("NEXUS_AUTOGEN_API_KEY") or os.environ.get(f"NEXUS_{provider_name.upper()}_API_KEY") or os.environ.get("NEXUS_OPENAI_API_KEY")
+        key = default.api_key if default else os.environ.get("NEXUS_GEN_API_KEY") or os.environ.get(f"NEXUS_{provider_name.upper()}_API_KEY") or os.environ.get("NEXUS_OPENAI_API_KEY")
         if not key:
             raise RuntimeError("No tenant or platform model credential is configured")
-        options: dict[str, Any] = {"model": model_name, "api_key": key}
-        base_url = default.api_base if default else os.environ.get("NEXUS_AUTOGEN_API_BASE") or os.environ.get(f"NEXUS_{provider_name.upper()}_API_BASE")
+        profile = profile_for(model_name)
+        options: dict[str, Any] = {"model": model_name, "api_key": key, "timeout": profile.timeout_seconds, "max_retries": profile.max_retries}
+        base_url = default.api_base if default else os.environ.get("NEXUS_GEN_API_BASE") or os.environ.get(f"NEXUS_{provider_name.upper()}_API_BASE")
         if base_url:
             options["base_url"] = base_url
         if default and default.headers:

@@ -30,7 +30,7 @@ from app.models import (
 from app.models.scope import scoped_session
 from app.routers.common import conflict, not_found
 from nexus_builtin_tools import TOOLS
-from nexus_core_schema.models import AutoGenSandboxNodeSpec, CrewNodeSpec, WorkflowSpec
+from nexus_core_schema.models import NexusGenSandboxNodeSpec, CrewNodeSpec, WorkflowSpec
 from team_evolution import (
     DYNAMIC_TEAM_TOOL_ID,
     BottleneckAnalyzer,
@@ -163,7 +163,7 @@ async def refresh_metrics(session: AsyncSession, versions: list[WorkflowTopology
 
 async def build_observations(session: AsyncSession, spec: WorkflowSpec, runs: list[WorkflowRun]) -> list[RunObservation]:
     agent_node = {agent.id: node.id for node in spec.nodes if isinstance(node, CrewNodeSpec) for agent in node.agents}
-    agent_node.update({f"{node.id}_coder": node.id for node in spec.nodes if isinstance(node, AutoGenSandboxNodeSpec)})
+    agent_node.update({f"{node.id}_coder": node.id for node in spec.nodes if isinstance(node, NexusGenSandboxNodeSpec)})
     observations: list[RunObservation] = []
     for run in runs:
         checkpoints = list((await session.scalars(

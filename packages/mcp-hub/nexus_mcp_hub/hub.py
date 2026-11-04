@@ -143,7 +143,7 @@ class UnifiedToolHub:
     def crew_tools(self) -> tuple[CrewToolAdapter, ...]:
         return tuple(CrewToolAdapter(self._bindings[name]) for name in self.tool_names())
 
-    def autogen_workbench(self, sse_url: str, access_token: str) -> McpWorkbench:
+    def nexusgen_workbench(self, sse_url: str, access_token: str) -> McpWorkbench:
         if not sse_url.startswith("https://") or not sse_url.endswith("/sse"):
             raise ValueError("Internal MCP workbench requires an HTTPS SSE endpoint")
         if len(access_token) < 32:

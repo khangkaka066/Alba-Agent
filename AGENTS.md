@@ -5,8 +5,8 @@ You are a Principal AI Systems Architect and Lead Full-Stack Engineer. Your task
 The platform unifies four foundational layers plus a **6-Pillar Proprietary Optimization & Governance Moat** into a single cohesive product owned 100% by us:
 
 1. **Visual Workflow & BaaS Studio (Inspired by Dify concepts — Clean-Room):** Visual node-based workflow builder, multi-tenant RAG pipeline, unified LLM gateway, and instant REST API / WebApp publishing.
-2. **Structured Multi-Agent Orchestration (Powered by CrewAI):** Deterministic state management via **CrewAI Flows** (`@start`, `@listen`, `@router`) and role-based SOP collaboration via **CrewAI Crews** (`Agent`, `Task`, `Crew`).
-3. **Deep Problem Solving & Autonomous Code Execution (Powered by AutoGen):** Multi-turn conversational reasoning (`autogen-agentchat` / `autogen-core`) paired with isolated sandbox code execution (`autogen-ext`).
+2. **Structured Multi-Agent Orchestration (Powered by NexusAI):** Deterministic state management via **NexusAI Flows** (`@start`, `@listen`, `@router`) and role-based SOP collaboration via **NexusAI Crews** (`Agent`, `Task`, `Crew`).
+3. **Deep Problem Solving & Autonomous Code Execution (Powered by NexusGen):** Multi-turn conversational reasoning (`autogen-agentchat` / `autogen-core`) paired with isolated sandbox code execution (`autogen-ext`).
 4. **Persistent AI Teammates, Computer Use & Human Governance (Adapted from Rakazo architecture):** Multi-platform persistent bots (Web, Desktop, Mobile, Voice Mode), scheduled Markdown routines, live graphical desktop/browser/terminal sandboxes (Local Docker, E2B, Daytona, CreateOS, Boat), and Human-in-the-Loop Approval Cards with full audit logging.
 5. **6-Pillar Proprietary Moat (Our Unique Differentiators):**
    - **Pillar 1:** Governed Cross-Agent Learning Transfer, Propagation Scope Firewall & Negative Transfer Circuit Breaker.
@@ -24,8 +24,8 @@ The platform unifies four foundational layers plus a **6-Pillar Proprietary Opti
    - Strictly block restrictive copyleft or commercial-restricted licenses (`GPL-*`, `AGPL-*`, `SSPL-*`, `BUSL-*`, or Dify's modified license).
    - **DIFY (`./reference/dify` if present) — ZERO CODE COPYING:** Dify uses a restrictive modified license prohibiting multi-tenant SaaS and logo removal. You MUST NOT copy any Python, TypeScript, or React code verbatim from Dify. Use Dify strictly as a conceptual UX reference and write 100% original clean-room code.
 2. **Complete White-Labeling & Brand Independence (`./reference/rakazo`, `./reference/crewAI`, `./reference/autogen`):**
-   - When using or adapting permissive MIT/Apache-2.0 modules from Rakazo, CrewAI, or AutoGen:
-     - Strip all external branding, product names (`Rakazo`, `Inbox Zero`, `Dify`, `LangGenius`, `CrewAI`, `AutoGen`), logos, and URI schemes from all user-facing UIs, API routes, CLI tools, and database tables.
+   - When using or adapting permissive MIT/Apache-2.0 modules from Rakazo, NexusAI, or NexusGen:
+     - Strip all external branding, product names (`Rakazo`, `Inbox Zero`, `Dify`, `LangGenius`, `NexusAI`, `NexusGen`), logos, and URI schemes from all user-facing UIs, API routes, CLI tools, and database tables.
      - Standardize all environment variables, package namespaces, and Docker images under our brand prefix (`NEXUS_*` / `@nexus/*`).
      - Maintain a single consolidated `THIRD_PARTY_NOTICES.md` file in the repository root preserving required permissive copyright attributions for third-party dependencies.
 3. **Zero External Telemetry (Privacy & Security by Default):**
@@ -45,28 +45,28 @@ nexus-agent-studio/
 ├── docker-compose.prod.yml            # Production stack with HTTPS proxy, healthchecks & resource limits
 ├── .env.example
 ├── packages/
-│   ├── core-schema/                   # Shared Pydantic v2 & TypeScript/Zod schemas (Flows, Crews, AutoGen, Bots, Approvals, Capsules)
+│   ├── core-schema/                   # Shared Pydantic v2 & TypeScript/Zod schemas (Flows, Crews, NexusGen, Bots, Approvals, Capsules)
 │   │   └── templates/                 # Seed Vertical Agent Blueprints (Data Science, QA Auditor, Market Research, Ops Bot)
 │   ├── agent-runtime/                 # Dual-Engine Orchestrator & Proprietary Runtime Capabilities
 │   │   ├── nexus_kernel/              # Plugin kernel: scoped context (`ctx`), typed service keys, 5 event modes, plugin lifecycle, YAML rows + patches
 │   │   ├── nexus_plugins/             # Runtime capabilities as plugins (infrastructure, llm, sandbox, tools, checkpoints) + `default.yaml`
 │   │   ├── flows/                     # Dynamic Flow compiler & Pydantic state manager
-│   │   ├── crews/                     # CrewAI builder from bi-directional JSONC/YAML configs
-│   │   ├── autogen_bridge/            # AutoGen GroupChat + Shared Sandbox Code/Browser Executor wrapper
+│   │   ├── crews/                     # NexusAI builder from bi-directional JSONC/YAML configs
+│   │   ├── nexusgen_bridge/            # NexusGen GroupChat + Shared Sandbox Code/Browser Executor wrapper
 │   │   ├── architect/                 # Pillar 6: AI Meta-Architect & Conversational Team/Workflow Generator
 │   │   ├── time_travel/               # Pillar 3: Time-Travel Checkpoint Rewind & A/B Trajectory Forking
 │   │   ├── consensus/                 # Pillar 5: Adversarial Swarm Consensus & Arbiter Judge
 │   │   ├── callbacks/                 # Real-time event emitter to Redis Pub/Sub (thoughts, tool calls, terminal, approvals)
 │   │   └── checkpoints/               # Postgres/Redis state persistence for pause/resume & human approval gates
 │   ├── learning-transfer/             # Pillar 1 & 2: Cross-Agent Learning Transfer, Scope Firewall, Negative Transfer & Self-Healing
-│   │   ├── distiller.py               # Extracts KnowledgeCapsules from AutoGen debug loops & human edits
+│   │   ├── distiller.py               # Extracts KnowledgeCapsules from NexusGen debug loops & human edits
 │   │   ├── scope_firewall.py          # Epistemic graph boundary enforcement & PII/secret redaction
 │   │   ├── negative_transfer_detector.py # Transfer Impact Score (TIS) telemetry & automatic circuit breaker
 │   │   └── self_healing.py            # Pillar 2: Generates git-diff PromptPatchProposals from Approval Card edits
 │   ├── computer-sandbox/              # Persistent Computer & Live Screen Supervisor (Docker, E2B, Daytona, CreateOS, Boat)
 │   ├── rag-engine/                    # Multi-tenant LlamaIndex + Qdrant ingestion & hybrid retrieval
 │   ├── model-gateway/                 # LiteLLM router, BYOK, cost tracking & Pillar 4 FinOps Auto-Distillation (`auto_distill.py`)
-│   └── mcp-hub/                       # Unified Model Context Protocol & OpenAPI client for CrewAI, AutoGen & Persistent Bots
+│   └── mcp-hub/                       # Unified Model Context Protocol & OpenAPI client for NexusAI, NexusGen & Persistent Bots
 ├── apps/
 │   ├── api/                           # FastAPI Control Plane, BaaS REST API, SSE/WebSocket Streaming & Async Workers
 │   │   ├── app/
@@ -80,7 +80,7 @@ nexus-agent-studio/
 │   ├── web/                           # Next.js 15 / React 19 + TypeScript + Tailwind + @xyflow/react
 │   │   ├── src/
 │   │   │   ├── app/                   # Workspace Dashboard, Persistent Bot Chat/Voice, Visual Workflow Studio, Template Gallery, Learning Transfer Radar, FinOps
-│   │   │   ├── components/canvas/     # React Flow nodes (Trigger, Crew, AutoGenSandbox, ApprovalGate, Router, RAG) + ArchitectCopilot + Dashed Learning Edges
+│   │   │   ├── components/canvas/     # React Flow nodes (Trigger, Crew, NexusGenSandbox, ApprovalGate, Router, RAG) + ArchitectCopilot + Dashed Learning Edges
 │   │   │   ├── components/teammates/  # Persistent Bot profile, Markdown Routine scheduler, Bidirectional Voice UI, Approval Cards + Prompt Diff Modal
 │   │   │   ├── components/inspector/  # Live SSE trace drawer, Time-Travel & A/B Forking Timeline, Live Virtual Desktop Screen & Terminal stream
 │   │   │   └── lib/                   # Typed API client, SSE & WebSocket audio/terminal stream hooks
@@ -95,21 +95,21 @@ nexus-agent-studio/
   - Accepts a validated `WorkflowSpec` Pydantic object (serialized from the React Flow visual canvas or Git JSONC/YAML files).
   - Dynamically constructs an executable `crewai.flow.flow.Flow` subclass holding a typed `WorkflowState(BaseModel)`.
   - Wires `@start()`, `@listen()`, and `@router()` methods according to graph edges, persisting a `RunCheckpoint` after each step.
-- **AutoGen Sandbox Bridge (`autogen_bridge/sandbox_team.py`):**
-  - Implements `AutoGenCodeExecutionTool(BaseTool)` for CrewAI agents AND a standalone async runner for Flow nodes.
+- **NexusGen Sandbox Bridge (`nexusgen_bridge/sandbox_team.py`):**
+  - Implements `NexusGenCodeExecutionTool(BaseTool)` for NexusAI agents AND a standalone async runner for Flow nodes.
   - Uses `autogen_agentchat.agents.AssistantAgent` (`CoderAgent` & `ReviewerAgent`) connected to our unified `packages/computer-sandbox` supervisor.
   - Runs an iterative multi-turn verification loop (`RoundRobinGroupChat` or `SelectorGroupChat`) until generated code executes cleanly (exit code 0) and passes verification.
-  - Streams all intermediate code blocks, terminal stdout/stderr, and desktop screen frames to `RuntimeEventEmitter`, returning a concise `SandboxResult(summary, artifacts, exit_code, metrics)` back to CrewAI.
+  - Streams all intermediate code blocks, terminal stdout/stderr, and desktop screen frames to `RuntimeEventEmitter`, returning a concise `SandboxResult(summary, artifacts, exit_code, metrics)` back to NexusAI.
 - **Real-Time Event Bus (`callbacks/event_bus.py`):**
   - Publishes structured JSON events to Redis channel `run:{tenant_id}:{run_id}:events`:
     - `FLOW_STATE_CHANGED`, `CREW_AGENT_THOUGHT`, `TOOL_INVOKED`
-    - `AUTOGEN_CODE_GENERATED`, `SANDBOX_TERMINAL_OUTPUT`, `SANDBOX_SCREEN_FRAME`
+    - `NEXUSGEN_CODE_GENERATED`, `SANDBOX_TERMINAL_OUTPUT`, `SANDBOX_SCREEN_FRAME`
     - `APPROVAL_REQUIRED`, `APPROVAL_RESOLVED`, `NEGATIVE_TRANSFER_DETECTED`, `RUN_COMPLETED`, `RUN_FAILED`
 
 ## 2. Persistent AI Teammates, Computer Sandbox & Approval Gates (`packages/computer-sandbox` & `apps/api`)
 - **Persistent Teammate Bots & Bidirectional Voice:**
   - Each Bot has persistent memory, conversation threads, assigned LLM model, connected MCP/OpenAPI tools, **Markdown Routines**, and bidirectional WebSocket Voice streaming (`/api/v1/bots/{bot_id}/voice/stream` with STT/TTS).
-  - Any Bot can trigger a multi-agent **CrewAI + AutoGen Workflow** via the internal MCP/Tool bridge or delegate subtasks to peer bots.
+  - Any Bot can trigger a multi-agent **NexusAI + NexusGen Workflow** via the internal MCP/Tool bridge or delegate subtasks to peer bots.
 - **Unified Computer Sandbox Supervisor (Hardened):**
   - Supports **Shared Team Computers** and **Isolated Private Computers** with browser, shell/terminal, file system, and graphical desktop access (`SCREEN_PROXY`).
   - Pluggable providers: local `docker` (default, enforcing `cap_drop=["ALL"]`, `no-new-privileges:true`, CPU/RAM limits, and private metadata IP blocking) plus cloud providers (`e2b`, `daytona`, `createos`, `boat`, `railway`).
@@ -122,11 +122,11 @@ nexus-agent-studio/
   - Enforces mandatory payload filtering on `tenant_id` and `knowledge_base_id` on every query (`Filter(must=[...])`) to guarantee zero cross-tenant data leakage.
   - Supports PDF, DOCX, Markdown, CSV parsing, semantic chunking, and hybrid search via LlamaIndex.
 - **Unified MCP & OpenAPI Adapter:**
-  - Connects to HTTPS/stdio MCP servers and OpenAPI 3.1 specs, exposing tools simultaneously to Persistent Bots, CrewAI Agents, and AutoGen `McpWorkbench`.
+  - Connects to HTTPS/stdio MCP servers and OpenAPI 3.1 specs, exposing tools simultaneously to Persistent Bots, NexusAI Agents, and NexusGen `McpWorkbench`.
 
 ## 4. 6-Pillar Proprietary Moat (`packages/learning-transfer`, `packages/agent-runtime`, `packages/model-gateway`)
 - **Pillar 1 — Governed Cross-Agent Learning Transfer & Negative Transfer Circuit Breaker (`packages/learning-transfer`):**
-  - Distills reusable `KnowledgeCapsule` units from successful AutoGen multi-turn debugging and human corrections.
+  - Distills reusable `KnowledgeCapsule` units from successful NexusGen multi-turn debugging and human corrections.
   - Enforces an **Epistemic Propagation Scope Firewall** (`AGENT_PRIVATE`, `CREW_LOCAL`, `WORKFLOW_SCOPED`, `WORKSPACE_QUARANTINE`, `WORKSPACE_VERIFIED`) with automatic PII/secret redaction.
   - Continuously computes the **Transfer Impact Score ($\text{TIS}_{k \to B} \in [-1.0, +1.0]$)**:
     $$\text{TIS}_{k \to B} = w_1 \Delta \text{SuccessRate} - w_2 \Delta \text{RetryRate} - w_3 \Delta \text{RejectionRate} - w_4 \Delta \text{TokenOverhead}$$
@@ -140,9 +140,9 @@ nexus-agent-studio/
   - Collects verified `GoldenTraces` from frontier models and runs background shadow evaluations on cheaper/local candidate models augmented with dynamic golden few-shot examples.
   - Surfaces a one-click **"Auto-Downgrade & Save X%"** recommendation when schema and semantic parity $\ge 95\%$.
 - **Pillar 5 — Adversarial Swarm Consensus Mode (`packages/agent-runtime/consensus/`):**
-  - Executes high-stakes nodes concurrently across $\ge 2$ heterogeneous model families with 1-round AutoGen cross-critique and an `ArbiterJudge` scoring `consensus_confidence`. Automatically routes to an `ApprovalGateNode` if confidence is below threshold.
+  - Executes high-stakes nodes concurrently across $\ge 2$ heterogeneous model families with 1-round NexusGen cross-critique and an `ArbiterJudge` scoring `consensus_confidence`. Automatically routes to an `ApprovalGateNode` if confidence is below threshold.
 - **Pillar 6 — AI Meta-Architect & Conversational Team Generator (`packages/agent-runtime/architect/`):**
-  - Synthesizes a complete, compilable `WorkflowSpec` (with `CrewNode`, `AutoGenSandboxNode`, `ApprovalGateNode`, bound MCP/RAG tools, pre-attached high-TIS `KnowledgeCapsules`, and auto-layout coordinates) from a natural language requirement prompt, and supports conversational graph editing (**Canvas Copilot**).
+  - Synthesizes a complete, compilable `WorkflowSpec` (with `CrewNode`, `NexusGenSandboxNode`, `ApprovalGateNode`, bound MCP/RAG tools, pre-attached high-TIS `KnowledgeCapsules`, and auto-layout coordinates) from a natural language requirement prompt, and supports conversational graph editing (**Canvas Copilot**).
 
 # PLUGIN ARCHITECTURE: "EVERYTHING IS A PLUGIN" (`nexus_kernel` + `nexus_plugins`)
 
@@ -159,12 +159,12 @@ The process is assembled at boot from a list of plugins instead of being wired b
   | Plugin (`plugin:` name) | Provides | Requires |
   |---|---|---|
   | `infrastructure.runtime` | `DATABASE`, `REDIS`, `QDRANT` (opened on start, closed on stop) | none |
-  | `llm.gateway` | `LLM` (credential resolution, routers, CrewAI and AutoGen clients) | `DATABASE` |
+  | `llm.gateway` | `LLM` (credential resolution, routers, NexusAI and NexusGen clients) | `DATABASE` |
   | `memory.checkpoints` | `CHECKPOINTS` (append-only run state for pause, resume and time-travel) | `DATABASE`, `REDIS` |
   | `tools.registry` | `TOOLS` (per-run built-in registries, tools mounted per workspace) | none |
   | `sandbox.supervisor` | `SANDBOX` (a supervisor with no provider of its own) | `DATABASE` |
   | `sandbox.docker` | registers the Docker provider on `SANDBOX` | `SANDBOX` |
-  | `sandbox.runner` | `SANDBOX_RUNNER` (AutoGen coder and reviewer team) | `DATABASE`, `LLM`, `SANDBOX`, `TOOLS` |
+  | `sandbox.runner` | `SANDBOX_RUNNER` (NexusGen coder and reviewer team) | `DATABASE`, `LLM`, `SANDBOX`, `TOOLS` |
 
 - **Rules**
   1. A plugin module imports the kernel, `nexus_plugins.seams`, `nexus_plugins.support.*` and domain packages. It must **not** import another plugin module or `app.services`; collaboration goes through `ctx` (`tests/test_phase22_plugins.py` checks this with an AST scan).

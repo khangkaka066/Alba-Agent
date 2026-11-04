@@ -19,6 +19,7 @@ from pydantic import BaseModel, create_model
 
 from nexus_core_schema.models import AgentSpec, CrewNodeSpec, TaskSpec
 from agent_skills import SkillLoader, SkillSpec
+from crews.converter import LlmCallConverter
 
 
 def _remove_jsonc_comments(source: str) -> str:
@@ -258,6 +259,7 @@ class CrewBuilder:
                 agent=agents[task_spec.agent_id],
                 context=[tasks[task_id] for task_id in task_spec.context_task_ids],
                 output_pydantic=self.schema_for_task(task_spec),
+                converter_cls=LlmCallConverter,
             )
         kwargs: dict[str, Any] = {
             "agents": list(agents.values()),

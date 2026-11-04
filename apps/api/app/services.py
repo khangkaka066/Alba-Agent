@@ -26,7 +26,7 @@ from app.models import AgentSkill, AuditLog, KnowledgeBase, KnowledgeCapsule, Le
 from app.models.connection import create_runtime_engine
 from app.models.gateway_store import SqlGatewayStore
 from app.models.scope import scoped_session
-from autogen_bridge.sandbox_team import AutoGenSandboxRunner
+from nexusgen_bridge.sandbox_team import NexusGenSandboxRunner
 from bots.gateway import GatewayBotResponder
 from bots.runner import BotRunner
 from callbacks.event_bus import RuntimeEventEmitter
@@ -99,7 +99,7 @@ class AppServices:
     redis: Redis
     qdrant: AsyncQdrantClient
     sandbox: ComputerSandboxSupervisor
-    sandbox_runner: AutoGenSandboxRunner
+    sandbox_runner: NexusGenSandboxRunner
     dispatcher: TaskDispatcher
     output_schemas: dict[str, type[BaseModel]] = field(default_factory=_output_schemas)
     llm_service: LlmService | None = None
@@ -244,13 +244,13 @@ class AppServices:
             search_credentials=credentials, boundary_guard=boundary_guard,
         ))
         self.tools.remember_run(tenant_id, workspace_id, run_id, registry)
-        tool_map = {tool.tool_id: tool for tool in registry.crewai_tools()}
+        tool_map = {tool.tool_id: tool for tool in registry.nexusai_tools()}
         tool_map.update(self.workspace_tools.get((tenant_id, workspace_id), {}))
         tool_map.update(extra_tools or {})
         return CrewBuilder(self.output_schemas, tool_map, skill_loader=SkillLoader(), custom_skill_instructions=custom_skills)
 
     async def tenant_model_client(self, tenant_id: UUID, workspace_id: UUID, model: str) -> LLM | None:
-        return await self.llm.crewai_client(tenant_id, workspace_id, model)
+        return await self.llm.nexusai_client(tenant_id, workspace_id, model)
 
     def bot_runner(self, tenant_id: UUID, workspace_id: UUID, actor_id: UUID | None = None) -> BotRunner:
         async def boundary_requester(run_id: UUID, intent: ActionIntent) -> UUID | None:
@@ -611,6 +611,11 @@ class AppServices:
 
     async def _after_run(self, tenant_id: UUID, workspace_id: UUID, run_id: UUID) -> None:
         from app import evolution
+
+        try:
+            await self.sandbox.retire_run(tenant_id, workspace_id, run_id)  # a run that ended must not keep a container
+        except Exception:
+            logging.getLogger("nexus.sandbox").exception("Run computer could not be removed", extra={"run_id": str(run_id)})
 
         try:
             await evolution.after_run(self, tenant_id, workspace_id, run_id)

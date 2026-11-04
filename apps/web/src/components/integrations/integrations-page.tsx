@@ -61,7 +61,10 @@ function ChannelCard({ channel, saved, token, onChanged }: { channel: Channel; s
   </article>;
 }
 
-export function IntegrationsPage({ token, onConnect }: { token: string; onConnect: () => void }) {
+export type IntegrationsFilter = "all" | "skills" | "mcps";
+
+/** `filter` narrows the page to one kind of capability and `query` to matching names; `bare` drops the page heading. */
+export function IntegrationsPage({ token, onConnect, filter = "all", query = "", bare = false }: { token: string; onConnect: () => void; filter?: IntegrationsFilter; query?: string; bare?: boolean }) {
   const { t } = useLocale();
   const [saved, setSaved] = useState<Saved[]>([]);
   const [declared, setDeclared] = useState<string[]>([]);
@@ -80,13 +83,13 @@ export function IntegrationsPage({ token, onConnect }: { token: string; onConnec
   const shown = visibleChannels(declared, saved.map((item) => item.preset_id));
 
   return <div className="page-body tools-page">
-    <div className="page-title-row"><div><h1>{t("integrations.title")}</h1><p>{t("integrations.subtitle")}</p></div></div>
-    {shown.length > 0 && <section className="tools-section"><header><h2>{t("tools.channels")}</h2><p>{t("tools.channelsBody")}</p></header>
+    {!bare && <div className="page-title-row"><div><h1>{t("integrations.title")}</h1><p>{t("integrations.subtitle")}</p></div></div>}
+    {filter === "all" && !query.trim() && shown.length > 0 && <section className="tools-section"><header><h2>{t("tools.channels")}</h2><p>{t("tools.channelsBody")}</p></header>
       <div className="channel-grid">{CHANNELS.filter((channel) => shown.includes(channel.id as never)).map((channel) => <ChannelCard key={channel.id} channel={channel} saved={saved.find((item) => item.preset_id === channel.id)} token={token} onChanged={load} />)}</div>
       <p className="channel-footnote">{t("tools.footnote")}</p>
     </section>}
     <section className="tools-section"><header><h2>{t("tools.skillsHeading")}</h2></header>
-      <CapabilityHub token={token} onConnect={onConnect} tabs={expert ? ["skills", "tools", "knowledge"] : ["skills", "tools"]} />
+      <CapabilityHub token={token} onConnect={onConnect} query={query} tabs={filter === "skills" ? ["skills"] : filter === "mcps" ? ["tools"] : expert ? ["skills", "tools", "knowledge"] : ["skills", "tools"]} />
     </section>
   </div>;
 }

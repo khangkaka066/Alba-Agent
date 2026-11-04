@@ -14,46 +14,60 @@ import pytest
 
 from agent_skills import SkillLoader, SkillSpec
 from nexus_builtin_tools import BuiltinToolRegistry, TOOLS, ToolContext
-from autogen_bridge.sandbox_team import AutoGenSandboxRunner
+from nexusgen_bridge.sandbox_team import NexusGenSandboxRunner
 from autogen_core.models import ChatCompletionClient
-from nexus_core_schema.models import AutoGenSandboxNodeSpec
+from nexus_core_schema.models import NexusGenSandboxNodeSpec
 
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def test_seed_skills_parse_and_catalog_is_progressive() -> None:
-    loader = SkillLoader()
+SAMPLE_SKILL = """---
+name: Revenue Review
+slug: revenue-review
+category: finance
+description: "Review revenue figures against stated definitions."
+trigger_keywords: ["revenue", "forecast"]
+required_tools: []
+recommended_models: []
+---
+
+## Purpose
+Check revenue figures.
+
+## Standard operating procedure
+Define each metric before using it.
+
+## Guardrails
+Never invent a figure.
+"""
+
+
+def test_no_skill_ships_with_the_product_and_workspace_skills_load_from_their_own_directory(tmp_path: Path) -> None:
+    """Only skills whose quality was checked belong in the product; the packaged catalog is empty until then."""
+    assert SkillLoader().catalog() == ()
+    (tmp_path / "revenue-review.md").write_text(SAMPLE_SKILL)
+    loader = SkillLoader([tmp_path])
     catalog = loader.catalog()
-    assert len(catalog) >= 8
-    assert {item["slug"] for item in catalog} >= {
-        "deep-web-research-and-fact-checking",
-        "python-data-science-and-visualization",
-        "financial-and-kpi-analysis",
-        "full-stack-code-audit-and-testing",
-        "executive-report-and-document-authoring",
-        "sql-and-database-analytics",
-        "seo-and-omnichannel-marketing-copy",
-        "ai-video-script-and-ffmpeg-post-production",
-    }
+    assert [item["slug"] for item in catalog] == ["revenue-review"]
     assert all("body" not in item for item in catalog)
-    full = loader.get("python-data-science-and-visualization")
+    full = loader.get("revenue-review")
     assert "Standard operating procedure" in full.body
     assert SkillSpec.from_markdown(full.to_markdown()).slug == full.slug
 
 
-def test_only_assigned_or_task_matched_skill_enters_agent_prompt() -> None:
-    loader = SkillLoader()
-    catalog_prompt = str(loader.catalog())
-    assert "Golden example" not in catalog_prompt
-    assigned = loader.inject("You are an analyst.", assigned=("financial-and-kpi-analysis",))
-    assert "Search for primary evidence first" not in assigned  # The catalog did not inject another full skill.
+def test_only_assigned_or_task_matched_skill_enters_agent_prompt(tmp_path: Path) -> None:
+    (tmp_path / "revenue-review.md").write_text(SAMPLE_SKILL)
+    loader = SkillLoader([tmp_path])
+    assert "Define each metric" not in str(loader.catalog())
+    assigned = loader.inject("You are an analyst.", assigned=("revenue-review",))
     assert "Guardrails" in assigned
-    task_matched = loader.inject("Analyze this revenue CSV", task="forecast monthly revenue from CSV with pandas")
-    assert "Python Data Science" in task_matched or "missing" in task_matched.lower()
+    task_matched = loader.inject("Analyze this revenue CSV", task="forecast monthly revenue")
+    assert "Revenue Review" in task_matched
 
 
 def test_verified_high_tis_capsule_promotes_to_workspace_skill(tmp_path: Path) -> None:
+    (tmp_path / "revenue-review.md").write_text(SAMPLE_SKILL)
     loader = SkillLoader((tmp_path,))
 
     @dataclass
@@ -61,14 +75,14 @@ def test_verified_high_tis_capsule_promotes_to_workspace_skill(tmp_path: Path) -
         propagation_scope: str = "WORKSPACE_VERIFIED"
         distilled_heuristic: str = "Decode CSV using utf-8-sig, then fall back to cp1252 only after a decode error."
 
-    promoted = loader.promote_capsule("python-data-science-and-visualization", Capsule(), tis=0.42)
+    promoted = loader.promote_capsule("revenue-review", Capsule(), tis=0.42)
     assert "Learned Best Practices & Edge Cases" in promoted.body
     assert "utf-8-sig" in promoted.body
-    assert (tmp_path / "python-data-science-and-visualization.md").exists()
+    assert (tmp_path / "revenue-review.md").exists()
     with pytest.raises(PermissionError):
-        loader.promote_capsule("python-data-science-and-visualization", Capsule(propagation_scope="CREW_LOCAL"), tis=0.8)
+        loader.promote_capsule("revenue-review", Capsule(propagation_scope="CREW_LOCAL"), tis=0.8)
     with pytest.raises(ValueError):
-        loader.promote_capsule("python-data-science-and-visualization", Capsule(), tis=0.01)
+        loader.promote_capsule("revenue-review", Capsule(), tis=0.01)
 
 
 def test_builtin_tools_local_document_sql_report_chart_and_security(tmp_path: Path) -> None:
@@ -77,8 +91,8 @@ def test_builtin_tools_local_document_sql_report_chart_and_security(tmp_path: Pa
         registry = BuiltinToolRegistry(context)
         assert len(registry.descriptors()) == 12
         assert {tool.id for tool in registry.descriptors()} == {tool.id for tool in TOOLS}
-        assert len(registry.crewai_tools()) == 12
-        assert len(registry.autogen_tools()) == 12
+        assert len(registry.nexusai_tools()) == 12
+        assert len(registry.nexusgen_tools()) == 12
 
         sample = tmp_path / "sample.csv"
         sample.write_text("month,revenue\nJan,12\nFeb,19\n", encoding="utf-8")
@@ -113,7 +127,7 @@ def test_builtin_tools_local_document_sql_report_chart_and_security(tmp_path: Pa
 
 
 def test_custom_skill_is_injected_once_into_sandbox_agent(monkeypatch: pytest.MonkeyPatch) -> None:
-    import autogen_bridge.sandbox_team as bridge
+    import nexusgen_bridge.sandbox_team as bridge
 
     messages: list[str] = []
 
@@ -135,14 +149,14 @@ def test_custom_skill_is_injected_once_into_sandbox_agent(monkeypatch: pytest.Mo
 
     monkeypatch.setattr(bridge, "AssistantAgent", Agent)
     monkeypatch.setattr(bridge, "RoundRobinGroupChat", Team)
-    runner = AutoGenSandboxRunner(SimpleNamespace(), lambda model: cast(ChatCompletionClient, ModelClient()))  # type: ignore[arg-type]
+    runner = NexusGenSandboxRunner(SimpleNamespace(), lambda model: cast(ChatCompletionClient, ModelClient()))  # type: ignore[arg-type]
 
     async def resolve_skills(tenant_id: object, workspace_id: object, slugs: tuple[str, ...]) -> dict[str, str]:
         assert "workspace-analysis" in slugs
         return {"workspace-analysis": "Only use approved workspace revenue definitions."}
 
     runner.set_skill_resolver(resolve_skills)
-    spec = AutoGenSandboxNodeSpec(
+    spec = NexusGenSandboxNodeSpec(
         id="sandbox", label="Python analysis", coder_model="openai/gpt-4.1-mini",
         reviewer_model="openai/gpt-4.1-mini", verification_command="python -m compileall .",
         skill_ids=("workspace-analysis",),

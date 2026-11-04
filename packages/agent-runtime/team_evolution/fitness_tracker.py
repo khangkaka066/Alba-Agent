@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from nexus_core_schema.models import AutoGenSandboxNodeSpec, CrewNodeSpec, RouterNodeSpec, WorkflowSpec
+from nexus_core_schema.models import NexusGenSandboxNodeSpec, CrewNodeSpec, RouterNodeSpec, WorkflowSpec
 
 W_COMPLETENESS = 0.45
 W_QUALITY = 0.35
@@ -61,7 +61,7 @@ def extract_run_metrics(
     """Measure one run: how much of the declared product exists, how good it was judged, and what it cost."""
     declared: list[tuple[str, str]] = []
     for node in spec.nodes:
-        if isinstance(node, (CrewNodeSpec, AutoGenSandboxNodeSpec)):
+        if isinstance(node, (CrewNodeSpec, NexusGenSandboxNodeSpec)):
             declared += [(node.id, path) for path in node.declared_artifact_paths()]
     completed = status == "completed"
     if declared:

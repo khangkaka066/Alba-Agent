@@ -8,7 +8,7 @@ from collections.abc import Mapping, Sequence
 from statistics import median
 from typing import Any
 
-from nexus_core_schema.models import AutoGenSandboxNodeSpec, CrewNodeSpec, RouterNodeSpec, WorkflowSpec
+from nexus_core_schema.models import NexusGenSandboxNodeSpec, CrewNodeSpec, RouterNodeSpec, WorkflowSpec
 
 from .domains import SECTION_DIRECTORIES, domain_matches, is_code_or_media, role_from_path, uncovered_terms
 from .models import BottleneckKind, BottleneckReport, Diagnosis, RunObservation
@@ -21,8 +21,8 @@ NEGATIVE_TRANSFER_THETA = 0.2
 TIMEOUT_PATTERN = re.compile(r"time(?:d)?[- ]?out|too long|exceeded|deadline", re.IGNORECASE)
 
 
-def _agent_text(node: CrewNodeSpec | AutoGenSandboxNodeSpec) -> str:
-    if isinstance(node, AutoGenSandboxNodeSpec):
+def _agent_text(node: CrewNodeSpec | NexusGenSandboxNodeSpec) -> str:
+    if isinstance(node, NexusGenSandboxNodeSpec):
         return f"{node.label} {node.coder_instructions} {node.reviewer_instructions} {' '.join(node.expected_artifact_paths)}"
     parts = [node.label]
     parts += [f"{agent.role} {agent.goal}" for agent in node.agents]
@@ -31,7 +31,7 @@ def _agent_text(node: CrewNodeSpec | AutoGenSandboxNodeSpec) -> str:
     return " ".join(parts)
 
 
-def declared_paths(node: CrewNodeSpec | AutoGenSandboxNodeSpec) -> tuple[str, ...]:
+def declared_paths(node: CrewNodeSpec | NexusGenSandboxNodeSpec) -> tuple[str, ...]:
     return node.declared_artifact_paths()
 
 
@@ -45,7 +45,7 @@ class BottleneckAnalyzer:
         self, spec: WorkflowSpec, runs: Sequence[RunObservation], transfer_scores: Mapping[str, float] | None = None,
     ) -> BottleneckReport:
         nodes = {node.id: node for node in spec.nodes}
-        work_nodes = {node_id: node for node_id, node in nodes.items() if isinstance(node, (CrewNodeSpec, AutoGenSandboxNodeSpec))}
+        work_nodes = {node_id: node for node_id, node in nodes.items() if isinstance(node, (CrewNodeSpec, NexusGenSandboxNodeSpec))}
         failures: dict[str, dict[str, Any]] = defaultdict(lambda: {"runs": 0, "paths": [], "ok": [], "evidence": [], "timeout": False})
         aspects: dict[str, list[tuple[str, str]]] = defaultdict(list)
         gate_ids = [node.id for node in spec.nodes if isinstance(node, RouterNodeSpec) and node.artifact_gate]
@@ -200,7 +200,7 @@ class BottleneckAnalyzer:
 
     def _redundancy(
         self, spec: WorkflowSpec, runs: Sequence[RunObservation],
-        work_nodes: Mapping[str, CrewNodeSpec | AutoGenSandboxNodeSpec], scores: Mapping[str, float],
+        work_nodes: Mapping[str, CrewNodeSpec | NexusGenSandboxNodeSpec], scores: Mapping[str, float],
     ) -> list[Diagnosis]:
         found: list[Diagnosis] = []
         total_cost = {node_id: sum(run.node_cost_usd.get(node_id, 0.0) for run in runs) for node_id in work_nodes}

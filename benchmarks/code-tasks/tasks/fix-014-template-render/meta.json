@@ -1,0 +1,1 @@
+{"id": "fix-014-template-render", "category": "fix", "difficulty": 2, "protected": ["test_templating.py"]}

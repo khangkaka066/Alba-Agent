@@ -46,3 +46,36 @@ export function loadModel(storage) {
 export function saveModel(storage, id) {
   try { if (id) storage.setItem(MODEL_STORAGE_KEY, id); else storage.removeItem(MODEL_STORAGE_KEY); } catch { /* the choice then lasts for this visit only */ }
 }
+
+const RECENT_KEY = "nexus_recent_models";
+
+/** The last few models the person chose, newest first. */
+export function loadRecent(storage) {
+  try {
+    const parsed = JSON.parse(storage.getItem(RECENT_KEY) ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string").slice(0, 5) : [];
+  } catch { return []; }
+}
+
+export function rememberRecent(storage, id, limit = 3) {
+  try { storage.setItem(RECENT_KEY, JSON.stringify([id, ...loadRecent(storage).filter((item) => item !== id)].slice(0, limit))); } catch { /* the shortcut list then resets next visit */ }
+}
+
+/**
+ * What the picker shows, kept short however many providers are connected: the models the person used last (only ones that
+ * still run), then one collapsed row per provider with its model count. A search replaces both with one flat list of matches.
+ */
+export function pickerView(models, recent, query = "") {
+  const list = Array.isArray(models) ? models : [];
+  const needle = String(query).trim().toLowerCase();
+  if (needle) {
+    const matches = list.filter((item) => `${item.group} ${item.model} ${item.id}`.toLowerCase().includes(needle));
+    return { recent: [], providers: [], matches };
+  }
+  const byId = new Map(list.map((item) => [item.id, item]));
+  return {
+    recent: (Array.isArray(recent) ? recent : []).map((id) => byId.get(id)).filter(Boolean),
+    providers: groupModels(list),
+    matches: [],
+  };
+}

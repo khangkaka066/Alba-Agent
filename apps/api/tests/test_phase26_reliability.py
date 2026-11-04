@@ -131,7 +131,7 @@ def test_file_claims_are_found_by_field_name_and_inputs_are_not_mistaken_for_del
     assert deliverables_in("Create a summary of squares.md for the board.") == []
 
 
-def test_tracking_follows_real_crewai_agents_and_never_touches_their_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_tracking_follows_real_nexusai_agents_and_never_touches_their_fields(monkeypatch: pytest.MonkeyPatch) -> None:
     from crewai import Agent, Crew, Process, Task
 
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")

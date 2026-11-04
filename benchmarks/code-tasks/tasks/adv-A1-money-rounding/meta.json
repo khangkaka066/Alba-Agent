@@ -1,0 +1,1 @@
+{"id": "adv-A1-money-rounding", "category": "fix", "difficulty": 2, "protected": ["test_money.py"]}

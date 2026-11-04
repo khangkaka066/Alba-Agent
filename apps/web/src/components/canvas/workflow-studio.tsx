@@ -69,7 +69,7 @@ function makeSpec(nodes: StudioNode[], edges: Edge[], scope: { tenant_id: string
       for (const task of tasks) if (Array.isArray(task.context_task_ids)) task.context_task_ids = (task.context_task_ids as unknown[]).filter((id) => taskIds.has(String(id)));
       return { id: node.id, kind: "crew", label: node.data.label, agents, tasks, process: hierarchical ? "hierarchical" : "sequential", ...(hierarchical ? { manager_agent_id: c.manager_agent_id } : {}), consensus_config: consensusConfig(c), ...contractFields(c) };
     }
-    if (node.type === "autogen") return { id: node.id, kind: "sandbox", label: node.data.label, coder_model: textValue(c.coder_agent, "openai/gpt-4.1-mini"), reviewer_model: textValue(c.reviewer_agent, "openai/gpt-4.1-mini"), coder_instructions: c.coder_instructions ?? "", reviewer_instructions: c.reviewer_instructions ?? "", sandbox_provider: c.sandbox_provider || "docker", max_rounds: Number(c.max_turns || 8), timeout_seconds: Number(c.timeout_seconds || 900), verification_command: c.verification_command || "python -m compileall .", skill_ids: configList(c.skill_ids), tool_ids: configList(c.tool_ids), consensus_config: consensusConfig(c), ...contractFields(c) };
+    if (node.type === "nexusgen") return { id: node.id, kind: "sandbox", label: node.data.label, coder_model: textValue(c.coder_agent, "openai/gpt-4.1-mini"), reviewer_model: textValue(c.reviewer_agent, "openai/gpt-4.1-mini"), coder_instructions: c.coder_instructions ?? "", reviewer_instructions: c.reviewer_instructions ?? "", sandbox_provider: c.sandbox_provider || "docker", max_rounds: Number(c.max_turns || 8), timeout_seconds: Number(c.timeout_seconds || 900), verification_command: c.verification_command || "python -m compileall .", skill_ids: configList(c.skill_ids), tool_ids: configList(c.tool_ids), consensus_config: consensusConfig(c), ...contractFields(c) };
     if (node.type === "approval") return { id: node.id, kind: "approval", label: node.data.label, action_description: textValue(c.message, node.data.description), boundary_rules: (c.boundary_rules ?? "").split(/[\n,]/).map((rule) => rule.trim()).filter(Boolean), required_role: "admin", timeout_seconds: 86400 };
     if (node.type === "router") {
       const parsedRules = (c.rules ?? "").split("\n").map((line) => line.trim()).filter(Boolean).map((line, index) => {
@@ -90,7 +90,7 @@ function makeSpec(nodes: StudioNode[], edges: Edge[], scope: { tenant_id: string
     return { id: node.id, kind: "rag", label: node.data.label, knowledge_base_id: baseId || "00000000-0000-4000-8000-000000000001", mcp_server_ids: (c.mcp_servers ?? "").split("\n").map((server) => server.trim()).filter(Boolean), query_template: "{input}", top_k: Number(c.top_k || 5) };
   });
   const edgeIndexes = new Map<string, number>();
-  const sourceAgentId = (nodeId: string) => { const node = nodes.find((candidate) => candidate.id === nodeId); return node?.type === "crew" ? `${node.id}_agent_1` : node?.type === "autogen" ? `${node.id}_coder` : null; };
+  const sourceAgentId = (nodeId: string) => { const node = nodes.find((candidate) => candidate.id === nodeId); return node?.type === "crew" ? `${node.id}_agent_1` : node?.type === "nexusgen" ? `${node.id}_coder` : null; };
   const targetAgentId = (nodeId: string) => nodes.some((node) => node.id === nodeId && node.type === "crew") ? `${nodeId}_agent_1` : null;
   const learning_edges = edges.filter((edge) => edge.data?.learning === true).map((edge) => ({ source_agent_id: sourceAgentId(edge.source), target_agent_id: targetAgentId(edge.target), scope: learning.scope, allow_heuristics: learning.allowHeuristics, allow_code_patterns: learning.allowCodePatterns, require_human_approval: learning.requireApproval })).filter((edge) => edge.source_agent_id && edge.target_agent_id);
   return { id: workflowId, tenant_id: scope.tenant_id, workspace_id: scope.workspace_id, name, version: 1, nodes: mapped, layout: Object.fromEntries(nodes.map((node) => [node.id, node.position])), learning_edges, ...(modes ? { modes } : {}), edges: edges.filter((edge) => edge.data?.learning !== true).map((edge) => {
@@ -108,7 +108,7 @@ function specToCanvas(spec: JsonRecord): { nodes: StudioNode[]; edges: Edge[]; l
   const rawNodes = Array.isArray(spec.nodes) ? spec.nodes as JsonRecord[] : [];
   const savedLayout = spec.layout && typeof spec.layout === "object" ? spec.layout as Record<string, JsonRecord> : {};
   const nodes: StudioNode[] = rawNodes.map((raw, index) => {
-    const kind = raw.kind === "sandbox" ? "autogen" : raw.kind as CanvasKind;
+    const kind = raw.kind === "sandbox" ? "nexusgen" : raw.kind as CanvasKind;
     const savedPosition = savedLayout[String(raw.id)];
     const position = savedPosition && typeof savedPosition.x === "number" && typeof savedPosition.y === "number"
       ? { x: savedPosition.x, y: savedPosition.y }
@@ -129,8 +129,8 @@ function specToCanvas(spec: JsonRecord): { nodes: StudioNode[]; edges: Edge[]; l
       Object.assign(config, { agents_source: config.agents, tasks_source: config.tasks, skill_ids_source: config.skill_ids, tool_ids_source: config.tool_ids });
       const cc = (raw.consensus_config ?? {}) as JsonRecord; Object.assign(config, { consensus_enabled: String(Boolean(cc.enabled)), consensus_models: Array.isArray(cc.models) ? cc.models.join("\n") : "", arbiter_model: String(cc.arbiter_model ?? ""), consensus_threshold: String(cc.min_agreement_threshold ?? 0.85) });
     }
-    if (kind === "autogen") Object.assign(config, { coder_agent: String(raw.coder_model ?? ""), reviewer_agent: String(raw.reviewer_model ?? ""), coder_instructions: String(raw.coder_instructions ?? ""), reviewer_instructions: String(raw.reviewer_instructions ?? ""), sandbox_provider: String(raw.sandbox_provider ?? "docker"), timeout_seconds: String(raw.timeout_seconds ?? 900), max_turns: String(raw.max_rounds ?? 8), skill_ids: Array.isArray(raw.skill_ids) ? raw.skill_ids.join("\n") : "", tool_ids: Array.isArray(raw.tool_ids) ? raw.tool_ids.join("\n") : "", verification_command: String(raw.verification_command ?? ""), join: String(raw.join ?? "any"), expected_artifact_paths: JSON.stringify(raw.expected_artifact_paths ?? []), requires_visual_evidence: String(Boolean(raw.requires_visual_evidence)) });
-    if (kind === "autogen") { const cc = (raw.consensus_config ?? {}) as JsonRecord; Object.assign(config, { consensus_enabled: String(Boolean(cc.enabled)), consensus_models: Array.isArray(cc.models) ? cc.models.join("\n") : "", arbiter_model: String(cc.arbiter_model ?? ""), consensus_threshold: String(cc.min_agreement_threshold ?? 0.85) }); }
+    if (kind === "nexusgen") Object.assign(config, { coder_agent: String(raw.coder_model ?? ""), reviewer_agent: String(raw.reviewer_model ?? ""), coder_instructions: String(raw.coder_instructions ?? ""), reviewer_instructions: String(raw.reviewer_instructions ?? ""), sandbox_provider: String(raw.sandbox_provider ?? "docker"), timeout_seconds: String(raw.timeout_seconds ?? 900), max_turns: String(raw.max_rounds ?? 8), skill_ids: Array.isArray(raw.skill_ids) ? raw.skill_ids.join("\n") : "", tool_ids: Array.isArray(raw.tool_ids) ? raw.tool_ids.join("\n") : "", verification_command: String(raw.verification_command ?? ""), join: String(raw.join ?? "any"), expected_artifact_paths: JSON.stringify(raw.expected_artifact_paths ?? []), requires_visual_evidence: String(Boolean(raw.requires_visual_evidence)) });
+    if (kind === "nexusgen") { const cc = (raw.consensus_config ?? {}) as JsonRecord; Object.assign(config, { consensus_enabled: String(Boolean(cc.enabled)), consensus_models: Array.isArray(cc.models) ? cc.models.join("\n") : "", arbiter_model: String(cc.arbiter_model ?? ""), consensus_threshold: String(cc.min_agreement_threshold ?? 0.85) }); }
     if (kind === "approval") Object.assign(config, { message: String(raw.action_description ?? ""), boundary_rules: Array.isArray(raw.boundary_rules) ? raw.boundary_rules.join("\n") : "" });
     if (kind === "router") {
       const readable = routesToText(raw.routes);
@@ -227,7 +227,7 @@ function WorkflowStudioInner({ embedded = false, token, scope: currentScope, act
 
   const connect = useCallback((connection: Connection) => {
     const source = nodes.find((node) => node.id === connection.source); const target = nodes.find((node) => node.id === connection.target);
-    if (learningMode && !(["crew", "autogen"].includes(String(source?.type)) && target?.type === "crew")) { setMessage("Learning edges connect a Crew or sandbox coder to a Crew target."); return; }
+    if (learningMode && !(["crew", "nexusgen"].includes(String(source?.type)) && target?.type === "crew")) { setMessage("Learning edges connect a Crew or sandbox coder to a Crew target."); return; }
     setEdges((current) => addEdge({ ...connection, id: identifier(), data: learningMode ? { learning: true } : undefined, style: learningMode ? { stroke: "#7776c8", strokeWidth: 2, strokeDasharray: "7 5" } : { stroke: "#a9b8ad", strokeWidth: 1.6 } }, current));
   }, [learningMode, nodes, setEdges]);
   const changeSelected = (data: StudioNodeData) => setNodes((current) => current.map((node) => node.id === selectedId ? { ...node, data } : node));
@@ -237,7 +237,7 @@ function WorkflowStudioInner({ embedded = false, token, scope: currentScope, act
     try {
       const spec = await apiRequest<JsonRecord>(`/api/v1/workflows/${id}`, token);
       const canvas = specToCanvas(spec);
-      setNodes(canvas.nodes); setEdges(canvas.edges); setLearningConfig(canvas.learningConfig); setModes(canvas.modes); setName(String(spec.name ?? "Untitled workflow")); setWorkflowId(id); setSelectedId(embedded ? null : canvas.nodes.find((node) => node.type === "autogen")?.id ?? canvas.nodes[0]?.id ?? null);
+      setNodes(canvas.nodes); setEdges(canvas.edges); setLearningConfig(canvas.learningConfig); setModes(canvas.modes); setName(String(spec.name ?? "Untitled workflow")); setWorkflowId(id); setSelectedId(embedded ? null : canvas.nodes.find((node) => node.type === "nexusgen")?.id ?? canvas.nodes[0]?.id ?? null);
       setDraftSpecId(null);
       setMessage("Workflow opened from this workspace.");
     } catch (error) { setMessage(readError(error)); }

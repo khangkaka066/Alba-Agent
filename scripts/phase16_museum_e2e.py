@@ -53,7 +53,7 @@ async def main() -> None:
             {"id": "production", "kind": "crew", "label": "Produce museum footage", "process": "sequential",
              "agents": [
                  {"id": "scriptwriter", "role": "Museum camera director", "goal": "Define one concise fixed security camera scene", "backstory": "Writes realistic camera briefs.", "model": "openai/gpt-4.1-mini", "tool_ids": [], "skill_ids": []},
-                 {"id": "producer", "role": "Video production operator", "goal": "Call media tools and deliver an actual MP4 and report", "backstory": "Executes and verifies file-producing tools.", "model": "openai/gpt-4.1-mini", "tool_ids": ["media_generation", "report_exporter"], "skill_ids": ["ai-video-script-and-ffmpeg-post-production"]},
+                 {"id": "producer", "role": "Video production operator", "goal": "Call media tools and deliver an actual MP4 and report", "backstory": "Executes and verifies file-producing tools.", "model": "openai/gpt-4.1-mini", "tool_ids": ["media_generation", "report_exporter"], "skill_ids": []},
              ],
              "tasks": [
                  {"id": "script", "agent_id": "scriptwriter", "description": "Write a concise Veo prompt for fixed museum surveillance footage with display artifacts and visitors walking. The camera must not move.", "expected_output": "A complete production prompt", "output_schema": "MuseumScript", "output_schema_json": script_schema},

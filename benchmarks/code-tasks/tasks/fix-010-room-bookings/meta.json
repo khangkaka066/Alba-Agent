@@ -1,0 +1,1 @@
+{"id": "fix-010-room-bookings", "category": "fix", "difficulty": 2, "protected": ["test_bookings.py"]}

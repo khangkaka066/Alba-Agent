@@ -1,0 +1,1 @@
+{"id": "fix-003-catalog-records", "category": "fix", "difficulty": 1, "protected": ["test_records.py"]}

@@ -10,6 +10,7 @@ from time import monotonic_ns
 from typing import Any, Awaitable, Callable, Literal, Mapping, Protocol
 from uuid import UUID
 
+from .connection import effective_api_base
 os.environ["OTEL_SDK_DISABLED"] = "true"
 os.environ["CREWAI_DISABLE_TELEMETRY"] = "true"
 os.environ["LITELLM_TELEMETRY_DISABLED"] = "true"
@@ -197,8 +198,7 @@ class LiteLLMRouter:
             raise ValueError("Input exceeds the approved token limit")
         if request.billing_mode == "byok" and not resolved_api_key:
             raise ValueError("BYOK request has no configured workspace credential")
-        environment_base = os.environ.get(f"NEXUS_{request.provider.upper()}_API_BASE")
-        effective_base = request.api_base or (credential.api_base if credential else None) or environment_base
+        effective_base = effective_api_base(request.provider, request.api_base, credential)
         if request.provider in ("ollama", "vllm") and effective_base not in self._allowed_local_bases:
             raise ValueError("Local provider URL is not approved by the server")
         reserved = rate.cost(request.max_input_tokens, request.max_output_tokens, request.markup)

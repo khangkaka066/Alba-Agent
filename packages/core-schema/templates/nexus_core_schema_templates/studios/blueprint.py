@@ -11,7 +11,7 @@ from nexus_core_schema.models import (
     AgentSpec,
     AgentTier,
     ApprovalGateNodeSpec,
-    AutoGenSandboxNodeSpec,
+    NexusGenSandboxNodeSpec,
     ChannelId,
     CrewNodeSpec,
     NodePosition,
@@ -220,7 +220,7 @@ def build_studio_graph(
         nodes.append(_crew(dept, specialists, model, director_model, tools, goals.get(dept.key, "")))
         department_summary.append({"id": dept.key, "label": dept.label, "agents": 1 + len(specialists)})
     for dept in wave_two:
-        nodes.append(AutoGenSandboxNodeSpec(
+        nodes.append(NexusGenSandboxNodeSpec(
             id=dept.key, label=dept.label, coder_model=model, reviewer_model=director_model,
             coder_instructions=dept.instructions + (f" Project-specific direction: {goals[dept.key]}" if goals.get(dept.key) else ""),
             reviewer_instructions=dept.review, sandbox_provider="docker", max_rounds=8, timeout_seconds=900,
@@ -270,7 +270,7 @@ def build_studio_graph(
         top = CENTER_Y - (len(layer) - 1) * ROW_HEIGHT / 2
         for row, node_id in enumerate(layer):
             layout[node_id] = NodePosition(x=60 + column * LAYER_WIDTH, y=top + row * ROW_HEIGHT)
-    agent_count = sum(len(node.agents) if isinstance(node, CrewNodeSpec) else 2 for node in nodes if isinstance(node, (CrewNodeSpec, AutoGenSandboxNodeSpec)))
+    agent_count = sum(len(node.agents) if isinstance(node, CrewNodeSpec) else 2 for node in nodes if isinstance(node, (CrewNodeSpec, NexusGenSandboxNodeSpec)))
     return StudioGraph(
         nodes=nodes, edges=edges, layout=layout,
         modes=WorkflowModesSpec(rigor=rigor, path_rules=blueprint.path_rules, channels=blueprint.channels),

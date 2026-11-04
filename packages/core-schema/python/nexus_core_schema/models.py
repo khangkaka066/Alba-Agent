@@ -135,7 +135,7 @@ class CrewNodeSpec(Contract):
         return tuple(dict.fromkeys((*self.expected_artifact_paths, *(path for task in self.tasks for path in task.expected_artifact_paths))))
 
 
-class AutoGenSandboxNodeSpec(Contract):
+class NexusGenSandboxNodeSpec(Contract):
     id: str = Field(min_length=1)
     kind: Literal["sandbox"] = "sandbox"
     label: str = Field(min_length=1)
@@ -150,13 +150,15 @@ class AutoGenSandboxNodeSpec(Contract):
     max_rounds: int = Field(default=8, ge=1, le=50)
     timeout_seconds: int = Field(default=300, ge=1, le=3600)
     verification_command: str = Field(min_length=1)
+    # What to do when the code ran but no executable evidence proves it: hand it over clearly labelled, or fail the run.
+    on_unverified: Literal["deliver_labeled", "fail"] = "deliver_labeled"
     consensus_config: ConsensusConfigSpec = Field(default_factory=ConsensusConfigSpec)
     join: JoinMode = "any"
     expected_artifact_paths: tuple[ArtifactPath, ...] = Field(default=(), max_length=64)
     requires_visual_evidence: bool = False
 
     @model_validator(mode="after")
-    def validate_artifact_paths(self) -> AutoGenSandboxNodeSpec:
+    def validate_artifact_paths(self) -> NexusGenSandboxNodeSpec:
         _unique_artifact_paths(self.expected_artifact_paths)
         return self
 
@@ -215,7 +217,7 @@ class RAGNodeSpec(Contract):
 WorkflowNode = Annotated[
     StartNodeSpec
     | CrewNodeSpec
-    | AutoGenSandboxNodeSpec
+    | NexusGenSandboxNodeSpec
     | ApprovalGateNodeSpec
     | RouterNodeSpec
     | RAGNodeSpec,
@@ -309,7 +311,7 @@ class WorkflowSpec(ScopedContract):
         if any((edge.source, edge.route) in forward_routes for edge in self.edges if edge.loop_back):
             raise ValueError("A router route cannot both continue forward and loop back")
         agent_ids = {agent.id for node in self.nodes if isinstance(node, CrewNodeSpec) for agent in node.agents}
-        source_ids = agent_ids | {f"{node.id}_coder" for node in self.nodes if isinstance(node, AutoGenSandboxNodeSpec)}
+        source_ids = agent_ids | {f"{node.id}_coder" for node in self.nodes if isinstance(node, NexusGenSandboxNodeSpec)}
         if any(edge.source_agent_id not in source_ids or edge.target_agent_id not in agent_ids for edge in self.learning_edges):
             raise ValueError("Learning edge references an unknown agent")
         if any(edge.source_agent_id == edge.target_agent_id for edge in self.learning_edges):
@@ -410,7 +412,7 @@ class RuntimeEventType(str, Enum):
     FLOW_STATE_CHANGED = "FLOW_STATE_CHANGED"
     CREW_AGENT_THOUGHT = "CREW_AGENT_THOUGHT"
     TOOL_INVOKED = "TOOL_INVOKED"
-    AUTOGEN_CODE_GENERATED = "AUTOGEN_CODE_GENERATED"
+    NEXUSGEN_CODE_GENERATED = "NEXUSGEN_CODE_GENERATED"
     SANDBOX_TERMINAL_OUTPUT = "SANDBOX_TERMINAL_OUTPUT"
     SANDBOX_SCREEN_FRAME = "SANDBOX_SCREEN_FRAME"
     APPROVAL_REQUIRED = "APPROVAL_REQUIRED"

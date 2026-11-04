@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 
-from nexus_core_schema.models import AutoGenSandboxNodeSpec, CrewNodeSpec, WorkflowSpec
+from nexus_core_schema.models import NexusGenSandboxNodeSpec, CrewNodeSpec, WorkflowSpec
 
 from .bottleneck_analyzer import declared_paths
 from .domains import is_code_or_media
@@ -51,7 +51,7 @@ def plan_operations(
     max_operations: int = MAX_OPERATIONS,
 ) -> EvolutionPlan:
     nodes = {node.id: node for node in spec.nodes}
-    owned = {path for node in spec.nodes if isinstance(node, (CrewNodeSpec, AutoGenSandboxNodeSpec)) for path in declared_paths(node)}
+    owned = {path for node in spec.nodes if isinstance(node, (CrewNodeSpec, NexusGenSandboxNodeSpec)) for path in declared_paths(node)}
     prune: list[MutationOp] = []
     spawn: list[MutationOp] = []
     inject: list[MutationOp] = []

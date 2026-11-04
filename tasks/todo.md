@@ -220,3 +220,87 @@ Decisions taken where the user did not answer: attaching the previous run's file
 - GitHub repo description and 20 topics set with `gh repo edit`.
 - Found while making the screenshots: asking for something similar twice could fail with a 500 because the Meta-Architect picked an existing workflow name (unique per workspace and version). `free_workflow_name` now appends " (2)", " (3)"; tested.
 - The screenshots come from a throw-away "Showcase" tenant (real runs, real UI); the canvas picture is a crop of a real team graph. That tenant stays in the dev database; delete it if unwanted.
+
+---
+
+# Phase 28 — Benchmark: NexusAgent vs Claude Code CLI and a DeepSeek harness on small coding tasks
+
+## Decisions (from the user)
+- Problem: write small functions / fix small bugs; hidden tests give an automatic verdict.
+- Systems, same ShopAIKey key and base model, same prompts, same limits:
+  A. NexusAgent (compact team, sandbox coder + reviewer; ShopAIKey connected through its OpenAI-compatible gateway card)
+  B. Claude Code CLI (installed, 2.1.283) with ANTHROPIC_BASE_URL / auth token pointed at ShopAIKey
+  C. DeepSeek Harness (`dsh`, github.com/deepseek-ai/deepseek-harness, MIT, developer preview): `dsh --profile headless --json "<task>"`
+     (stdin with `-`), `--permission-mode workspace-write`, `--approval-policy never`; ShopAIKey wired through its `llm-pi-ai`
+     plugin (`baseURL`, `apiKeyEnv`, model list) in a `--patch` overlay file. Run from an isolated install dir; read SAFETY.md first.
+
+## Design
+- 60 original tasks (no copying from public benchmarks, to avoid contamination): 30 "implement from spec", 30 "fix the bug".
+  Each task dir: `prompt.md`, `starter/`, hidden `tests/`, `meta.json` (category, difficulty, allowed paths).
+- Task validity check: reference solution passes hidden tests, untouched starter fails them.
+- Grader: copy the produced workspace into a fresh Docker container (no network), run hidden tests. Verdicts: PASS / FAIL / SEVERE.
+- SEVERE = edits or deletes tests, writes outside allowed paths, destructive command, claims success while hidden tests fail,
+  or hangs past the limit.
+- Metrics per task and system: completion (hidden tests pass), severe error, wall time, billed cost (gateway usage, not estimates),
+  interventions (approval cards + permission prompts + manual retries a human would have had to answer).
+- Fixed limits for every system: 1 attempt, 10 min wall clock, same token cap, same Python image.
+- Report: completion with Wilson 95% CI, severe-error rate, median/p90 time, cost per task and per success, interventions per task,
+  per-category split, failure taxonomy. Human review: blind rubric (1-5 correctness of approach, readability) on a 15-task sample.
+- Secrets: ShopAIKey key only in an env var / untracked `.env`; never committed or logged.
+
+## Plan
+- [x] 0. Settled with the user: ShopAIKey key + model `gpt-6-luna`, cost cap 12 USD, blind review by Claude (Sonnet 5.5)
+- [x] 1. Spike: start the stack, connect ShopAIKey as an OpenAI-compatible gateway, drive one run headlessly through the API
+- [x] 2a. Task format, `bench.validate` (starter must fail, reference must pass, prompt must not leak hidden names), 2 example tasks
+- [x] 2b. 58 more tasks authored by 4 parallel subagents (impl-002..030, fix-002..030), each validated; 60/60 valid
+- [x] 3. Grader (Docker `nexus-sandbox-python:3.11`, no network, caps dropped) + SEVERE detectors (protected files, canary/outside writes); `bench.selftest` proves PASS/SEVERE/FAIL/false-claim with fake agents
+- [x] 4. Adapters: claude_code, claude_code_sbx, dsh, nexus, nexus_plain all done; claude_code done (`--bare`, so the operator's CLAUDE.md/hooks do not leak in); dsh and nexus need the ShopAIKey details
+- [x] 5a. Runner `bench.run` (resumable, infra errors retried then excluded, JSONL records)
+- [x] 5b. Cost = real ShopAIKey account counter delta per system run (cents), no price list needed
+- [x] 6. Pilot on 5 tasks x all systems; project total cost; ask the user before the full run
+- [x] 7. Full run (60 tasks x 5 configurations) and report: benchmarks/code-tasks/REPORT.md
+
+## Review
+
+- Review (Phase 28): see `benchmarks/code-tasks/REPORT.md`. dsh 60/60, Claude Code 59/60 (57/60 with its own sandbox), NexusAgent 38/60 (41/60 with the plain prompt); 0 severe errors; real spend 6.94 USD of 12.
+  Harness bugs found and fixed on the way: impl-019 test contradicted its prompt, two wrong NexusAgent API assumptions, workflow-name collisions, operator skills leaking into dsh, dsh telemetry plugin on by default, `_count()` miscount.
+  Cleaned up: project `.env` restored, benchmark stack stopped (`docker compose -p nexus-bench down`, volumes kept), the ShopAIKey key lives only in untracked `benchmarks/code-tasks/.env.bench` (mode 600).
+  NOT done: repeated runs per task (pass@1 only), multi-file studio-style tasks, a human other than Claude grading the blind sample.
+
+
+# Phase 29: Verified-by-construction sandbox results (accuracy > speed > cost)
+
+Motivation: Phase 28 showed NexusAgent completes 38/60 while dsh/Claude Code complete 59-60/60. Failures are in verification, not code:
+every architect design verifies with `python -m compileall .`, the LLM reviewer then rejects for lack of evidence, and a failed run exports nothing.
+
+## Decisions (settled with the user)
+- Priority: accuracy and verifiability first, then speed, then cost.
+- Fully automatic: no test-author agent, no human approval on the main path (`ApprovalGateNode` stays an opt-in node).
+- Three honest states: `VERIFIED(level)`, `UNVERIFIED` (candidate, labelled, separate field), `FAILED`.
+- A machine decides from an evidence bundle; the reviewer LLM can never promote or demote a state.
+- `on_unverified` workflow policy: `deliver_labeled` (default) | `fail`.
+- Levels: V1 existing tests/examples, V2 heterogeneous N-version differential agreement on algorithmically generated inputs,
+  V3 coder-written tests accepted only after fail-on-baseline + AST mutation score + hash lock. `compileall` is never evidence.
+- No guarantee of false-verified = 0; each level is measured separately against hidden tests and the VERIFIED threshold is set from data.
+
+## Plan
+- [x] 1. Evidence model + three states; compile-only is never evidence (validate endpoint warns instead of rejecting, so existing templates keep working)
+- [x] 2. V1: staged tests run by a probe the coder cannot edit (hash-checked, nonce-guarded); machine verdict decides exit code
+- [x] 3. V3 gates: fail-on-baseline, AST mutation score (stdlib `ast`), >=3 tests; `on_unverified` policy; unverified files under `unverified/`
+- [ ] 4. V2: algorithmic input generation, two heterogeneous independent solvers, output agreement
+- [x] 5a. `on_unverified` policy + architect draft repair loop (HTTP 422)
+- [ ] 5b. Escalation ladder (stronger model on later rounds)
+- [ ] 6a. Adversarial set (12 tasks, adv-A/B/C) and a measured false-verified rate per level
+- [ ] 6b. Rerun the 60 tasks on the final build, update REPORT.md
+
+## Progress notes (Phase 29)
+- Pilot on the 22 tasks that failed in Phase 28 (V1 only): 16 PASS. Pilot on the remaining 6 + 2 controls (V1+V3): 7/8 PASS, the one miss was an architect HTTP 422, now repaired.
+- Budget: the user raised the cap from 12 to 16 USD. Spent so far 8.40 USD (6.94 + 1.13 + 0.33).
+- Deviation: no new run status `completed_unverified` (would touch DB, web and checkpoints); the label lives in `unverified_nodes` and `unverified/` files instead.
+- V2 is built only if the adversarial run shows V3 verifying wrong answers.
+
+## Review (Phase 29, benchmark and infrastructure)
+- Full 60-task result after the verification rework: NexusAgent 57/60 (95.0%, Wilson 86.3-98.3%), against 38/60 before; DeepSeek Harness 60/60, Claude Code 59/60. McNemar versus both is not significant. Details in `benchmarks/code-tasks/REPORT.md`.
+- Root cause of the infrastructure failures: the persistent computer supervisor created one `sleep`-forever container per run and nothing removed it. Fixed with release-at-node-end (reference counted per run), re-provisioning on the same row, an orphan reaper by label, a per-process concurrency cap and provisioning retries.
+- The fix caused a regression, caught by the benchmark: `read_run_file` required a running computer, so deliverables were lost after release while the run still reported completion. Fixed (host-backed files stay readable; an unreadable reported file now fails the run). Lesson: a silent `except ... continue` around an export hides lost work.
+- Still open: held-out and harder benchmark with repeats, the 3 remaining failures, no integration test for re-provision and reaper against a real database, speed (median 193 s vs 55 s), GitHub connection, OAuth login.

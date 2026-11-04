@@ -91,7 +91,7 @@ async def _inside_main() -> None:
     from app.models import AuditLog, Tenant, TenantBudget, User, Workspace, WorkspaceMember
 
     chat_model = os.environ.get("NEXUS_SMOKE_CHAT_MODEL", "openai/gpt-4.1-mini")
-    auto_model = os.environ.get("NEXUS_SMOKE_AUTOGEN_MODEL", "gpt-4.1-mini")
+    auto_model = os.environ.get("NEXUS_SMOKE_GEN_MODEL", "gpt-4.1-mini")
     embedding_model = os.environ.get("NEXUS_SMOKE_EMBEDDING_MODEL", "openai/text-embedding-3-small")
     auto_qualified_model = auto_model if "/" in auto_model else f"openai/{auto_model}"
     required_models = (chat_model, embedding_model, auto_qualified_model)  # prices are optional: unpriced models run as SUBSCRIPTION_INCLUDED
@@ -106,8 +106,8 @@ async def _inside_main() -> None:
         if model.partition("/")[0] in credentials_by_provider
         and not os.environ.get(credentials_by_provider[model.partition("/")[0]])
     })
-    if not (os.environ.get("NEXUS_AUTOGEN_API_KEY") or os.environ.get("NEXUS_OPENAI_API_KEY")):
-        missing_credentials.append("NEXUS_AUTOGEN_API_KEY or NEXUS_OPENAI_API_KEY")
+    if not (os.environ.get("NEXUS_GEN_API_KEY") or os.environ.get("NEXUS_OPENAI_API_KEY")):
+        missing_credentials.append("NEXUS_GEN_API_KEY or NEXUS_OPENAI_API_KEY")
     if missing_credentials:
         raise RuntimeError(
             f"A live AI workflow cannot run until provider credentials exist: {', '.join(missing_credentials)}. "

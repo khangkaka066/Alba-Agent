@@ -34,3 +34,21 @@ export function failureDetails(failure) {
   if (!failure || typeof failure !== "object") return "";
   return [failure.error_type, failure.traceback_summary].filter((part) => typeof part === "string" && part).join("\n");
 }
+
+/** A compact age such as "now", "5m", "3h", "2d" or "6w", the way a session list shows when a task last moved. */
+export function ageLabel(iso, now = Date.now()) {
+  const time = Date.parse(String(iso));
+  if (Number.isNaN(time)) return "";
+  const minutes = Math.max(0, Math.floor((now - time) / 60_000));
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 60 * 24) return `${Math.floor(minutes / 60)}h`;
+  if (minutes < 60 * 24 * 7) return `${Math.floor(minutes / (60 * 24))}d`;
+  return `${Math.floor(minutes / (60 * 24 * 7))}w`;
+}
+
+/** Tasks whose name contains `query` (case-insensitive); all of them when the query is empty. */
+export function filterTasks(tasks, query = "") {
+  const needle = String(query).trim().toLowerCase();
+  return needle ? tasks.filter((task) => String(task.name).toLowerCase().includes(needle)) : tasks;
+}

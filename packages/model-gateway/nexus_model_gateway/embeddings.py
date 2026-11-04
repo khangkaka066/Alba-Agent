@@ -11,6 +11,7 @@ from time import monotonic_ns
 from typing import Any, Awaitable, Callable
 from uuid import UUID
 
+from .connection import effective_api_base
 from .router import BillingMode, GatewayStore, ModelRate, Provider, UsageRecord, price_for, resolve_credential
 
 os.environ["OTEL_SDK_DISABLED"] = "true"
@@ -92,7 +93,7 @@ class LiteLLMEmbeddingRouter:
             raise ValueError("Embedding input exceeds the approved token limit")
         if request.billing_mode == "byok" and not resolved_api_key:
             raise ValueError("BYOK embedding has no configured workspace credential")
-        effective_base = request.api_base or (credential.api_base if credential else None) or os.environ.get(f"NEXUS_{request.provider.upper()}_API_BASE")
+        effective_base = effective_api_base(request.provider, request.api_base, credential)
         if request.provider in ("ollama", "vllm") and effective_base not in self._allowed_local_bases:
             raise ValueError("Local embedding URL is not approved by the server")
         reserved = rate.cost(request.max_input_tokens, 0, request.markup)

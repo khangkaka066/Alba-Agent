@@ -1,0 +1,1 @@
+{"id": "fix-026-lru-memoize", "category": "fix", "difficulty": 3, "protected": ["test_memo.py"]}

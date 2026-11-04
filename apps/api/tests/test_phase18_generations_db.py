@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app import evolution
 from app.models import Workflow, WorkflowEvolutionPolicy, WorkflowTopologyVersion
 from app.models.scope import scoped_session
-from nexus_core_schema.models import AutoGenSandboxNodeSpec, CrewNodeSpec, WorkflowSpec
+from nexus_core_schema.models import NexusGenSandboxNodeSpec, CrewNodeSpec, WorkflowSpec
 from nexus_core_schema_templates.studios import STUDIO_BY_ID, build_studio_graph
 from sqlalchemy import select
 
@@ -29,7 +29,7 @@ def _spec(tenant: UUID, workspace: UUID) -> WorkflowSpec:
 
 def _state(spec: WorkflowSpec, *, complete: float, gate_passed: bool, reasons: tuple[str, ...] = ()) -> dict[str, Any]:
     outputs: dict[str, Any] = {}
-    declared = [(node.id, path) for node in spec.nodes if isinstance(node, (CrewNodeSpec, AutoGenSandboxNodeSpec)) for path in node.declared_artifact_paths()]
+    declared = [(node.id, path) for node in spec.nodes if isinstance(node, (CrewNodeSpec, NexusGenSandboxNodeSpec)) for path in node.declared_artifact_paths()]
     keep = declared[: int(len(declared) * complete)]
     for node_id, path in declared:
         contract = outputs.setdefault(node_id, {"artifact_contract": {"passed": True, "verified": [], "recovered": [], "missing": [], "invalid": []}})["artifact_contract"]

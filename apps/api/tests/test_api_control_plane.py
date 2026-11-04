@@ -24,7 +24,7 @@ from app.models import ApprovalRequest, AuditLog, BotRoutine, KnowledgeBase, Per
 from app.models.scope import scoped_session
 from app.services import AppServices
 from app.workers.jobs import CeleryDispatcher, WorkerExecutor
-from autogen_bridge.sandbox_team import AutoGenSandboxRunner
+from nexusgen_bridge.sandbox_team import NexusGenSandboxRunner
 from nexus_computer_sandbox import ComputerSandboxSupervisor, DockerSandboxProvider
 from nexus_core_schema.models import RuntimeEventType
 from nexus_core_schema_templates.catalog import TEMPLATES
@@ -82,7 +82,7 @@ def test_api_auth_workflow_approval_and_event_stream() -> None:
         sandbox = ComputerSandboxSupervisor(runtime_engine, DockerSandboxProvider(root))
         services = AppServices(
             runtime_engine, redis, qdrant, sandbox,
-            cast(AutoGenSandboxRunner, NoopSandboxRunner()), dispatcher,
+            cast(NexusGenSandboxRunner, NoopSandboxRunner()), dispatcher,
         )
         dispatcher.services = services
         app = create_app(services)

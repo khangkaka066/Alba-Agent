@@ -1,0 +1,1 @@
+`python -m unittest test_jobs` fails: `JobQueue` in `jobs.py` loses work when a handler raises, and other behaviour does not match the class docstring. Read the docstring, find the root causes and fix `jobs.py` so the queue is correct for any sequence of calls, including handlers that raise or that push new jobs while a drain is running. Do not modify `test_jobs.py`.

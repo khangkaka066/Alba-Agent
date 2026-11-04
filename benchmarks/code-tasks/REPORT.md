@@ -141,6 +141,28 @@ Chi phí được tính: NexusAgent 0,124 USD, DeepSeek Harness 0,171 USD, Claud
 
 **Cách đọc.** Mỗi ô chỉ một lần chạy, bốn tác vụ do chính chúng tôi viết, và lượt NexusAgent được đo sau khi sửa lỗi bộ đo và đường gọi model (khóa 401) dựa trên các tác vụ này, nên con số có xu hướng lạc quan. Điều đáng tin: khoảng cách 0/4 trước đó là do giao diện đầu vào, không phải do thiếu công cụ sửa file, và giả thuyết "cần `read_file`/`edit_file`/`grep`/`glob`" chưa có bằng chứng ủng hộ. Việc cần làm tiếp là chạy lặp 3 lần và thêm tác vụ mới chưa từng dùng để chỉnh sửa.
 
+## Giai đoạn 31: sáu tác vụ nhiều file mới, chạy lặp 3 lần
+
+Sáu tác vụ mới (`repo-005-stock`, `repo-006-calendar`, `repo-007-resilient`, `repo-008-acl`, `repo-009-mdlite`, `repo-010-pager`), mỗi tác vụ là một package 3-4 module với 3-5 lỗi nằm ở các file khác nhau. Chưa hệ thống nào từng thấy chúng và không sửa gì sau khi chạy. Trước khi chạy, `bench.validate` bắt được một giá trị sai trong test ẩn của chúng tôi và việc rà soát tìm ra một khẳng định mơ hồ (coi `True` là số nguyên); cả hai đã sửa trước khi có hệ thống nào chạy. Mỗi hệ thống chạy 6 tác vụ x 3 lần = 18 lượt, giới hạn 15 phút mỗi lượt.
+
+| Hệ thống | Đạt | Wilson 95% | Tuyên bố sai | Trung vị | Lâu nhất |
+|---|---|---|---|---|---|
+| Claude Code | 17/18 (94,4%) | 74,2-99,0% | 1 | 261 giây | 586 giây |
+| DeepSeek Harness | 16/18 (88,9%) | 67,2-96,9% | 2 | 125 giây | 243 giây |
+| NexusAgent | 15/18 (83,3%) | 60,8-94,2% | 3 | 115 giây | 225 giây |
+
+Không có lượt INFRA, TIMEOUT hay SEVERE.
+
+Kiểm định cặp (McNemar chính xác, ghép theo tác vụ và lần chạy): NexusAgent so với DeepSeek Harness p = 1,0 (1 so với 2 lượt chỉ một bên đạt); NexusAgent so với Claude Code p = 0,5 (0 so với 2); DeepSeek Harness so với Claude Code p = 1,0. Không có khác biệt có ý nghĩa thống kê, và với 18 lượt cũng không đủ để chứng minh là ngang nhau.
+
+Theo tác vụ (PPP là đạt cả 3 lần): `cal`, `resilient`, `acl`, `pager` đạt 3/3 ở cả ba hệ thống. `stock`: NexusAgent PPF, hai hệ thống kia PPP. `mdlite`: NexusAgent FPF, DeepSeek Harness PFF, Claude Code PPF; đây là tác vụ khó với cả ba.
+
+Nguyên nhân ba lần rớt của NexusAgent (đã đọc từng workspace):
+- `mdlite` (2 lần): xử lý `*...*` trước khi nhận dạng code span, nên `` `b*` `` không thành `<code>`, trái với đề. Cả hai lần cùng một lỗi và agent không tự viết test cho trường hợp đó.
+- `stock` (1 lần): `orders.py` dùng `OutOfStock` mà không import (`NameError`). Test đi kèm không chạy nhánh đó nên bộ kiểm chứng vẫn báo hợp lệ. Một kiểm tra tĩnh về tên chưa định nghĩa sẽ bắt được lỗi này mà không tốn thêm lượt gọi model.
+
+**Cách đọc.** Ba hệ thống chạy song song trên cùng một cổng API, nên thời gian chỉ mang tính tham khảo (độ chính xác là số đo chính). Chi phí không tách riêng được vì billing đo chung. 18 lượt mỗi hệ thống là cỡ mẫu nhỏ: khoảng tin cậy chồng lấn nhiều. Các tác vụ do chúng tôi viết nên có thể thiên về kiểu lỗi mà chúng tôi hình dung ra. Kết luận có thể nói: trên bộ này NexusAgent ở cùng tầm với hai đối thủ, nhanh hơn Claude Code, và tỉ lệ tuyên bố sai cao hơn (3/18 so với 2/18 và 1/18, chưa có ý nghĩa thống kê).
+
 ## Tái tạo
 
 ```bash

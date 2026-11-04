@@ -1,0 +1,1 @@
+{"id": "repo-008-acl", "category": "fix", "difficulty": 3, "protected": ["test_acl.py"]}

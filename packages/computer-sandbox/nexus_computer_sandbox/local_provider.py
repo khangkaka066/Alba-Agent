@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import os
 import resource
+import shutil
 import signal
 import sys
 from pathlib import Path
@@ -48,7 +49,7 @@ def _quoted(path: Path | str) -> str:
     return f'"{text}"'
 
 
-def seatbelt_profile(run_directory: Path, computers_root: Path, home: Path, network: bool) -> str:
+def seatbelt_profile(run_directory: Path, scratch_directory: Path, computers_root: Path, home: Path, network: bool) -> str:
     """Seatbelt rules. Every read rule names the same operation, file-read-data: Seatbelt lets a rule for a narrower operation beat an
     earlier broad one, so mixing ``file-read*`` with ``file-read-data`` made an allow silently override a deny. Within one operation, later
     rules win, so each allow that re-opens something comes after the deny it narrows."""
@@ -61,6 +62,10 @@ def seatbelt_profile(run_directory: Path, computers_root: Path, home: Path, netw
         # shell walks the parent directories when it changes directory, and a deny of everything makes `cd` fail.
         f"(deny file-read-data (subpath {_quoted(computers_root)}))",
         f"(allow file-read-data (subpath {_quoted(run_directory)}))",
+        # Scratch space (temp files, HOME) lives beside the run directory, never inside it: a tool that copies the working directory into
+        # a temp folder would otherwise copy that folder into itself without end.
+        f"(allow file-read-data (subpath {_quoted(scratch_directory)}))",
+        f"(allow file-write* (subpath {_quoted(scratch_directory)}))",
         r'(deny file-read-data (regex #"/\.env(\.[^/]*)?$"))',
         r'(allow file-read-data (regex #"/\.env\.(example|sample|template)$"))',
     ]
@@ -75,13 +80,12 @@ def _limit_file_size() -> None:
     resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_FILE_BYTES, MAX_FILE_BYTES))
 
 
-def _environment(run_directory: Path, interpreter_directory: Path) -> dict[str, str]:
+def _environment(scratch_directory: Path, interpreter_directory: Path) -> dict[str, str]:
     """Only what a command needs. The host environment holds API keys and tokens, so none of it is passed on."""
-    temporary = run_directory / ".tmp"
-    temporary.mkdir(exist_ok=True)
+    scratch_directory.mkdir(parents=True, exist_ok=True)
     return {
         "PATH": f"{interpreter_directory}:/usr/bin:/bin:/usr/sbin:/sbin",
-        "HOME": str(run_directory), "TMPDIR": str(temporary),
+        "HOME": str(scratch_directory), "TMPDIR": str(scratch_directory),
         "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1",
     }
 
@@ -102,16 +106,18 @@ class LocalSandboxProvider(DockerSandboxProvider):
         self._interpreter_directory = (interpreter or Path(sys.executable)).resolve().parent
         self._home = (home or Path.home()).resolve()
 
+    def _scratch(self, handle: ComputerHandle) -> Path:
+        # Under the computers root but outside every run directory, like the Docker provider's /tmp tmpfs.
+        return self._root / ".scratch" / str(handle.access.tenant_id) / str(handle.access.workspace_id) / str(handle.id)
+
     async def create(self, handle: ComputerHandle) -> str:
         self._directory(handle).mkdir(parents=True, exist_ok=True)
+        self._scratch(handle).mkdir(parents=True, exist_ok=True)
         return f"local-{handle.id.hex}"
 
     async def destroy(self, handle: ComputerHandle) -> None:
-        return None  # nothing runs between commands; the directory is removed by the run's retirement, as for Docker
-
-    async def files(self, handle: ComputerHandle) -> tuple[str, ...]:
-        # The private temp folder is scratch space (the Docker provider keeps /tmp outside the shared directory), not a deliverable.
-        return tuple(name for name in await super().files(handle) if not name.startswith(".tmp/"))
+        # Nothing runs between commands; the run directory is removed by the run's retirement, as for Docker. Scratch goes with the computer.
+        shutil.rmtree(self._scratch(handle), ignore_errors=True)
 
     def evaluate_command(self, command: str) -> Verdict:
         """What the supervisor asks before running a command, so an Ask can go through the existing approval boundary first."""
@@ -131,10 +137,11 @@ class LocalSandboxProvider(DockerSandboxProvider):
             # Nobody approved it (a benchmark, a service key, a caller without a guard): a refusal, never a wait.
             return await self._blocked(command, f"{verdict.reason} (needs approval)", started, handle)
         run_directory = self._directory(handle).resolve()
-        profile = seatbelt_profile(run_directory, self._root, self._home, network=verdict.needs_network and verdict.decision is Decision.ASK)
+        scratch = self._scratch(handle).resolve()
+        profile = seatbelt_profile(run_directory, scratch, self._root, self._home, network=verdict.needs_network and verdict.decision is Decision.ASK)
         process = await asyncio.create_subprocess_exec(
             SANDBOX_EXEC, "-p", profile, "/bin/sh", "-c", command,
-            cwd=run_directory, env=_environment(run_directory, self._interpreter_directory),
+            cwd=run_directory, env=_environment(scratch, self._interpreter_directory),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True, preexec_fn=_limit_file_size,
         )
         chunks: dict[str, list[str]] = {"stdout": [], "stderr": []}

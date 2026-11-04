@@ -64,14 +64,14 @@ def test_strict_mode_asks_even_for_harmless_commands_but_still_denies() -> None:
 
 
 def test_the_profile_closes_the_network_unless_a_command_was_approved(tmp_path: Path) -> None:
-    run, root, home = tmp_path / "run", tmp_path, tmp_path / "home"
-    assert "(deny network*)" in seatbelt_profile(run, root, home, network=False)
-    assert "(deny network*)" not in seatbelt_profile(run, root, home, network=True)
+    run, scratch, root, home = tmp_path / "run", tmp_path / "scratch", tmp_path, tmp_path / "home"
+    assert "(deny network*)" in seatbelt_profile(run, scratch, root, home, network=False)
+    assert "(deny network*)" not in seatbelt_profile(run, scratch, root, home, network=True)
 
 
 def test_a_path_that_could_break_out_of_the_profile_is_refused(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
-        seatbelt_profile(tmp_path / 'a")(allow default', tmp_path, tmp_path, network=False)
+        seatbelt_profile(tmp_path / 'a")(allow default', tmp_path, tmp_path, tmp_path, network=False)
 
 
 # ---- real execution (macOS only) ----
@@ -199,7 +199,7 @@ class GuardedSupervisor(ComputerSandboxSupervisor):
     async def get(self, access: ComputerAccess, computer_id: object) -> ComputerHandle:
         return self._handle_in_memory
 
-    async def _audit(self, access: ComputerAccess, computer_id: object, action: str, details: dict[str, str | int]) -> None:  # type: ignore[override]
+    async def _audit(self, access: ComputerAccess, computer_id: object, action: str, details: dict[str, str | int]) -> None:
         self.audited.append(action)
 
 
@@ -295,3 +295,23 @@ def test_one_file_cannot_grow_past_the_size_cap(tmp_path: Path) -> None:
     code, _, _ = asyncio.run(fixture.run("python3 -c \"f=open('big.bin','wb'); f.seek(2**31); f.write(b'x'); f.close()\""))
     assert code != 0
     assert (fixture.provider._directory(fixture.handle) / "big.bin").stat().st_size < 2**31  # noqa: SLF001
+
+
+@needs_macos
+def test_temp_files_live_outside_the_run_directory_so_copying_the_workspace_cannot_recurse(tmp_path: Path) -> None:
+    fixture = Fixture(tmp_path)
+    # What the verification gate does: copy the working directory into a fresh temp folder.
+    script = (
+        "import os, shutil, tempfile\n"
+        "target = tempfile.mkdtemp(prefix='gate-')\n"
+        "shutil.copytree('.', os.path.join(target, 'copy'))\n"
+        "print(os.path.realpath(target))\n"
+    )
+    asyncio.run(fixture.provider.upload(fixture.handle, "copy_gate.py", script.encode()))
+    code, out, err = asyncio.run(fixture.run("python3 copy_gate.py"))
+    assert code == 0, err
+    run_directory = fixture.provider._directory(fixture.handle).resolve()  # noqa: SLF001
+    assert not Path(out.strip()).is_relative_to(run_directory)
+    assert sorted(path.name for path in run_directory.iterdir()) == ["copy_gate.py"]  # no temp folder, no bytecode left in the deliverables
+    asyncio.run(fixture.provider.destroy(fixture.handle))
+    assert not fixture.provider._scratch(fixture.handle).exists()  # noqa: SLF001

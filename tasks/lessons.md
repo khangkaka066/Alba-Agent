@@ -25,3 +25,14 @@
 ## Bộ đo: không sửa mã trong lúc đang đo
 - Lỗi: đang chạy A/B (18 run) thì mình thêm một trường vào schema. Mã được bind-mount vào container, nên API (đã nạp bản mới) và worker (bản cũ) lệch nhau; 16/18 run chết sau 5 giây với `extra_forbidden`, số liệu A/B vô giá trị.
 - Quy tắc: trước khi bắt đầu một phép đo, chốt mã và dựng lại stack; trong lúc đo chỉ viết mã ở nơi không được mount hoặc chờ đo xong. Khi trung vị thời gian của một nhóm run chỉ vài giây, đọc lỗi từ log worker trước khi diễn giải kết quả.
+
+
+## Compare against a control from the same day when the model is the noisy part
+A drop (mdlite 8/10 to 3/10) after a change is not caused by the change until a control run with the OLD setting, same day, same model, shows otherwise. Here the Docker control gave 3/10 too: the earlier 8/10 was another day. Before looking for a bug in the new code, run the control.
+
+## A blocking test must check WHY it failed
+`assert exit_code != 0` passes when the sandbox profile itself is broken (a bad regex made every command fail, so every "blocked" test passed for the wrong reason). Assert the kernel's refusal text, and run a positive case in the same environment first.
+
+## A temp folder inside the working directory makes copy-the-workspace tools recurse
+The Docker provider hid this with a separate /tmp tmpfs. Anything that replaces a container's separate temp space on the host needs the scratch directory OUTSIDE the directory that is copied, exported or listed.
+\n

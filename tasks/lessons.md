@@ -35,3 +35,12 @@ A drop (mdlite 8/10 to 3/10) after a change is not caused by the change until a 
 
 ## A temp folder inside the working directory makes copy-the-workspace tools recurse
 The Docker provider hid this with a separate /tmp tmpfs. Anything that replaces a container's separate temp space on the host needs the scratch directory OUTSIDE the directory that is copied, exported or listed.
+
+## Packaging a multi-process app (Phase 36)
+- Identify a process you started by pid AND start time, never by command line: Next.js renames its process (`next-server`), so a command-line check silently skipped it and it held the port after a crash. Test crash recovery by killing the parent with SIGKILL, not only by quitting.
+- After killing stale processes, wait for their sockets to close before checking ports; the check raced the kernel.
+- A quit that arrives while services are still starting must stop the start, otherwise processes spawned afterwards are orphans. Test "quit during first start".
+- Do not count readiness from a port that an orphan may still be serving: compare the pid of the listener with the one before.
+- When a test loop mixes `&&` and `||`, `A && B || break` breaks when A is false; write the wait condition as a function and test it once by hand.
+- A one-off slow batch (280 s against 35 s) right after configuring a provider was not reproduced in 12 later runs; record it as unexplained instead of calling it noise or a regression.
+

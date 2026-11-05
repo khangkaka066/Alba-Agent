@@ -29,7 +29,8 @@ def _redis_url() -> str:
         return override
     password = quote(os.environ.get("NEXUS_REDIS_PASSWORD", ""), safe="")
     host = os.environ.get("NEXUS_REDIS_HOST", "redis")
-    return f"redis://:{password}@{host}:6379/0"
+    port = int(os.environ.get("NEXUS_REDIS_PORT", "6379"))
+    return f"redis://:{password}@{host}:{port}/0"
 
 
 celery_app = Celery("nexus_agent_studio", broker=_redis_url())

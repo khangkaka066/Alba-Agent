@@ -444,3 +444,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 Copyright (c) the respective upstream copyright holders, as identified in each distribution's license file.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use the relevant distribution except in compliance with the License. You may obtain a copy of the License at <https://www.apache.org/licenses/LICENSE-2.0>. Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+
+## Programs bundled in the desktop installer
+
+The desktop installer (`apps/desktop`, built by `scripts/package/build_runtime.py`) ships unmodified upstream programs next to the application. Each keeps its own license, which applies to that program only:
+
+- PostgreSQL 16 (PostgreSQL License), from the zonky.io embedded-postgres-binaries distribution.
+- Redis 7.2.4 (BSD 3-Clause), built from the upstream source release. Later Redis versions use different licenses and are not bundled.
+- Qdrant 1.12.6 (Apache-2.0), upstream release binary.
+- CPython 3.12 (Python Software Foundation License), from python-build-standalone, with the Python packages listed in `apps/api/requirements.txt` under their own licenses.
+- Electron (MIT) and the Node.js runtime it embeds.

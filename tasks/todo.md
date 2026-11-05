@@ -430,3 +430,43 @@ Replacing Postgres, Redis, Celery and Qdrant with embedded stores touches 17 mig
 - Windows: Cursor's documented Windows sandbox runs inside WSL2 (same restrictions as Linux); a native sandbox exists but is limited (PowerShell restricted language mode). Third-party analysis says no single Windows primitive sandboxes an agent cleanly; the working patterns are WSL2, or a restricted token plus dedicated user. Codex documents an experimental restricted token derived from an AppContainer profile. Sources: https://cursor.com/docs/agent/tools/terminal.md, https://agentpatterns.ai/security/windows-sandbox-primitives-coding-agents/, https://developers.openai.com/codex/sandbox
 - dmg/exe: the common pattern is to freeze the Python backend with PyInstaller (a directory, not one file, built on each target OS), have Electron start it as a child bound to 127.0.0.1 on a dynamic port with an authenticated health check, and package with electron-builder (dmg on macOS, NSIS on Windows). Signing and notarization are a separate step. The backend here (CrewAI, AutoGen, litellm, Celery, Postgres drivers) will need hidden-import work and a large bundle; it also still needs Postgres and Redis, so the Stage B decision comes first. Source: https://github.com/sodejm/AncestryLLM/wiki/DESKTOP_SIDECAR
 - Not done: an embedded profile, the Windows sandbox, the packaged app, a browser check of the approval card (it reuses the existing one, not re-checked here).
+
+# Phase 36 — One installable app, no Docker (branch `feature/local-execution-policy`)
+Goal: a `.dmg` (macOS) and `.exe` (Windows) that run NexusAgent with nothing else installed, the way Cursor installs. Accuracy and speed must not drop against the Docker stack.
+
+## Decision (replaces the Stage B note above)
+Do NOT replace Postgres/Redis/Qdrant with embedded stores (tenant isolation by RLS cannot be re-verified cheaply). Ship the SAME services as sidecar binaries inside the app and start them from the Electron main process. Application code stays the same, so agent behaviour and speed are the same code path that was already measured.
+- Python backend: a relocatable CPython (python-build-standalone) with the pinned requirements installed. Not PyInstaller: no hidden-import hunting for CrewAI/AutoGen/litellm, and the interpreter is also the one agent commands run with.
+- Postgres 16 (zonky embedded-postgres-binaries), Redis 7.2.4 built from source (last BSD release; same version as compose), Qdrant 1.12.6 release binary (same as compose).
+- Web: Next.js `standalone` output, started with Electron's own Node (`ELECTRON_RUN_AS_NODE`).
+- Data under the user's app-data folder; secrets generated on first run (file mode 0600); one fixed loopback port per service (the web bundle bakes the API WebSocket URL).
+
+## Steps
+- [x] 1. Backend: `NEXUS_DB_PORT`, `NEXUS_REDIS_PORT` (defaults unchanged) so sidecars can use private ports. Test.
+- [x] 2. `scripts/package/build_runtime.py <platform>`: fetch + verify (sha256) + assemble `apps/desktop/runtime/<platform>/`.
+- [x] 3. `apps/desktop/src/stack.ts`: first-run init (initdb, runtime role, secrets), ordered start, health checks, migrations, shutdown, restart on crash; unit tests for the pure parts.
+- [x] 4. `main.ts`: embedded mode with a boot screen and error page that says what failed (no more "docker compose up").
+- [x] 5. electron-builder: `extraResources`, arm64 dmg. Build it.
+- [x] 6. Verify from the BUILT app, Docker stopped: boot time, one real agent run, a tenant-isolation spot check, quit leaves no orphan processes.
+- [x] 7. Performance gate: same tasks as the Stage A gate against the packaged backend (stock, scheduler, minisql; mdlite only as a same-day control). A large drop means find the cause before shipping.
+- [ ] 8. (NOT DONE, see below) Windows: same runtime script for win-x64, NSIS config, CI workflow that builds and smoke-tests on `windows-latest`. NOT runnable on this Mac: stays "unverified" until CI has run.
+
+## Known limits to state, not hide
+- Windows has no Seatbelt. Until a WSL2 or restricted-token provider exists, the Windows build must run agent commands in Strict mode (every command asks) with the text policy only, and say so in the UI/README.
+- Unsigned/un-notarized: first launch needs confirmation on macOS, SmartScreen on Windows.
+- Bundle size will be about 1.2–1.5 GB because the backend needs CrewAI, AutoGen, litellm, onnxruntime.
+
+## Review (Phase 36)
+- Built: macOS arm64 `.dmg` (548 MB, app 1.6 GB installed) that starts Postgres 16.15, Redis 7.2.4, Qdrant 1.12.6, API, worker and web from inside the app. No Docker, no system Python. `scripts/package/build_runtime.py` + `runtime.json` (sha256 pins; Qdrant's was recorded on first download because the release publishes none), `apps/desktop/src/stack.ts` (+ `stack-cli.ts` headless), embedded mode in `main.ts`, `NEXUS_DB_PORT` / `NEXUS_REDIS_PORT` in the backend (defaults unchanged, 3 tests).
+- Same code as before: the backend and packages are copied unchanged, so agent behaviour is the code already measured. Runtime is Python 3.12.16 (Docker image: 3.11), same sandbox libraries as the sandbox image except Pillow (13 from the API pins, not 11.0.0), and no ffmpeg/chromium (the Docker sandbox image has them; the local mode uses whatever the Mac has).
+- Performance gate against the packaged stack (gpt-6-luna, `nexus_auto`, Docker stopped): stock 3/3 (25-33 s), scheduler 3/3 (37-41 s), minisql 2/3 (77-86 s), mdlite 1/3 (45 s; this task is model-noisy: Docker 8/10 earlier, 3/10 the same day as the local runs). Host-run local provider earlier: stock 29 s, scheduler 37 s, minisql 48-86 s. Then from the built app copied out of the dmg: stock 38 s, scheduler 55 s, mdlite 234 s (passed). A first batch right after connecting the gateway took 280 s for stock and scheduler (5 attempts each, sandbox time 0.15 s) and was normal on every later run; cause not proven (gateway latency is the likeliest; the sandbox time rules out the local runtime). Samples are small: this shows no large regression, not equality.
+- Lifecycle checked on a copy installed from the dmg: first start 85-94 s (creates the database), warm start 34-42 s (headless 18-25 s; Electron plus the services), quit 3-5 s with nothing left running and Postgres shut down cleanly, SIGKILL of the app then restart recovers (orphans stopped, Postgres recovers its WAL, 38 s), quitting while still starting leaves nothing, a saved provider credential survives restarts.
+- Bugs found by running it (all fixed): standalone web copy lost pnpm symlinks (module not found); `bootstrap` did not create the database; relative runtime path broke `spawn` with another cwd; Pillow pin clashed with pdfplumber; crash cleanup matched processes by command line but the web server renames itself `next-server`, so it kept port 13000 forever (now pid + start time); ports were checked before the killed orphans released them; a quit during startup left new processes behind.
+- Environment finding: this harness sets `ELECTRON_RUN_AS_NODE=1`, which makes the Electron binary behave as plain Node ("bad option: --user-data-dir"). Launch the app with `env -u ELECTRON_RUN_AS_NODE` when testing from here. `open -a` does not start the app from this harness; direct execution does.
+
+### Not done, and why
+- **Windows `.exe` with the embedded stack: not built.** I have no Windows machine here, so nothing could be run, and the Windows pieces are real work, not packaging: (1) a Windows sandbox (no Seatbelt; Cursor uses WSL2, Codex a restricted token), (2) agent commands assume a POSIX shell, (3) Redis has no official Windows build (redis-windows publishes 7.2.x, BSD, unverified), Postgres/Qdrant/Python have Windows binaries (pins noted: python-build-standalone x86_64-pc-windows-msvc, zonky windows-amd64 16.15.0 sha256 51c7812d..., qdrant-x86_64-pc-windows-msvc.zip sha256 2450892b...), (4) graceful stop of Postgres needs `pg_ctl` instead of signals. The existing `build:win` still produces the installer that opens a window onto a remote server. `Stack` refuses to start on non-macOS instead of pretending.
+- Intel Macs (x86_64): same recipe, not built.
+- Not signed or notarized: first launch needs right-click, Open.
+- No in-app restart when one service dies while the app is running (the page says to reopen the app); logs are in the app-data `logs` folder.
+- Local Ollama endpoints are only accepted through the Docker host bridge name in the providers router, so a native Ollama is not usable from this app yet.

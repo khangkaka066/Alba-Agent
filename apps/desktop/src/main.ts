@@ -1,7 +1,8 @@
 import { BrowserWindow, Menu, Notification, app, dialog, globalShortcut, ipcMain, screen, shell, type IpcMainEvent, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from "electron";
 import { basename, join } from "node:path";
-import { existsSync, statSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, statSync, truncateSync, type WriteStream } from "node:fs";
 import { loadSettings, resolveWebUrl, saveSettings } from "./settings";
+import { Stack } from "./stack";
 import { readFileText, readTextFiles, scanFolder, writeFileSafe, type FolderScan } from "./workspace-fs";
 
 const QUICK_SHORTCUT = "CommandOrControl+Shift+Space";
@@ -9,8 +10,13 @@ const BACKGROUND = "#090A0F";
 const isMac = process.platform === "darwin";
 
 let settings = loadSettings(app.getPath("userData"));
-const webUrl = resolveWebUrl(process.env.NEXUS_WEB_URL, settings.webUrl);
-const origin = new URL(webUrl).origin;
+// Embedded mode: the installer ships the whole stack (Postgres, Redis, Qdrant, API, worker, web) and this process starts it, so nothing else
+// has to be installed. An explicit NEXUS_WEB_URL (or a saved server) still means "connect to that server instead".
+const runtimeDirectory = process.env.NEXUS_RUNTIME_DIR ?? (app.isPackaged ? join(process.resourcesPath, "runtime") : join(__dirname, "..", "runtime", `${process.platform === "darwin" ? "mac" : "win"}-${process.arch}`));
+const embedded = !process.env.NEXUS_WEB_URL && !settings.webUrl && existsSync(join(runtimeDirectory, "manifest.json"));
+let stack: Stack | null = null;
+let webUrl = resolveWebUrl(process.env.NEXUS_WEB_URL, settings.webUrl);
+let origin = new URL(webUrl).origin;
 let mainWindow: BrowserWindow | null = null;
 let quickBar: BrowserWindow | null = null;
 let folderRoot: string | null = null;
@@ -47,9 +53,50 @@ async function chooseFolder(): Promise<void> {
   if (!result.canceled && chosen) await mountFolder(chosen);
 }
 
+const escapeHtml = (text: string): string => text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
+
+function messagePage(title: string, detail: string, busy: boolean): string {
+  const html = `<body style="margin:0;background:${BACKGROUND};color:#e6e6e6;font:15px system-ui;display:grid;place-content:center;height:100vh;text-align:center;-webkit-app-region:drag">
+  <h2 style="margin:0 0 8px">${escapeHtml(title)}</h2><p style="color:#9a9a9a;margin:0;max-width:640px;white-space:pre-wrap;font:${busy ? "15px system-ui" : "12px ui-monospace,Menlo,monospace"}">${escapeHtml(detail)}</p></body>`;
+  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}
+
+// One log file per service, so "it does not start" has something to read. Truncated when large; secrets are never written to these.
+const logStreams = new Map<string, WriteStream>();
+function serviceLog(service: string, line: string): void {
+  let stream = logStreams.get(service);
+  if (!stream) {
+    const directory = join(app.getPath("userData"), "logs");
+    mkdirSync(directory, { recursive: true });
+    const file = join(directory, `${service}.log`);
+    try { if (statSync(file).size > 5_000_000) truncateSync(file, 0); } catch { /* new file */ }
+    stream = createWriteStream(file, { flags: "a" });
+    logStreams.set(service, stream);
+  }
+  stream.write(`${new Date().toISOString()} ${line}\n`);
+}
+
+async function startEmbeddedStack(): Promise<boolean> {
+  const show = (title: string, detail: string, busy: boolean): void => { void mainWindow?.loadURL(messagePage(title, detail, busy)); };
+  stack = new Stack({
+    runtime: runtimeDirectory, data: join(app.getPath("userData"), "data"), executable: process.execPath,
+    onStatus: (message) => show("NexusAgent", message, true), onLog: serviceLog,
+  });
+  try {
+    await stack.start();
+    webUrl = stack.webUrl;
+    origin = new URL(webUrl).origin;
+    return true;
+  } catch (error) {
+    await stack.stop();
+    show("NexusAgent could not start", `${error instanceof Error ? error.message : String(error)}\n\nLogs: ${join(app.getPath("userData"), "logs")}`, false);
+    return false;
+  }
+}
+
 function offlinePage(): string {
   const html = `<body style="margin:0;background:${BACKGROUND};color:#e6e6e6;font:15px system-ui;display:grid;place-content:center;height:100vh;text-align:center;-webkit-app-region:drag">
-  <h2 style="margin:0 0 8px">Cannot reach NexusAgent</h2><p style="color:#9a9a9a;margin:0 0 18px">Is the server running at <b>${origin}</b>?<br>Start it with <code>docker compose up -d</code>, or set NEXUS_WEB_URL.</p>
+  <h2 style="margin:0 0 8px">Cannot reach NexusAgent</h2><p style="color:#9a9a9a;margin:0 0 18px">${embedded ? `NexusAgent's background services stopped answering.<br>Quit and open the app again. Logs: ${escapeHtml(join(app.getPath("userData"), "logs"))}` : `Is the server running at <b>${origin}</b>?<br>Start it with <code>docker compose up -d</code>, or set NEXUS_WEB_URL.`}</p>
   <a href="${webUrl}/studio" style="color:#8fb0ff;-webkit-app-region:no-drag">Try again</a></body>`;
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
 }
@@ -72,7 +119,6 @@ function createMainWindow(): void {
   mainWindow.webContents.on("did-fail-load", (_event, _code, _description, url, isMainFrame) => { if (isMainFrame && !url.startsWith("data:")) void mainWindow?.loadURL(offlinePage()); });
   mainWindow.on("focus", () => { if (folderRoot) void folderInfo().then((info) => mainWindow?.webContents.send("workspace:changed", info)); });
   mainWindow.on("closed", () => { mainWindow = null; });
-  void mainWindow.loadURL(`${webUrl}/studio`);
 }
 
 function toggleQuickBar(): void {
@@ -134,11 +180,25 @@ app.on("window-all-closed", () => { if (!isMac) app.quit(); });
 app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createMainWindow(); });
 app.on("will-quit", () => globalShortcut.unregisterAll());
 
+let quitting = false;
+app.on("before-quit", (event) => {
+  if (!stack || quitting) return;
+  // Stop the services in order (database last) before the process goes away; a killed database would need crash recovery on every launch.
+  event.preventDefault();
+  quitting = true;
+  void stack.stop().finally(() => app.exit(0));
+});
+
 void app.whenReady().then(async () => {
   registerIpc();
   buildMenu();
   const argument = process.argv.find((item) => item.startsWith("--workspace="))?.slice("--workspace=".length);
   await mountFolder(argument ?? process.env.NEXUS_DESKTOP_WORKSPACE ?? settings.lastFolder ?? null);
   createMainWindow();
+  if (embedded) {
+    if (await startEmbeddedStack()) void mainWindow?.loadURL(`${webUrl}/studio`);
+  } else {
+    void mainWindow?.loadURL(`${webUrl}/studio`);
+  }
   if (!globalShortcut.register(QUICK_SHORTCUT, toggleQuickBar)) console.warn(`Global shortcut ${QUICK_SHORTCUT} is taken by another app; use File → Quick Task.`);
 });

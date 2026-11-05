@@ -231,7 +231,7 @@ class NexusAgentAdapter:
     plain_prompt = False  # nexus_plain: the task text alone, no RESULT-line rules
     rigor = "minimal"  # nexus_auto: let the product choose between one coder/reviewer with a repair step and a planned team
 
-    def __init__(self, endpoint: Endpoint, api_url: str = "http://127.0.0.1:8000") -> None:
+    def __init__(self, endpoint: Endpoint, api_url: str = os.environ.get("BENCH_NEXUS_API_URL", "http://127.0.0.1:8000")) -> None:
         self.endpoint = endpoint
         self.api_url = api_url.rstrip("/")
         self.model_ref = f"openai/{endpoint.model}"

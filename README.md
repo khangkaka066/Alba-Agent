@@ -22,13 +22,15 @@
   <img src="https://img.shields.io/badge/FastAPI-2f6fed?style=flat&logo=fastapi&logoColor=white" alt="FastAPI">
   <img src="https://img.shields.io/badge/Next.js-15-2f6fed?style=flat&logo=next.js&logoColor=white" alt="Next.js 15">
   <img src="https://img.shields.io/badge/PostgreSQL-RLS-2f6fed?style=flat&logo=postgresql&logoColor=white" alt="PostgreSQL with row-level security">
+  <img src="https://img.shields.io/badge/macOS-no%20Docker-2f6fed?style=flat&logo=apple&logoColor=white" alt="Runs on macOS without Docker">
   <img src="https://img.shields.io/badge/Docker-sandbox-2f6fed?style=flat&logo=docker&logoColor=white" alt="Docker sandbox">
   <img src="https://img.shields.io/badge/MCP-ready-2f6fed?style=flat" alt="MCP">
 </p>
 
 <p align="center">
-  <a href="#-quick-start">Quick start</a> ·
+  <a href="#-install">Install</a> ·
   <a href="#-see-it">Screenshots</a> ·
+  <a href="#-the-interface">Interface</a> ·
   <a href="#-what-you-get">Features</a> ·
   <a href="#-agent-studios">Agent studios</a> ·
   <a href="#-connect-a-model">Models</a> ·
@@ -40,10 +42,11 @@
 
 ## Why NexusAgent
 
-Most multi-agent projects are libraries: you write the orchestration, the sandbox, the review step and the UI yourself. NexusAgent is the finished product built on top of them. It is a self-hosted web and desktop app where you type a goal, an AI architect designs a whole **team** of agents for it, the team runs inside an isolated Docker computer, and a human approves the sensitive steps.
+Most multi-agent projects are libraries: you write the orchestration, the sandbox, the review step and the UI yourself. NexusAgent is the finished product built on top of them. It is a self-hosted web and desktop app where you type a goal, an AI architect designs a whole **team** of agents for it, the team runs inside an isolated sandbox, and a human approves the sensitive steps.
 
 - **Team, not chatbot.** A request becomes a structured team: directors, department leads and specialists, with a quality gate that sends missing work back to the right department.
-- **Safe by design.** Code runs in a locked-down container. Sensitive actions stop at an approval card. Every decision is written to an audit log.
+- **Runs on your Mac without Docker.** The desktop app carries its own database, queue, vector store, API, Node, git and ffmpeg; agent commands run in an operating-system sandbox. Docker stays available for servers and Linux.
+- **Safe by design.** Code runs in a locked-down sandbox. Sensitive actions stop at an approval card. Every decision is written to an audit log.
 - **Honest results.** A team that claims a file it never wrote fails with a clear message (media is never invented) instead of finishing as if it had delivered.
 - **Bring any model.** Use your ChatGPT, Claude, Gemini or GitHub Copilot plan, an API key, any OpenAI-compatible gateway, or a local Ollama model.
 - **Yours.** Self-hosted, MIT licensed, no telemetry leaves your machine.
@@ -53,30 +56,84 @@ Most multi-agent projects are libraries: you write the orchestration, the sandbo
 ## 🖼️ See it
 
 <p align="center">
-  <img src="docs/media/nexus-tour.gif" alt="NexusAgent product tour: start a task, choose a model, review the files, hand off to the next team" width="860">
+  <img src="docs/media/nexus-tour.gif" alt="NexusAgent tour: home, slash actions, review, files, overview, canvas, command palette, settings" width="860">
 </p>
-<p align="center"><sub>A tour of the real interface (frames from the screenshots below).</sub></p>
+<p align="center"><sub>A tour of the real interface. Every frame is a screenshot of the running app, taken from a task the team actually completed.</sub></p>
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/home.png" alt="Start a task from one prompt"><br><sub><b>One prompt.</b> Describe the result; pick a model and a team size.</sub></td>
-    <td width="50%"><img src="docs/screenshots/work.png" alt="Files, download and hand-off buttons"><br><sub><b>Results next to the chat.</b> Preview, download, and hand the files to the next team.</sub></td>
+    <td width="50%"><img src="docs/screenshots/ui-home.png" alt="Home: one prompt, model, team size, permissions"><br><sub><b>One prompt.</b> Model, team size and the agent's permission preset sit in the box; <code>@</code> attaches earlier results, <code>/</code> opens quick actions.</sub></td>
+    <td width="50%"><img src="docs/screenshots/ui-review.png" alt="Review tab with added and removed lines per file"><br><sub><b>Review.</b> Every file the team produced with lines added and removed; accept or reject one file or all.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/work-code.png" alt="Code deliverable with a diff view"><br><sub><b>Code as a diff.</b> Accept or reject a file into your project folder.</sub></td>
-    <td><img src="docs/screenshots/canvas.png" alt="A studio team on the visual canvas"><br><sub><b>The team on a canvas.</b> Directors, departments, sandboxes, quality gate and sign-off.</sub></td>
+    <td><img src="docs/screenshots/ui-files.png" alt="Files tab with a diff view of todo.py"><br><sub><b>Files as diffs.</b> Preview, download, or accept into your project folder.</sub></td>
+    <td><img src="docs/screenshots/ui-overview.png" alt="Overview menu of the right panel with modified files"><br><sub><b>Overview.</b> Jump to Review, Files, Terminal, Browser or Canvas, and see what changed.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/model-picker.png" alt="Model selector"><br><sub><b>Switch model on the fly.</b> Connected models, well-known ones, or any model id.</sub></td>
-    <td><img src="docs/screenshots/settings.png" alt="AI settings with subscription connectors"><br><sub><b>Use the plan you already pay for.</b> Claude, ChatGPT, Copilot, Gemini or an API key.</sub></td>
+    <td><img src="docs/screenshots/ui-canvas.png" alt="The agent team on the visual canvas"><br><sub><b>The team on a canvas.</b> Directors, departments, sandboxes, quality gate and sign-off, beside the conversation.</sub></td>
+    <td><img src="docs/screenshots/ui-browser.png" alt="Browser tab opening a local page"><br><sub><b>Browser tab.</b> Open a local dev server or any web page next to the chat.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/ui-palette.png" alt="Command palette"><br><sub><b>Command palette</b> (<code>⌘K</code>): navigate, open a panel, jump to a conversation.</sub></td>
+    <td><img src="docs/screenshots/ui-settings.png" alt="Settings panel with the models page"><br><sub><b>Settings as a panel.</b> Use the plan you already pay for, or any API key or gateway.</sub></td>
   </tr>
 </table>
 
 ---
 
-## ⚡ Quick start
+## 🧭 The interface
 
-You need Docker Compose, and either an AI subscription you already use (ChatGPT, Claude, Gemini, GitHub Copilot) or an API key.
+The window follows the layout of modern AI code editors, so what matters is in front of you and the rest is one key away.
+
+| Area | What it holds |
+|---|---|
+| **Title bar** | Sidebar toggle, back and forward, search; the breadcrumb `Project / Conversation`; a menu (copy the conversation, run log, shortcuts), the *Overview* menu and the right-panel toggle. |
+| **Sidebar** | *New Conversation*, *Automations* (scheduled teammates), *Customizations* (channels, MCP, skills); **Projects** (a folder you opened, with its conversations); **Conversations**; *Settings* and your account at the foot. |
+| **Conversation** | Messages, the team's live progress, approval cards, and the message box: attach (`+` or `@`), model, permissions, dictation (browsers that support it), send. |
+| **Right panel** | *Review* (lines added and removed), *Files* (diff, download, accept), *Terminal* (the run's output, read-only), *Browser*, *Canvas* (the agent graph and the run log). Drag its edge to resize, or expand it to full width. |
+| **Settings** | A panel over the work: General (theme, language, permissions, shortcuts), Models, Learning metrics. |
+
+| Keys | Action |
+|---|---|
+| `⌘K` / `Ctrl+K` | Command palette |
+| `⌘Enter` | Send the message |
+| `⌘L` | Focus the message box |
+| `⌘J` | Show or hide the right panel |
+| `⌘I` | Open the agent run log (Canvas) |
+| `⌘B` | Show or hide the sidebar |
+| `⌘\` | Switch between Files and Canvas |
+| `A` / `Y` / `D` | On the first approval card: allow once / always allow (scheduled tasks) / deny |
+
+Every shortcut can be changed in **Settings → General**. On narrow windows the sidebar becomes a drawer and the right panel covers the conversation.
+
+---
+
+## ⚡ Install
+
+You need either an AI subscription you already use (ChatGPT, Claude, Gemini, GitHub Copilot) or an API key.
+
+### Option A: the desktop app (macOS, Apple Silicon, no Docker)
+
+The installer carries the whole product: PostgreSQL, Redis, Qdrant, the API, the worker and the web app start inside the app. Agent commands find Node 22, git and ffmpeg inside the app too, so nothing has to be installed on the Mac.
+
+```bash
+python3 scripts/package/build_runtime.py mac-arm64     # downloads (sha256-pinned) and assembles the runtime
+python3 scripts/package/verify_runtime.py mac-arm64    # portability audit and a smoke run from a relocated copy; must pass
+pnpm --filter @nexus/desktop build:mac                 # apps/desktop/release/NexusAgent-<version>-mac-arm64.dmg
+```
+
+Open the `.dmg` and drag NexusAgent to Applications. Requirements and limits, stated plainly:
+
+- **macOS 15 or later on Apple Silicon.** There is no Intel or Windows installer yet.
+- **The `.dmg` is not signed or notarized**, so macOS asks you to confirm the first launch (right-click the app, then *Open*).
+- **No browser is bundled.** The `headless-browser` command used by agents needs Chrome, Chromium, Edge or Brave to be installed, and says so when none is found.
+- There is no published download yet; build it with the three commands above.
+
+Details: [apps/desktop/README.md](apps/desktop/README.md).
+
+### Option B: Docker (any OS, servers)
+
+You need Docker Compose.
 
 ```bash
 git clone https://github.com/khangkaka066/Nexus-Agent.git && cd Nexus-Agent
@@ -99,9 +156,9 @@ docker compose up -d --build
 
 Open **http://localhost:3000**. There is no sign-up in local mode: a *Local Workspace* is created for you. Then:
 
-1. **AI Settings → Models & keys:** connect a model (see [Connect a model](#-connect-a-model)).
-2. Type what you want on the **Work** screen and press Enter.
-3. Open the files the team produced, download them, or hand them to another team.
+1. **Settings → Models:** connect a model (see [Connect a model](#-connect-a-model)).
+2. Type what you want and press Enter.
+3. Open the files the team produced in the right panel, review them, accept or download them, or hand them to another team.
 
 On Linux set `NEXUS_DOCKER_GID` to the group of `/var/run/docker.sock` and run `sudo chown -R 10001 data/artifacts` so the containers can write results. The API and `packages/` are mounted with `--reload`; after changing runtime code run `docker compose restart worker`, which does not reload by itself.
 
@@ -115,7 +172,7 @@ On Linux set `NEXUS_DOCKER_GID` to the group of `/var/run/docker.sock` and run `
 |---|---|---|
 | 🧠 | **AI Meta-Architect** | Turns a sentence into a compilable team: agents, tasks, tools, knowledge and approval gates. |
 | 🏢 | **Hierarchical teams** | Directors, department leads and specialists work in parallel waves with artifact contracts and a rework loop. |
-| 💻 | **Code sandbox** | Coder and reviewer agents run code in Docker (no network, dropped capabilities, resource limits) until it verifies. |
+| 💻 | **Code sandbox** | Coder and reviewer agents run code until it verifies: in Docker (no network, dropped capabilities, resource limits) or, in the macOS app, in an operating-system sandbox with a command policy (deny, ask, allow). |
 | ✅ | **Human approval** | Sensitive steps pause on an *Allow once / Always allow / Deny* card; every decision is audited. |
 | 🗂️ | **Task history** | Every task and its conversation is saved; reopen it, delete it, or retry it. |
 | 🩺 | **Readable failures** | The failure card names the department and agent that stopped and the sanitised error. Retry only the failed step (finished departments are kept) or the whole team. |
@@ -193,7 +250,7 @@ The runtime is assembled from plugins: connections, model access, checkpoints, t
 
 ## 🔌 Connect a model
 
-Open **AI Settings → Models & keys**.
+Open **Settings → Models**.
 
 | Source | How |
 |---|---|
@@ -203,7 +260,7 @@ Open **AI Settings → Models & keys**.
 | **Gemini Advanced / Code Assist** | Copy `~/.gemini/oauth_creds.json` into `data/subscriptions/gemini/`, or paste a bridge token. |
 | **API key or gateway** | **Nexus Harness**: enter the API URL and key of any OpenAI-compatible provider; models are discovered automatically. OpenAI, Anthropic, Gemini, DeepSeek and Ollama have their own cards. |
 
-Use the model selector in the header (or the small pill in the prompt bar) to switch model per task, including any model id you type. Plan usage is recorded at $0 per token; no price table is needed.
+Use the model selector in the message box to switch model per task, including any model id you type. Plan usage is recorded at $0 per token; no price table is needed.
 
 > Plan tokens work only on endpoints that understand them (for example a bridge such as CLIProxyAPI), and providers may limit using plan tokens outside their own apps. Check the terms of your plan.
 
@@ -211,7 +268,7 @@ Use the model selector in the header (or the small pill in the prompt bar) to sw
 
 ## 🖥️ Desktop app
 
-[apps/desktop](apps/desktop/README.md) is an Electron shell: open a real project folder (`⌘/Ctrl+O`), review changes as diffs, accept them into your files, a global shortcut (`⌘/Ctrl+Shift+Space`) for quick tasks, and system notifications. `pnpm --filter @nexus/desktop dev` runs it and `pnpm --filter @nexus/desktop build` packages it. The macOS `.dmg` build is verified; Windows and Linux targets are configured but not yet tested.
+[apps/desktop](apps/desktop/README.md) is an Electron shell around the same interface. Besides the self-contained install above it adds: open a real project folder (`⌘/Ctrl+O`) that appears under **Projects**, review changes as diffs and accept them into your files, a global shortcut (`⌘/Ctrl+Shift+Space`) for quick tasks, and system notifications. `pnpm --filter @nexus/desktop dev` runs it from source. Only the macOS Apple Silicon `.dmg` has been built and verified; the Windows and Linux targets are configured but untested, and the Windows build would still need a sandbox and a verifier of its own.
 
 ---
 
@@ -247,6 +304,9 @@ CI runs the same commands plus licence and branding checks on every push. Read [
 - **Posting to TikTok, Facebook and YouTube is not wired yet.** The marketing and film teams write publish-ready packages and checklists and stop at your approval; channel cards store a token and check connectivity only.
 - **Video generation** depends on your provider offering a video API. Agents describe, plan and assemble media; they do not invent files.
 - The interface has a single local workspace for now; the multi-workspace switcher is planned (the backend already isolates workspaces).
+- **The right panel is honest about what it is.** *Terminal* shows the run's output and is not an interactive shell; *Browser* is a sandboxed frame (a site that refuses framing opens in your system browser); the permission preset is read-only and describes the sandbox policy. Dictation needs a browser with speech recognition and is not offered in the desktop app.
+- The new shell is dark-first; the light theme is not fully restyled yet.
+- With an unusual model gateway the architect may pick model names the gateway does not have (the task then stops with a *model not found* error). Choose a model you have connected, or give the full provider-qualified id.
 - Agents can still misjudge their own work. Failed claims are caught and reported, and every run can be retried, but review important output yourself.
 - Planned: node handlers as plugins, per-workspace plugin configuration, Windows and Linux desktop verification.
 

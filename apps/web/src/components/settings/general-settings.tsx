@@ -18,6 +18,11 @@ export function GeneralSettings({ theme, onTheme, bindings, onBindings, mac }: {
         </div></div>
       <div className="settings-row"><div><strong>{t("general.language")}</strong><p>{t("general.languageBody")}</p></div><LanguageSwitch /></div>
     </div>
+    <h2 className="settings-group-title">{t("perm.title")}</h2>
+    <div className="settings-card">
+      <div className="settings-row"><div><strong>{t("perm.auto")}</strong><p>{t("perm.body")}</p></div></div>
+      <div className="settings-row"><div><ul className="settings-list"><li>{t("perm.allow")}</li><li>{t("perm.ask")}</li><li>{t("perm.deny")}</li></ul><p>{t("perm.keys")}</p></div></div>
+    </div>
     <h2 className="settings-group-title">{t("shortcut.title")}</h2>
     <div className="settings-card settings-card--block"><ShortcutSettings bindings={bindings} onChange={onBindings} mac={mac} /></div>
   </div>;

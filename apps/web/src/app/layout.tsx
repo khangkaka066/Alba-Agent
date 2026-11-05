@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { LocaleProvider } from "@/components/locale-provider";
 import "./globals.css";
+import "./shell.css";
 
 export const metadata: Metadata = {
   title: { default: "NexusAgent", template: "%s · NexusAgent" },

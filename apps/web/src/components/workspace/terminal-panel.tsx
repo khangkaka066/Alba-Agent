@@ -5,15 +5,16 @@ import { useLocale } from "@/components/locale-provider";
 import { useWorkspace } from "./workspace-context";
 
 /** Live sandbox terminal and the virtual computer screen, fed by the run's event stream. */
-export function TerminalPanel() {
+export function TerminalPanel({ docked = false }: { docked?: boolean }) {
   const { t } = useLocale();
   const { run, runId } = useWorkspace();
   const [tab, setTab] = useState<"terminal" | "screen">("terminal");
-  const [open, setOpen] = useState(false); // collapsed until asked for: most people never need the raw output
+  const [openState, setOpen] = useState(false); // collapsed until asked for: most people never need the raw output
+  const open = docked || openState; // in the dock the panel is the whole tab, so it is always open
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [run.terminal.length, open]);
   const status = run.status === "idle" ? "idle" : run.status;
-  return <section className={`terminal-panel ${open ? "" : "is-collapsed"}`} aria-label="Terminal">
+  return <section className={`terminal-panel ${open ? "" : "is-collapsed"} ${docked ? "is-docked" : ""}`} aria-label="Terminal">
     <header className="terminal-head">
       <div role="tablist" aria-label="Terminal views">
         <button role="tab" aria-selected={tab === "terminal"} className={tab === "terminal" ? "is-active" : ""} onClick={() => { setTab("terminal"); setOpen(true); }}>Terminal</button>
@@ -21,7 +22,7 @@ export function TerminalPanel() {
       </div>
       <span className={`run-dot run-dot--${status}`} title={`Run ${status}`} />
       <span className="terminal-status">{runId ? (t(`terminal.status.${status}`) === `terminal.status.${status}` ? status : t(`terminal.status.${status}`)) : t("terminal.notRun")}</span>
-      <button className="terminal-toggle" aria-label={t(open ? "terminal.collapse" : "terminal.open")} onClick={() => setOpen((value) => !value)}>{open ? "▾" : "▴"}</button>
+      {!docked && <button className="terminal-toggle" aria-label={t(open ? "terminal.collapse" : "terminal.open")} onClick={() => setOpen((value) => !value)}>{open ? "▾" : "▴"}</button>}
     </header>
     {open && (tab === "terminal"
       ? <div className="terminal-body" role="log" aria-live="polite">

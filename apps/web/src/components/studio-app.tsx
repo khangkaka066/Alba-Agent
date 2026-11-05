@@ -1,28 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { TeammateWorkspace } from "@/components/teammates/teammate-workspace";
 import { LearningTransferRadar } from "@/components/learning-transfer-radar";
 import { FinOpsDistillationPanel } from "@/components/finops-distillation-panel";
 import { CustomizePage } from "@/components/integrations/customize-page";
 import { ModelProvider } from "@/components/model-context";
-import { ModelPicker } from "@/components/model-picker";
 import { GeneralSettings } from "@/components/settings/general-settings";
-import { FileExplorer } from "@/components/workspace/file-explorer";
-import { LanguageSwitch } from "@/components/language-switch";
 import { useLocale } from "@/components/locale-provider";
 import { ShortcutSettings } from "@/components/providers/shortcut-settings";
 import { ProviderSettings } from "@/components/providers/provider-settings";
-import { NexusAgentLogo } from "@/components/brand/nexus-agent-logo";
 import { TeamEvolutionOverview } from "@/components/team-evolution-overview";
 import { WorkspaceApp } from "@/components/workspace/workspace-app";
 import { WorkspaceProvider, useWorkspace } from "@/components/workspace/workspace-context";
 import { apiRequest, readError, tokenExpiry } from "@/lib/api";
 import { getDesktop } from "@/lib/desktop";
 import { actionFor, formatCombo, loadBindings, saveBindings, type Bindings } from "@/lib/shortcuts.mjs";
+import { INITIAL_DOCK, dockAfter, loadProjects, type DockTab } from "@/lib/shell.mjs";
+import { Sidebar } from "@/components/shell/sidebar";
+import { SettingsModal } from "@/components/shell/settings-modal";
+import { ShellContext, type NavPage, type ShellValue } from "@/components/shell/shell-context";
+import { TitleBar } from "@/components/shell/title-bar";
+import { useConversations } from "@/components/workspace/use-conversations";
+import { useReview } from "@/components/workspace/use-review";
 
 type WorkspaceScope = { tenant_id: string; workspace_id: string };
-export type NavPage = "studio" | "general" | "settings" | "integrations" | "teammates" | "intelligence";
+export type { NavPage } from "@/components/shell/shell-context";
 
 const emptyScope = { tenant_id: "", workspace_id: "" };
 
@@ -89,8 +92,8 @@ const pagePaths: Record<NavPage, string> = {
 // The rail starts with New chat, Automations and Customize above the task list, with Settings pinned at the bottom.
 // Integrations (channels, MCP, skills) open from Customize.
 const NAV_TARGETS: Record<string, NavPage> = { "nav-studio": "studio", "nav-integrations": "integrations", "nav-settings": "general" };
-// Settings has its own navigation: General, Models, and the expert pages (teammates, learning metrics).
-const SETTINGS_FAMILY: NavPage[] = ["general", "settings", "teammates", "intelligence"];
+// Settings is a panel with its own navigation: General, Models and Intelligence (learning metrics).
+const SETTINGS_FAMILY: NavPage[] = ["general", "settings", "intelligence"]; // shown as a panel over the work; Teammates (Automations) is a full page
 
 type NavIcon = "studio" | "newSession" | "customize" | "general" | "models" | "teammates" | "intelligence" | "back" | "shortcuts" | "logout";
 
@@ -110,18 +113,6 @@ function NavGlyph({ name }: { name: NavIcon }) {
   return <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
 
-/** Sidebar toggle and search, drawn as the two icons that sit beside the logo (and float in the corner when the sidebar is hidden). */
-function HeaderButtons({ collapsed, onToggle, onSearch }: { collapsed: boolean; onToggle: () => void; onSearch: () => void }) {
-  const { t } = useLocale();
-  const icon = { className: "header-icon", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
-  return <div className="header-buttons">
-    <button className="header-button" onClick={onToggle} aria-label={t(collapsed ? "shell.showSidebar" : "shell.hideSidebar")} aria-expanded={!collapsed} title={t(collapsed ? "shell.showSidebar" : "shell.hideSidebar")}>
-      <svg {...icon}><rect x="3.5" y="5" width="17" height="14" rx="2.5" /><path d="M9.5 5v14" /></svg></button>
-    <button className="header-button" onClick={onSearch} aria-label={t("shell.search")} title={t("shell.search")}>
-      <svg {...icon}><circle cx="10.8" cy="10.8" r="6.2" /><path d="m15.5 15.5 4.7 4.7" /></svg></button>
-  </div>;
-}
-
 function ShortcutsDialog({ bindings, onChange, mac, onClose }: { bindings: Bindings; onChange: (next: Bindings) => void; mac: boolean; onClose: () => void }) {
   const { t } = useLocale();
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
@@ -132,18 +123,19 @@ function ShortcutsDialog({ bindings, onChange, mac, onClose }: { bindings: Bindi
   </div>;
 }
 
-function CommandPalette({ onClose, onNavigate, hint, onConnect }: { onClose: () => void; onNavigate: (page: NavPage) => void; hint: (action: string) => string; onConnect: (() => void) | null }) {
+function CommandPalette({ onClose, onNavigate, hint, onConnect, extra }: { onClose: () => void; onNavigate: (page: NavPage) => void; hint: (action: string) => string; onConnect: (() => void) | null; extra: Array<{ label: string; hint: string; run: () => void }> }) {
   const { t } = useLocale();
   const commands: Array<{ label: string; hint: string; run: () => void }> = [
     { label: t("palette.work"), hint: hint("nav-studio"), run: () => onNavigate("studio") },
     { label: t("page.integrations"), hint: hint("nav-integrations"), run: () => onNavigate("integrations") },
     { label: t("page.settings"), hint: hint("nav-settings"), run: () => onNavigate("general") },
-    { label: t("palette.teammates"), hint: t("palette.advanced"), run: () => onNavigate("teammates") },
+    { label: t("shell.automations"), hint: t("palette.advanced"), run: () => onNavigate("teammates") },
     { label: t("palette.intelligence"), hint: t("palette.advanced"), run: () => onNavigate("intelligence") },
     ...(onConnect ? [{ label: t("palette.signIn"), hint: t("palette.account"), run: onConnect }] : []),
+    ...extra,
   ];
   const [query, setQuery] = useState("");
-  const filtered = commands.filter((command) => command.label.toLowerCase().includes(query.toLowerCase()));
+  const filtered = commands.filter((command) => command.label.toLowerCase().includes(query.toLowerCase())).slice(0, 14);
   return <div className="command-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="command-palette" role="dialog" aria-modal="true" aria-label={t("shell.search")}><label className="command-search"><span aria-hidden="true">⌕</span><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("palette.placeholder")} /></label><div className="command-list">{filtered.map((command) => <button key={command.label} onClick={() => { command.run(); onClose(); }}><span>{command.label}</span><kbd>{command.hint}</kbd></button>)}{filtered.length === 0 && <p>{t("palette.empty")}</p>}</div><footer><span>{t("palette.footer")}</span><kbd>ESC</kbd></footer></section></div>;
 }
 
@@ -192,36 +184,6 @@ function AccountRow({ token, inSettings, onSettings, onClose, onShortcuts, onLog
       <span className="account-email">{label}</span>
     </button>
   </div>;
-}
-
-/** Settings navigation: back to the work screen, a search over the sections, and one entry per section. */
-function SettingsNav({ page, navigate }: { page: NavPage; navigate: (page: NavPage) => void }) {
-  const { t } = useLocale();
-  const [query, setQuery] = useState("");
-  const sections: Array<{ page: NavPage; icon: NavIcon; label: string }> = [
-    { page: "general", icon: "general", label: t("settings.nav.general") },
-    { page: "settings", icon: "models", label: t("settings.nav.models") },
-    { page: "teammates", icon: "teammates", label: t("page.teammates") },
-    { page: "intelligence", icon: "intelligence", label: t("page.intelligence") },
-  ];
-  const shown = sections.filter((section) => section.label.toLowerCase().includes(query.trim().toLowerCase()));
-  return <>
-    <button type="button" className="settings-back" onClick={() => navigate("studio")}><NavGlyph name="back" /><span>{t("settings.back")}</span></button>
-    <label className="settings-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.2" /><path d="m15.5 15.5 4.7 4.7" /></svg>
-      <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("settings.search")} aria-label={t("settings.search")} /></label>
-    <nav className="main-nav" aria-label={t("page.settings")}>{shown.map((section) => <button key={section.page} type="button" className={`nav-link ${page === section.page ? "is-active" : ""}`} aria-current={page === section.page ? "page" : undefined} onClick={() => navigate(section.page)}><NavGlyph name={section.icon} /><span className="nav-link__label">{section.label}</span></button>)}</nav>
-  </>;
-}
-
-/** The entry points above the session list: start a session, and the places that shape the assistant. */
-function SidebarActions({ page, navigate }: { page: NavPage; navigate: (page: NavPage) => void }) {
-  const { t } = useLocale();
-  const workspace = useWorkspace();
-  const items: Array<{ icon: NavIcon; label: string; active: boolean; run: () => void }> = [
-    { icon: "newSession", label: t("shell.newSession"), active: false, run: () => { workspace.newTask(); navigate("studio"); } },
-    { icon: "customize", label: t("shell.customize"), active: page === "integrations", run: () => navigate("integrations") },
-  ];
-  return <nav className="main-nav" aria-label={t("shell.screens")}>{items.map((item) => <button key={item.icon} type="button" className={`nav-link ${item.active ? "is-active" : ""}`} aria-current={item.active ? "page" : undefined} onClick={item.run}><NavGlyph name={item.icon} /><span className="nav-link__label">{item.label}</span></button>)}</nav>;
 }
 
 type LocalSession = { access_token: string; tenant_id: string; workspace_id: string; expires_in: number };
@@ -318,10 +280,19 @@ export function StudioApp({ initialPage = "studio" }: { initialPage?: NavPage })
     return () => { window.removeEventListener("nexus:session-expired", expire); if (timer !== undefined) window.clearTimeout(timer); };
   }, [token, localMode, saveToken]);
 
-  const toggleSidebar = useCallback(() => setCollapsed((value) => {
-    try { window.localStorage.setItem("nexus_sidebar_collapsed", value ? "0" : "1"); } catch { /* keep the in-memory choice */ }
-    return !value;
-  }), []);
+  const toggleSidebar = useCallback(() => {
+    if (window.innerWidth <= 800) { setMobileNavOpen((value) => !value); return; } // narrow windows use the sidebar as a drawer
+    setCollapsed((value) => {
+      try { window.localStorage.setItem("nexus_sidebar_collapsed", value ? "0" : "1"); } catch { /* keep the in-memory choice */ }
+      return !value;
+    });
+  }, []);
+
+  const [dock, dispatchDock] = useReducer(dockAfter, INITIAL_DOCK);
+  const [inspector, setInspector] = useState(false);
+  const showDock = useCallback((tab: DockTab) => dispatchDock({ type: "show", tab }), []);
+  const toggleInspector = useCallback(() => { setInspector((value) => !value); dispatchDock({ type: "show", tab: "canvas" }); }, []);
+  const closeSettings = useCallback(() => navigate("studio"), [navigate]);
 
   useEffect(() => {
     const keys = (event: KeyboardEvent) => {
@@ -334,46 +305,96 @@ export function StudioApp({ initialPage = "studio" }: { initialPage?: NavPage })
       else if (action === "toggle-sidebar") toggleSidebar();
       else if (action === "run") window.dispatchEvent(new CustomEvent("nexus:run"));
       else if (action === "toggle-canvas") window.dispatchEvent(new CustomEvent("nexus:toggle-canvas"));
+      else if (action === "toggle-dock") dispatchDock({ type: "toggle" });
+      else if (action === "toggle-inspector") toggleInspector();
+      else if (action === "focus-composer") { if (page !== "studio") navigate("studio"); window.setTimeout(() => window.dispatchEvent(new CustomEvent("nexus:focus-composer")), 0); }
       else if (NAV_TARGETS[action]) navigate(NAV_TARGETS[action]);
     };
     window.addEventListener("keydown", keys);
     return () => window.removeEventListener("keydown", keys);
-  }, [bindings, navigate, toggleSidebar]);
+  }, [bindings, navigate, page, toggleSidebar, toggleInspector]);
 
   const changeBindings = useCallback((next: Bindings) => { setBindings(next); saveBindings(window.localStorage, next); }, []);
   const hint = useCallback((action: string) => formatCombo(bindings[action] ?? "", mac), [bindings, mac]);
   const currentScope = useMemo(() => scope, [scope]);
   const connect = localMode === false ? () => setAccountOpen(true) : null;
+  const logout = localMode === false && token ? () => { saveToken(""); setAccountOpen(true); } : null;
 
-  return <ModelProvider token={token}><WorkspaceProvider token={token}><div className={`app-shell app-shell--chat ${collapsed ? "app-shell--collapsed" : ""} ${mobileNavOpen ? "app-shell--mobile-nav-open" : ""}`}>
-    <aside className="sidebar" aria-label={t("shell.sidebar")}>
-      {!SETTINGS_FAMILY.includes(page) && <div className="brand-row"><a className="brand" href="/studio" onClick={(event) => { event.preventDefault(); navigate("studio"); }} aria-label="NexusAgent"><span className="brand-symbol"><NexusAgentLogo size={34} /></span><span className="brand-copy"><strong>NexusAgent</strong></span></a><HeaderButtons collapsed={collapsed} onToggle={toggleSidebar} onSearch={() => setCommandOpen(true)} /></div>}
-      {SETTINGS_FAMILY.includes(page) ? <SettingsNav page={page} navigate={navigate} /> : <><SidebarActions page={page} navigate={navigate} /><FileExplorer onOpened={() => navigate("studio")} /></>}
-      <div className="sidebar-bottom"><AccountRow token={token} inSettings={SETTINGS_FAMILY.includes(page)} onSettings={() => navigate("general")} onClose={() => navigate("studio")} onShortcuts={() => setHelpOpen(true)} onLogout={localMode === false && token ? () => { saveToken(""); setAccountOpen(true); } : null} /></div>
-    </aside>
-    {mobileNavOpen && <button className="mobile-nav-scrim" aria-label={t("shell.closeNav")} onClick={() => setMobileNavOpen(false)} />}
-    {collapsed && <div className="header-float"><HeaderButtons collapsed onToggle={toggleSidebar} onSearch={() => setCommandOpen(true)} /></div>}
-    <main className="main-area">
-      <header className="app-header">
-        <button className="mobile-nav-toggle" aria-label={t("shell.openNav")} onClick={() => setMobileNavOpen(true)}><span /><span /><span /></button>
-        {page === "studio" && <h1 className="app-header__title">{t(`page.${page}`)}</h1>}
-        <span className="app-header__spacer" />
-        <ModelPicker onOpenSettings={() => navigate("settings")} />
-        <LanguageSwitch />
-        <button className="header-button" aria-label={t("shell.help")} title={t("shell.help")} onClick={() => setHelpOpen(true)}>?</button>
-      </header>
-      <div className={`content-area content-area--${page}`}>
-        {page === "studio" && <WorkspaceApp scope={currentScope} shortcutHint={hint("toggle-canvas")} onConnect={() => setAccountOpen(true)} onModal={setModal} onNavigate={navigate} />}
-        {page === "general" && <GeneralSettings theme={theme} onTheme={setTheme} bindings={bindings} onBindings={changeBindings} mac={mac} />}
-        {page === "settings" && <ProviderSettings token={token} onNavigate={navigate} />}
-        {page === "integrations" && <CustomizePage token={token} onConnect={() => setAccountOpen(true)} />}
-        {page === "teammates" && <TeammatesHost token={token} scope={currentScope} onConnect={() => setAccountOpen(true)} />}
-        {page === "intelligence" && <><div className="page-title-row"><div><h1>{t("intelligence.title")}</h1><p>{t("intelligence.body")}</p></div></div><div className="intelligence-stack"><EvolutionHost token={token} onOpened={() => navigate("studio")} /><LearningTransferRadar token={token} /><FinOpsDistillationPanel token={token} /></div></>}
-      </div>
-    </main>
-    {accountOpen && localMode === false && <AccountDialog token={token} scope={scope} onScope={saveScope} onToken={saveToken} onClose={() => setAccountOpen(false)} />}
-    {modal && <IntegrationDialog kind={modal} token={token} onClose={() => setModal(null)} />}
-    {commandOpen && <CommandPalette onClose={() => setCommandOpen(false)} onNavigate={navigate} hint={hint} onConnect={connect} />}
-    {helpOpen && <ShortcutsDialog bindings={bindings} onChange={changeBindings} mac={mac} onClose={() => setHelpOpen(false)} />}
-  </div></WorkspaceProvider></ModelProvider>;
+  return <ModelProvider token={token}><WorkspaceProvider token={token}>
+    <Frame page={page} navigate={navigate} collapsed={collapsed} mobileNavOpen={mobileNavOpen} closeNav={() => setMobileNavOpen(false)} toggleSidebar={toggleSidebar}
+      dock={dock} dispatchDock={dispatchDock} showDock={showDock} inspector={inspector} toggleInspector={toggleInspector} hint={hint}
+      openPalette={() => setCommandOpen(true)} commandOpen={commandOpen} closePalette={() => setCommandOpen(false)} connect={connect}
+      token={token} scope={currentScope} accountOpen={accountOpen && localMode === false} setAccountOpen={setAccountOpen} saveScope={saveScope} saveToken={saveToken}
+      modal={modal} setModal={setModal} helpOpen={helpOpen} setHelpOpen={setHelpOpen} bindings={bindings} changeBindings={changeBindings} mac={mac}
+      theme={theme} setTheme={setTheme} onLogout={logout} closeSettings={closeSettings} />
+  </WorkspaceProvider></ModelProvider>;
+}
+
+type FrameProps = {
+  page: NavPage; navigate: (page: NavPage) => void; collapsed: boolean; mobileNavOpen: boolean; closeNav: () => void; toggleSidebar: () => void;
+  dock: ShellValue["dock"]; dispatchDock: (action: Parameters<typeof dockAfter>[1]) => void; showDock: (tab: DockTab) => void; inspector: boolean; toggleInspector: () => void;
+  hint: (action: string) => string; openPalette: () => void; commandOpen: boolean; closePalette: () => void; connect: (() => void) | null;
+  token: string; scope: WorkspaceScope; accountOpen: boolean; setAccountOpen: (open: boolean) => void; saveScope: (value: WorkspaceScope) => void; saveToken: (value: string) => void;
+  modal: "api-key" | "widget" | null; setModal: (kind: "api-key" | "widget" | null) => void; helpOpen: boolean; setHelpOpen: (open: boolean) => void;
+  bindings: Bindings; changeBindings: (next: Bindings) => void; mac: boolean; theme: "dark" | "light"; setTheme: (value: "dark" | "light") => void;
+  onLogout: (() => void) | null; closeSettings: () => void;
+};
+
+/** The window: title bar on top; sidebar, the work and the right dock below; settings as a panel over everything. Lives inside the workspace providers. */
+function Frame(props: FrameProps) {
+  const { t } = useLocale();
+  const { page, navigate, token, scope, dock, showDock, dispatchDock, openPalette, hint, inspector, toggleInspector } = props;
+  const workspace = useWorkspace();
+  const { conversations, reload } = useConversations();
+  const review = useReview();
+  const inSettings = SETTINGS_FAMILY.includes(page);
+  const shownPage: NavPage = inSettings ? "studio" : page;
+
+  const value = useMemo<ShellValue>(() => ({
+    dock, showDock, toggleDock: () => dispatchDock({ type: "toggle" }), closeDock: () => dispatchDock({ type: "close" }), expandDock: () => dispatchDock({ type: "expand" }),
+    navigate, openPalette, hint, review, inspector, toggleInspector,
+  }), [dock, showDock, dispatchDock, navigate, openPalette, hint, review, inspector, toggleInspector]);
+
+  const current = conversations.find((item) => item.run.id === workspace.runId);
+  const firstWords = workspace.messages.find((message) => message.role === "user")?.text ?? null;
+  const [projects, setProjects] = useState<Record<string, string>>({});
+  useEffect(() => { try { setProjects(loadProjects(window.localStorage)); } catch { setProjects({}); } }, [conversations]);
+  const project = workspace.runId ? projects[workspace.runId] ?? null : null;
+  const start = () => { workspace.newTask(); navigate("studio"); window.setTimeout(() => window.dispatchEvent(new Event("nexus:focus-composer")), 0); };
+
+  const palette = [
+    { label: t("shell.newConversation"), hint: t("shell.conversations"), run: start },
+    { label: t("dock.review"), hint: hint("toggle-dock"), run: () => showDock("review") },
+    { label: t("dock.files"), hint: hint("toggle-dock"), run: () => showDock("files") },
+    { label: t("dock.terminal"), hint: hint("toggle-dock"), run: () => showDock("terminal") },
+    { label: t("dock.browser"), hint: hint("toggle-dock"), run: () => showDock("browser") },
+    { label: t("dock.canvas"), hint: hint("toggle-canvas"), run: () => showDock("canvas") },
+    ...conversations.slice(0, 8).map((item) => ({ label: item.name, hint: t("shell.conversations"), run: () => { if (item.run.id !== workspace.runId) workspace.openRun(item.run.workflow_id, item.run.id, item.name); navigate("studio"); } })),
+  ];
+
+  const account = <AccountRow token={token} inSettings={inSettings} onSettings={() => navigate("general")} onClose={props.closeSettings} onShortcuts={() => props.setHelpOpen(true)} onLogout={props.onLogout} />;
+  return <ShellContext.Provider value={value}><div className={`app-shell app-shell--chat ag-app ${props.collapsed ? "is-collapsed" : ""} ${props.mobileNavOpen ? "is-nav-open" : ""}`}>
+    <TitleBar page={shownPage} title={current?.name ?? firstWords ?? ""} project={project} collapsed={props.collapsed} onToggleSidebar={props.toggleSidebar} review={review} onShortcuts={() => props.setHelpOpen(true)} onNewConversation={start} />
+    <div className="ag-body">
+      <Sidebar page={page} conversations={conversations} reload={reload} navigate={navigate} footer={account} onOpenSettings={() => navigate("general")} />
+      {props.mobileNavOpen && <button className="ag-scrim" aria-label={t("shell.closeNav")} onClick={props.closeNav} />}
+      <main className="ag-main">
+        {shownPage === "studio"
+          ? <div className="ag-studio"><WorkspaceApp scope={scope} onModal={props.setModal} onNavigate={navigate} /></div>
+          : <div className={`content-area content-area--${shownPage}`}>
+            {shownPage === "integrations" && <CustomizePage token={token} onConnect={() => props.setAccountOpen(true)} />}
+            {shownPage === "teammates" && <TeammatesHost token={token} scope={scope} onConnect={() => props.setAccountOpen(true)} />}
+          </div>}
+      </main>
+    </div>
+    {inSettings && <SettingsModal page={page} navigate={navigate} onClose={props.closeSettings} onShortcuts={() => props.setHelpOpen(true)} footer={account}>
+      {page === "general" && <GeneralSettings theme={props.theme} onTheme={props.setTheme} bindings={props.bindings} onBindings={props.changeBindings} mac={props.mac} />}
+      {page === "settings" && <ProviderSettings token={token} onNavigate={navigate} />}
+      {page === "intelligence" && <><div className="page-title-row"><div><h1>{t("intelligence.title")}</h1><p>{t("intelligence.body")}</p></div></div><div className="intelligence-stack"><EvolutionHost token={token} onOpened={() => navigate("studio")} /><LearningTransferRadar token={token} /><FinOpsDistillationPanel token={token} /></div></>}
+    </SettingsModal>}
+    {props.accountOpen && <AccountDialog token={token} scope={scope} onScope={props.saveScope} onToken={props.saveToken} onClose={() => props.setAccountOpen(false)} />}
+    {props.modal && <IntegrationDialog kind={props.modal} token={token} onClose={() => props.setModal(null)} />}
+    {props.commandOpen && <CommandPalette onClose={props.closePalette} onNavigate={navigate} hint={props.hint} onConnect={props.connect} extra={palette} />}
+    {props.helpOpen && <ShortcutsDialog bindings={props.bindings} onChange={props.changeBindings} mac={props.mac} onClose={() => props.setHelpOpen(false)} />}
+  </div></ShellContext.Provider>;
 }

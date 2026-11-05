@@ -53,3 +53,12 @@ The Docker provider hid this with a separate /tmp tmpfs. Anything that replaces 
 - A transient provider test failure (ERROR with 0 models) right after startup passed on retry; retry once before debugging, but record it.
 - A non-Python task through the Python-oriented verifier (needs >= 3 self-written Python tests) never reaches "verified" and the coder/reviewer loop runs until the wall-clock limit. Prove a bundled tool by reading what the agent produced in its computer directory, not by waiting for the run to finish.
 - macOS has no `timeout` command and BSD `sed -i` needs an empty suffix argument (`sed -i ''`).
+
+## Redesigning a shell inside a layered stylesheet (Phase 38)
+- When 1,600 lines of CSS already override themselves, add a new layer scoped under one root class and prefix every new class; do not edit the old rules. Keep the old root classes on the element so descendant rules of components you reuse still apply, but give the new chrome new element classes so the old positioning rules cannot hit it.
+- A legacy rule can silently double a component's chrome (two nested bordered boxes). Drop the legacy class from the new wrapper instead of fighting it with `!important`.
+- Do not ship a control that has no backend: the permission preset has no per-request API, so it is read-only and says what the sandbox policy does; a fake dropdown would be a lie. Same for the mic (hide where unsupported) and the browser tab (refuse non-web addresses and the app's own origin).
+- Look at every screenshot before using it: the first slash menu had unstyled buttons, the palette showed a legacy square focus ring, the home screen overflowed at 390 px. Measure overflow with `max(getBoundingClientRect().right) - innerWidth`.
+- Pick demo data on purpose: a run started through the benchmark adapter showed the benchmark's rules text in the user bubble, and a blocked run produced junk files. A README image must show a task that really finished.
+- On macOS `pgrep -f` matches other apps' helper processes (here the user's Antigravity); never `pkill` by a loose pattern, kill by the exact command line you started.
+- BSD `sed -i` needs `-i ''`; use Python for multi-line edits.

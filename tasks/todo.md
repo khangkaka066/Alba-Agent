@@ -504,3 +504,43 @@ Goal: what ships in the dmg (and later the exe) must not depend on anything of t
 - Gate on the new dmg (3 passes): stock 3/3, scheduler 3/3, mdlite 0/3 (previous gate 1/3, flaky task). Wall times were 26-165 s for the same 2 attempts against ~35 s before; sandbox time per run 0.2-0.4 s, so the wait is the model gateway. Not compared under identical conditions; treat as unexplained, not as proven noise.
 - Found while building Intel (kept, shared by both builds): `arch -x86_64 make` fails (CLT has no Intel slice) so the compiler gets `-arch`; git's Makefile overrides `CC` so it is passed on the make command line; sharp is retargeted from the npm registry with sha512 check; the verifier runs the Intel smoke through the runtime's own Python.
 - Still open: Windows exe, signing/notarization, lowering the macOS floor, Intel installed-copy verification (not needed now).
+
+# Phase 38 — Antigravity-style shell, then a README with the new screenshots (branch `feature/local-execution-policy`)
+Request: study the 3 Antigravity screenshots, improve the UI, build the full set of bars/buttons like Antigravity; then rewrite the root README.md with NEW images of the redesigned app. Plan only so far; nothing below is implemented.
+
+## What Antigravity does (from the screenshots)
+1. Frameless titlebar row: traffic lights, sidebar toggle, back/forward, search; main header = breadcrumb "Project / Conversation title" + (⋮ menu, panel toggle, right-sidebar toggle).
+2. Left sidebar: `New Conversation` button, Automations, Customizations; section **Projects** (filter + add-folder icons; each project a folder row with its conversations and relative age "3h/1d/4d"); section **Conversations** (+ button) for conversations without a project; Settings pinned at the bottom.
+3. Composer: "Ask anything, @ to mention, / for actions", `+` (attach), model picker, **permission preset** chip (Auto (Preview)), mic, round send button. Message footer: age, copy, 👍/👎.
+4. Settings = centred modal over the app: left nav (General, Application, Appearance, Shortcuts, Notifications, Models, Projects…), card rows (Permission Preset, Tool Permissions, Network Access Rules, Plan Review Policy, Queue/Send Immediately, Built-in Browser).
+5. Right dock (split view): overview menu (Review +added/−removed, Files, Terminal, Extensions ›), "Modified Files (n)" list, a new-tab page with "Search or enter a URL" + Review / Open File / Terminal / Browser, expand and close buttons.
+
+## What exists today (explored, apps/web)
+One hand-rolled React app: `components/studio-app.tsx` (379-line monolith: sidebar, header, modals, Cmd+K palette), 1604-line `app/globals.css`, no shadcn/radix/zustand/lucide, inline-SVG icons, node:test for pure `lib/*.mjs` only. Settings are full pages, not a modal. Sidebar lists runs (no "projects"). Composer has no preset/mic. Shortcuts: only Cmd+K/B/\/Enter/1/2/, and `nexus:run` has no listener. No Cmd+J/I/L, no A/Y/D approvals, no real browser/PTY/git review. Desktop window is already frameless (`hiddenInset`, traffic lights at 16,14).
+
+## Decisions I need from you (answers change the work)
+- D1 Projects: use the opened local folder (+ runs grouped by it) as a project; runs without a folder go under Conversations. (Recommended: no backend change.)
+- D2 Right dock content that has no backend yet: Review = diff of the run's artifacts (exists), Files = artifact tree (exists), Terminal = the run's terminal output (read-only, exists), Browser = an in-app address bar page that opens URLs in an iframe/new window (sites that forbid framing will not load). A real PTY and a real browser engine are NOT part of this phase.
+- D3 Mic button: show it only if the browser speech API exists, otherwise hide it (no fake button).
+- D4 Scope of CSS: add a new token layer + new shell components and retire the old `.app-shell--chat` overrides; do not rewrite the 1604-line file in one go.
+
+## Steps
+- [x] 1. Split `studio-app.tsx`: AppShell, TitleBar (drag region, toggles, back/forward, search), Sidebar (new conversation, Automations, Customizations, Projects, Conversations, Settings), Breadcrumb header, RightDock. State in one small store (React context + pure reducer in `lib/shell.mjs`, node:test).
+- [x] 2. Tokens (CLAUDE.md §2.4: #09090b, #27272a, #18181b, cyan/indigo/amber; 150-200 ms transitions) as a new layer; icon set as a local `Icon` component (no new dependency).
+- [x] 3. Composer: `+` attach menu, `@` mention, `/` actions, permission preset chip (maps to existing approval policy), model picker, send; message footer actions.
+- [x] 4. Settings as a centred modal with left nav and card rows (reuse existing settings bodies).
+- [x] 5. Right dock: overview menu, Modified Files list, tabs (Review, Files, Terminal, Browser), expand/close; `Cmd+J` (terminal/dock), `Cmd+I` (inspector), `Cmd+L` (copilot focus), wire `Cmd+Enter` to send; approval hotkeys A/Y/D on `ApprovalCard`.
+- [x] 6. Responsive: dock collapses under 1100 px, sidebar becomes a drawer under 800 px (existing mobile-nav hook).
+- [x] 7. Verify: `cd apps/web && pnpm check && pnpm lint && pnpm test`; desktop `pnpm check && pnpm test`; run the app from the rebuilt dmg stack and look at every screen in a real window.
+- [x] 8. Screenshots: capture the REAL redesigned app (home, active chat, settings modal, right dock) at 1400x870 from the running app; rebuild `docs/media/nexus-tour.gif` from them. No mock-ups drawn by hand.
+- [x] 9. Rewrite root `README.md` around the desktop install (dmg, no Docker, bundled tools, honest limits: macOS 15+, arm64 only, unsigned) with those images. `README.vi.md` stays unchanged unless you ask (it will lag).
+- [x] 10. Review section here, lessons, commit and push on the branch.
+
+## Review (Phase 38)
+- Decisions used: D1 projects = the opened folder (remembered per run in localStorage, `lib/shell.mjs`), D2 dock shows existing data only, D3 mic only where the browser has speech recognition (never in Electron), D4 new `shell.css` layer scoped under `.ag-app`, older CSS untouched.
+- Built: title bar, sidebar (New Conversation, Automations = the Teammates page, Customizations, Projects, Conversations), centred conversation with the Antigravity message box (+, model, read-only permission chip, mic, send, `/` actions, `@` attach), right dock (Review with +/- per file, Files, Terminal, Browser, Canvas; resizable, expandable), settings as a panel, command palette with panels and conversations, shortcuts Mod+J/I/L, Mod+Enter now sends, approval hotkeys A/Y/D.
+- Honest gaps: Terminal is the run's output, not a PTY; Browser is a sandboxed iframe (http/https only, never the app's own origin); the permission chip is read-only because no per-request permission API exists; the old light theme is not restyled; reopening an old run does not replay its terminal output.
+- Verified: web tsc/eslint clean, 62 node tests (7 new for `lib/shell.mjs`), desktop tsc clean; the app driven in headless Chrome over DevTools (dock, overview, browser tab incl. a refused `javascript:` address, slash menu, palette, settings panel, 390 px width without horizontal overflow); packaged dmg rebuilt (verify_runtime 0 problems) and the packaged web serves the new shell.
+- Not verified: the packaged Electron window itself (traffic-light room, drag region) was not opened; speech recognition; Windows/Linux title-bar overlay padding.
+- Unrelated problems met while making screenshots (not caused by this phase, not fixed): with the ShopAIKey gateway the architect's agent models can be unknown to the gateway (404 model not found) or a crew fails with `KeyError: 'Architect_crew_1_3Output'`; a 7-department run can hold both worker threads for 10+ minutes. Demo data came from a real run started with the benchmark adapter (minimal rigor, models pinned).
+- README.md rewritten with the new screenshots and a rebuilt tour GIF; README.vi.md not touched (it still points at the old screenshots, which were kept).

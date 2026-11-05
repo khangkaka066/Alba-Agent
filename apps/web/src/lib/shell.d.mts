@@ -1,0 +1,13 @@
+export const PROJECTS_KEY: string;
+export type DockTab = "review" | "files" | "terminal" | "browser" | "canvas";
+export const DOCK_TABS: DockTab[];
+export type DockState = { open: boolean; tab: DockTab; expanded: boolean };
+export type DockAction = { type: "toggle" } | { type: "close" } | { type: "expand" } | { type: "show"; tab: DockTab };
+export const INITIAL_DOCK: DockState;
+export function dockAfter(state: DockState, action: DockAction): DockState;
+export function loadProjects(storage: Pick<Storage, "getItem">): Record<string, string>;
+export function rememberProject(storage: Pick<Storage, "getItem" | "setItem">, runId: string, name: string): void;
+export function groupConversations<T extends { run: { id: string } }>(tasks: T[], projects: Record<string, string>): { projects: Array<{ name: string; tasks: T[] }>; loose: T[] };
+export function normalizeUrl(input: string): string | null;
+export function reviewTotals(stats: Array<{ added: number; removed: number }>): { added: number; removed: number };
+export function conversationTitle(name: string | null | undefined, fallback: string): string;

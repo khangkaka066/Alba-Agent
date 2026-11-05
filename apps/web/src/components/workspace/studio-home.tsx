@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useLocale } from "@/components/locale-provider";
-import { AttachmentBar, atWordStart } from "./attachments";
-import { ModelPicker } from "@/components/model-picker";
+import { Icon } from "@/components/shell/icons";
+import { PromptBox } from "./prompt-box";
+import { SlashMenu } from "./composer";
 import { getDesktop } from "@/lib/desktop";
 import { dateLocale, statusLabel } from "@/lib/i18n.mjs";
 import { apiRequest } from "@/lib/api";
@@ -19,7 +20,7 @@ export function StudioHome({ onOpenSettings }: { onOpenSettings: () => void }) {
   const { t, locale } = useLocale();
   const workspace = useWorkspace();
   const [text, setText] = useState("");
-  const [picking, setPicking] = useState(false);
+  const [slash, setSlash] = useState(false);
   const [rigor, setRigor] = useState<Rigor>("auto");
   const [recent, setRecent] = useState<Array<RecentRun & { name: string }>>([]);
   const desktop = getDesktop();
@@ -47,21 +48,16 @@ export function StudioHome({ onOpenSettings }: { onOpenSettings: () => void }) {
   return <div className="studio-home">
     <div className="studio-home__inner">
       <h1>{t("home.title")}</h1>
-      <form className="home-composer" onSubmit={(event) => { event.preventDefault(); submit(text); }}>
-        <textarea aria-label={t("home.promptLabel")} rows={3} autoFocus value={text} disabled={workspace.busy}
-          placeholder={t(token ? "home.placeholder" : "home.starting")}
-          onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => { if (event.key === "@" && atWordStart(event.currentTarget)) { event.preventDefault(); setPicking(true); return; } if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); submit(text); } }} />
-        <AttachmentBar open={picking} onOpenChange={setPicking} />
-        <div className="home-composer__row">
-          {desktop && <button type="button" className="chip chip--action" onClick={() => void workspace.openFolder()} title={workspace.folder?.root}>
+      <form className="ag-composer" onSubmit={(event) => { event.preventDefault(); submit(text); }}>
+        {slash && <SlashMenu onClose={() => setSlash(false)} />}
+        <PromptBox value={text} onChange={setText} onSubmit={() => submit(text)} onSlash={() => setSlash(true)} onOpenSettings={onOpenSettings} autoFocus rows={3}
+          label={t("home.promptLabel")} placeholder={t(token ? "prompt.placeholder" : "home.starting")} busy={workspace.busy} canSend={Boolean(text.trim() && token)}>
+          {desktop && <button type="button" className="ag-chip" onClick={() => void workspace.openFolder()} title={workspace.folder?.root}><Icon name="folder" size={14} />
             {workspace.folder ? t("home.folder", { name: workspace.folder.name, count: workspace.folder.files.length }) : t("home.openFolder")}</button>}
-          <ModelPicker compact disabled={workspace.busy} onOpenSettings={onOpenSettings} />
           <label className="scale-select"><span>{t("home.scale")}</span>
             <select aria-label={t("home.scale")} value={rigor} onChange={(event) => setRigor(event.target.value as Rigor)} disabled={workspace.busy}>
               {SCALES.map((option) => <option key={option} value={option}>{t(`home.scale.${option}`)}</option>)}</select></label>
-          <button className="send-button" type="submit" aria-label={t("home.assign")} disabled={!text.trim() || workspace.busy || !token}>{workspace.busy ? "…" : "↑"}</button>
-        </div>
+        </PromptBox>
       </form>
       <div className="starter-chips" aria-label={t("home.hints")}>{STARTERS.map((key) => <button key={key} className="chip chip--starter" disabled={workspace.busy || !token} onClick={() => submit(t(key))}>{t(key)}</button>)}</div>
       {recent.length > 0 && <section className="recent-tasks" aria-label={t("home.recentLabel")}><h2>{t("home.recent")}</h2>

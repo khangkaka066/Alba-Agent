@@ -3,14 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { ApprovalCard } from "@/components/teammates/approval-card";
 import { useLocale } from "@/components/locale-provider";
-import { ModelPicker } from "@/components/model-picker";
 import { apiRequest } from "@/lib/api";
 import { channelList, channelsToConnect } from "@/lib/channels.mjs";
 import { getDesktop } from "@/lib/desktop";
 import { failureDetails, failureFacts } from "@/lib/history.mjs";
 import { classifyArtifact, isFinished, liveActivity, stepLabel } from "@/lib/workspace.mjs";
-import { AttachmentBar, atWordStart } from "./attachments";
 import { FileGlyph } from "./file-glyph";
+import { Icon, type IconName } from "@/components/shell/icons";
+import { useShell } from "@/components/shell/shell-context";
+import { PromptBox } from "./prompt-box";
 import { ProposalCard } from "./plan-proposal";
 import { useWorkspace, type ChatMessage } from "./workspace-context";
 
@@ -72,7 +73,7 @@ function TeamPill({ message }: { message: ChatMessage }) {
         <button className="chip chip--download" aria-label={t("stage.downloadFile", { name: file.filename })} title={t("stage.download")} onClick={() => void workspace.download(file)}>↓</button></span>)}</div>}
       {status === "completed" && workspace.artifacts.length > 0 && <HandoffActions />}
       {status === "failed" && <FailureCard />}
-      {run.approvals.map((approval) => <ApprovalCard key={approval.approval_id} approval={approval} token={token} onResolved={workspace.dismissApproval} />)}
+      {run.approvals.map((approval, index) => <ApprovalCard key={approval.approval_id} approval={approval} token={token} onResolved={workspace.dismissApproval} hotkeys={active && index === 0} />)}
     </>}
   </article>;
 }
@@ -126,19 +127,47 @@ function InsightBanner({ onOpen }: { onOpen: () => void }) {
   </div>;
 }
 
-/** Left pane of the active studio: the conversation, approvals, and a box for follow-ups. */
+/** What "/" offers at the start of an empty message: the same actions the shortcuts and the title bar reach. */
+export function SlashMenu({ onClose }: { onClose: () => void }) {
+  const { t } = useLocale();
+  const workspace = useWorkspace();
+  const shell = useShell();
+  const items: Array<{ icon: IconName; label: string; run: () => void }> = [
+    { icon: "plus", label: t("slash.new"), run: workspace.newTask },
+    { icon: "review", label: t("dock.review"), run: () => shell.showDock("review") },
+    { icon: "file", label: t("dock.files"), run: () => shell.showDock("files") },
+    { icon: "terminal", label: t("dock.terminal"), run: () => shell.showDock("terminal") },
+    { icon: "globe", label: t("dock.browser"), run: () => shell.showDock("browser") },
+    { icon: "canvas", label: t("dock.canvas"), run: () => shell.showDock("canvas") },
+    { icon: "settings", label: t("page.settings"), run: () => shell.navigate("settings") },
+  ];
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => { root.current?.querySelector<HTMLButtonElement>("button")?.focus(); }, []);
+  const move = (event: React.KeyboardEvent) => {
+    const buttons = Array.from(root.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+    const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    if (event.key === "ArrowDown") { event.preventDefault(); buttons[(at + 1) % buttons.length]?.focus(); }
+    else if (event.key === "ArrowUp") { event.preventDefault(); buttons[(at - 1 + buttons.length) % buttons.length]?.focus(); }
+    else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onClose(); window.dispatchEvent(new Event("nexus:focus-composer")); }
+  };
+  return <div className="ag-popover ag-popover--up ag-slash" role="menu" aria-label={t("prompt.actions")} ref={root} onKeyDown={move}>
+    {items.map((item) => <button key={item.label} type="button" role="menuitem" className="ag-menuitem" onClick={() => { onClose(); item.run(); }}><Icon name={item.icon} size={15} /><span>{item.label}</span></button>)}
+  </div>;
+}
+
+function CopyButton({ text }: { text: string }) {
+  const { t } = useLocale();
+  const [done, setDone] = useState(false);
+  return <button type="button" className="ag-iconbtn ag-iconbtn--small" aria-label={t("common.copy")} title={t("common.copy")} onClick={() => { void navigator.clipboard.writeText(text).then(() => { setDone(true); window.setTimeout(() => setDone(false), 1500); }).catch(() => undefined); }}><Icon name={done ? "check" : "copy"} size={13} /></button>;
+}
+
+/** The conversation: messages, approvals and the message box at the bottom. */
 export function Composer({ onNavigate }: { onNavigate: (page: "intelligence" | "integrations" | "settings") => void }) {
   const { t } = useLocale();
   const workspace = useWorkspace();
   const [text, setText] = useState("");
-  const [picking, setPicking] = useState(false);
+  const [slash, setSlash] = useState(false);
   const list = useRef<HTMLDivElement>(null);
-  const field = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    const focus = () => field.current?.focus();
-    window.addEventListener("nexus:focus-composer", focus);
-    return () => window.removeEventListener("nexus:focus-composer", focus);
-  }, []);
   const desktop = getDesktop();
   useEffect(() => { list.current?.scrollTo({ top: list.current.scrollHeight }); }, [workspace.messages.length, workspace.run.thoughts.length, workspace.run.approvals.length]);
   const working = workspace.busy || (workspace.runId !== null && !isFinished(workspace.run.status));
@@ -150,12 +179,10 @@ export function Composer({ onNavigate }: { onNavigate: (page: "intelligence" | "
     void workspace.startTask(prompt, "auto");
   };
 
-  return <div className="composer">
-    <header className="composer-head"><strong>{t("chat.title")}</strong>
-      <button className="button button-quiet composer-new" onClick={workspace.newTask}>{t("chat.newTask")}</button></header>
+  return <div className="composer ag-conversation">
     <div className="composer-stream" ref={list} aria-live="polite">
       {workspace.messages.map((message) => message.role === "user"
-        ? <div className="bubble bubble--user" key={message.id}>{message.text}{message.attached && message.attached.length > 0 && <small className="bubble__attached">📎 {message.attached.join(", ")}</small>}</div>
+        ? <div className="bubble bubble--user ag-bubble" key={message.id}>{message.text}{message.attached && message.attached.length > 0 && <small className="bubble__attached">📎 {message.attached.join(", ")}</small>}<span className="ag-bubble__tools"><CopyButton text={message.text} /></span></div>
         : message.role === "team" ? <TeamPill key={message.id} message={message} />
         : <p className="bubble bubble--note" key={message.id} role="status">{message.text}</p>)}
       {workspace.proposal && <ProposalCard proposal={workspace.proposal.card} disabled={workspace.busy}
@@ -163,15 +190,11 @@ export function Composer({ onNavigate }: { onNavigate: (page: "intelligence" | "
       <ChannelsHint onOpen={() => onNavigate("integrations")} />
       <InsightBanner onOpen={() => onNavigate("intelligence")} />
     </div>
-    <form className="composer-input" onSubmit={(event) => { event.preventDefault(); submit(); }}>
+    <form className="ag-composer" onSubmit={(event) => { event.preventDefault(); submit(); }}>
       {desktop && workspace.folder && <span className="composer-folder" title={workspace.folder.root}>{t("chat.workingIn", { name: workspace.folder.name, count: workspace.folder.files.length })}</span>}
-      <textarea ref={field} aria-label={t("chat.followUp")} rows={2} value={text} disabled={workspace.busy}
-        placeholder={t(working ? "chat.busyPlaceholder" : "chat.followUpPlaceholder")}
-        onChange={(event) => setText(event.target.value)}
-        onKeyDown={(event) => { if (event.key === "@" && atWordStart(event.currentTarget)) { event.preventDefault(); setPicking(true); return; } if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); } }} />
-      <AttachmentBar open={picking} onOpenChange={setPicking} />
-      <div className="composer-actions"><ModelPicker compact disabled={workspace.busy} onOpenSettings={() => onNavigate("settings")} /><span>{t("chat.keys")}</span>
-        <button className="send-button" type="submit" aria-label={t("common.send")} disabled={!text.trim() || workspace.busy || !workspace.token}>↑</button></div>
+      {slash && <SlashMenu onClose={() => setSlash(false)} />}
+      <PromptBox value={text} onChange={setText} onSubmit={submit} onSlash={() => setSlash(true)} onOpenSettings={() => onNavigate("settings")} label={t("chat.followUp")}
+        placeholder={t(working ? "chat.busyPlaceholder" : "prompt.placeholder")} busy={workspace.busy} canSend={Boolean(text.trim() && workspace.token)} />
     </form>
   </div>;
 }

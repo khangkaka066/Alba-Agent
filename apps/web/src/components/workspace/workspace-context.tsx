@@ -5,6 +5,7 @@ import { useLocale } from "@/components/locale-provider";
 import { useModels } from "@/components/model-context";
 import { apiRequest, readError, type JsonRecord } from "@/lib/api";
 import { getDesktop, type FolderInfo } from "@/lib/desktop";
+import { rememberProject } from "@/lib/shell.mjs";
 import { readSse } from "@/lib/sse";
 import type { PlanProposal, ProposalAnswers } from "./plan-proposal";
 import {
@@ -111,6 +112,8 @@ export function WorkspaceProvider({ token, children }: { token: string; children
   const [view, setView] = useState<View>("workbench");
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [folder, setFolder] = useState<FolderInfo | null>(null);
+  const folderName = useRef<string | null>(null);
+  folderName.current = folder?.name ?? null;
   const [busy, setBusy] = useState(false);
   const [proposal, setProposal] = useState<PendingProposal | null>(null);
   const folderMap = useRef<Record<string, string>>({});
@@ -184,6 +187,7 @@ export function WorkspaceProvider({ token, children }: { token: string; children
     });
     if (!response.run_id) throw new Error(translate.current("workspace.notRun"));
     attach(String(response.workflow_spec.id), response.run_id, response.workflow_spec);
+    if (folderName.current) rememberProject(window.localStorage, response.run_id, folderName.current); // lets the sidebar group this task under its project
     setFailure(null);
     setAttachments([]); chosenByHand.current = false; // the files went with this task; the next follow-up starts from its results
     if (response.conversation_id) setConversationId(response.conversation_id);

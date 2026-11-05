@@ -80,11 +80,22 @@ def _limit_file_size() -> None:
     resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_FILE_BYTES, MAX_FILE_BYTES))
 
 
-def _environment(scratch_directory: Path, interpreter_directory: Path) -> dict[str, str]:
+SYSTEM_PATH = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
+TOOLS_PATH_VARIABLE = "NEXUS_SANDBOX_TOOLS_PATH"
+
+
+def tool_directories_from_environment() -> tuple[Path, ...]:
+    """Folders of tools that ship with the app (Node, git, ffmpeg...), set by the app that starts the API. Relative entries are ignored: a
+    command's PATH must not depend on where the API happens to be running."""
+    entries = (entry for entry in os.environ.get(TOOLS_PATH_VARIABLE, "").split(os.pathsep) if entry)
+    return tuple(path for path in map(Path, entries) if path.is_absolute())
+
+
+def _environment(scratch_directory: Path, interpreter_directory: Path, tool_directories: tuple[Path, ...] = ()) -> dict[str, str]:
     """Only what a command needs. The host environment holds API keys and tokens, so none of it is passed on."""
     scratch_directory.mkdir(parents=True, exist_ok=True)
     return {
-        "PATH": f"{interpreter_directory}:/usr/bin:/bin:/usr/sbin:/sbin",
+        "PATH": os.pathsep.join([str(interpreter_directory), *map(str, tool_directories), *SYSTEM_PATH]),
         "HOME": str(scratch_directory), "TMPDIR": str(scratch_directory),
         "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1",
     }
@@ -97,13 +108,14 @@ class LocalSandboxProvider(DockerSandboxProvider):
 
     def __init__(
         self, host_root: Path, policy: ExecutionPolicy | None = None,
-        interpreter: Path | None = None, home: Path | None = None,
+        interpreter: Path | None = None, home: Path | None = None, tools: tuple[Path, ...] | None = None,
     ) -> None:
         if not seatbelt_available():
             raise RuntimeError("The local sandbox needs macOS sandbox-exec; use the docker provider on this machine")
         super().__init__(host_root)
         self._policy = policy or ExecutionPolicy()
         self._interpreter_directory = (interpreter or Path(sys.executable)).resolve().parent
+        self._tool_directories = tool_directories_from_environment() if tools is None else tools
         self._home = (home or Path.home()).resolve()
 
     def _scratch(self, handle: ComputerHandle) -> Path:
@@ -141,7 +153,7 @@ class LocalSandboxProvider(DockerSandboxProvider):
         profile = seatbelt_profile(run_directory, scratch, self._root, self._home, network=verdict.needs_network and verdict.decision is Decision.ASK)
         process = await asyncio.create_subprocess_exec(
             SANDBOX_EXEC, "-p", profile, "/bin/sh", "-c", command,
-            cwd=run_directory, env=_environment(scratch, self._interpreter_directory),
+            cwd=run_directory, env=_environment(scratch, self._interpreter_directory, self._tool_directories),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True, preexec_fn=_limit_file_size,
         )
         chunks: dict[str, list[str]] = {"stdout": [], "stderr": []}

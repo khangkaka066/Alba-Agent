@@ -6,7 +6,7 @@ import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, connect } from "node:net";
-import { join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 
 export interface Secrets {
   postgresPassword: string;
@@ -116,7 +116,13 @@ const tcpOpen = async (port: number): Promise<boolean> => portInUse(port);
 
 export interface Layout {
   python: string; postgresBin: (name: string) => string; redis: string; qdrant: string; backend: string; web: string;
+  tools: string[]; // folders of programs shipped for agent commands (node, git, ffmpeg...); only the ones this build contains
   apiPort: number; webPort: number;
+}
+
+// The order is the order on the agent's PATH. A folder that is not there (a build without ffmpeg) is left out rather than put on the PATH.
+export function bundledToolDirectories(runtime: string, exists: (path: string) => boolean = existsSync): string[] {
+  return [join(runtime, "node", "bin"), join(runtime, "git", "bin"), join(runtime, "tools", "bin")].filter(exists);
 }
 
 export function layoutFor(runtime: string): Layout {
@@ -128,6 +134,7 @@ export function layoutFor(runtime: string): Layout {
     qdrant: join(runtime, "qdrant", "qdrant"),
     backend: join(runtime, "backend"),
     web: join(runtime, "web", "apps", "web", "server.js"),
+    tools: bundledToolDirectories(runtime),
     apiPort: manifest.pins.ports.api, webPort: manifest.pins.ports.web,
   };
 }
@@ -185,11 +192,11 @@ export class Stack {
       NEXUS_REDIS_HOST: "127.0.0.1", NEXUS_REDIS_PORT: String(ports.redis), NEXUS_REDIS_PASSWORD: secrets.redisPassword,
       NEXUS_QDRANT_URL: `http://127.0.0.1:${ports.qdrant}`,
       NEXUS_SECRET_KEY: secrets.secretKey, NEXUS_API_KEY_PEPPER: secrets.apiKeyPepper, NEXUS_CREDENTIAL_ENCRYPTION_KEY_BASE64: secrets.encryptionKeyBase64,
-      NEXUS_SANDBOX_URL: `${this.apiUrl}/api/v1/sandboxes`, NEXUS_SANDBOX_PROVIDER: "local",
+      NEXUS_SANDBOX_URL: `${this.apiUrl}/api/v1/sandboxes`, NEXUS_SANDBOX_PROVIDER: "local", NEXUS_SANDBOX_TOOLS_PATH: layout.tools.join(delimiter),
       NEXUS_COMPUTER_ROOT: this.dir("computers"), NEXUS_ARTIFACTS_DIR: this.dir("artifacts"), NEXUS_SUBSCRIPTIONS_DIR: this.dir("subscriptions"),
       NEXUS_LOCAL_MODE: "true", NEXUS_RELOAD: "false",
       NEXUS_PLUGIN_PATCHES: join(layout.backend, "packages", "agent-runtime", "nexus_plugins", "local-mode.yaml"),
-      PYTHONPATH: [join(layout.backend, "apps", "api"), ...packages.map((name) => join(layout.backend, "packages", name))].join(":"),
+      PYTHONPATH: [join(layout.backend, "apps", "api"), ...packages.map((name) => join(layout.backend, "packages", name))].join(delimiter),
       PYTHONDONTWRITEBYTECODE: "1", PYTHONNOUSERSITE: "1", PYTHONUNBUFFERED: "1",
       OTEL_SDK_DISABLED: "true", CREWAI_DISABLE_TELEMETRY: "true", ANONYMIZED_TELEMETRY: "false", DO_NOT_TRACK: "true", LITELLM_TELEMETRY_DISABLED: "true", LITELLM_OFFLINE_MODE: "true",
     };

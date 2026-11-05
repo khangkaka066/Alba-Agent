@@ -470,3 +470,37 @@ Do NOT replace Postgres/Redis/Qdrant with embedded stores (tenant isolation by R
 - Not signed or notarized: first launch needs right-click, Open.
 - No in-app restart when one service dies while the app is running (the page says to reopen the app); logs are in the app-data `logs` folder.
 - Local Ollama endpoints are only accepted through the Docker host bridge name in the providers router, so a native Ollama is not usable from this app yet.
+
+---
+# Phase 37 — The bundle must run on any machine (branch `feature/local-execution-policy`)
+Goal: what ships in the dmg (and later the exe) must not depend on anything of the machine that built it, and must contain the tools agent commands expect. Evidence before claims: an audit script, not a guess.
+
+## Corrections to what I said earlier
+- I said the Docker sandbox image had Node. It does NOT: `packages/computer-sandbox/Dockerfile` is `python:3.11-slim` + ffmpeg + chromium + fonts + pandas/matplotlib/openpyxl/pillow/pytest. No Node, no git. So the parity gap is ffmpeg + a headless browser (+ Pillow 13 vs 11). Node and git are additions that make JS/git tasks work on a clean machine.
+- Found by looking: pip console scripts in the bundled Python (`pytest`, `uvicorn`, `celery`, `alembic`) start with `#!/Users/<builder>/.../python3`. On any other machine or install path they fail with "bad interpreter".
+- On this Mac the agent's PATH (`<python>:/usr/bin:/bin:/usr/sbin:/sbin`) hides `/opt/homebrew/bin`, so ffmpeg/node on the builder are invisible to agent commands anyway; a clean Mac has none of them.
+
+## Decisions
+- Agent PATH is built from `NEXUS_SANDBOX_TOOLS_PATH` (os.pathsep list, set by the app to the bundled tool folders), then the system folders. Platform-neutral code (no hard-coded ":" or "/usr/bin" literals outside one constant) so the Windows build reuses it.
+- Bundle: Node 22 LTS (MIT, same major as apps/web Dockerfile), git built from source with RUNTIME_PREFIX (GPLv2: source offer in THIRD_PARTY_NOTICES), ffmpeg static build if a pinned, checkable source exists (GPL: same notice). No Chromium bundle (300+ MB): a `headless-browser` wrapper finds an installed Chrome/Edge/Chromium (every Windows has Edge) and says plainly when there is none.
+- Portability gate = `scripts/package/verify_runtime.py <platform>`: every Mach-O's architecture, minimum macOS version, and dependencies (only /usr/lib, /System, or inside the runtime); no absolute build-machine path in scripts; then a smoke run from a COPY in a folder with a space, with PATH reduced to system folders, no Homebrew visible.
+- Intel Macs: same recipe, `mac-x64`, tested under Rosetta (running on this Mac).
+- Windows: not built (no machine). Make the code ready (pathsep/exe suffix, pins table) and say what is still missing.
+
+## Steps
+- [x] 1. Backend: tool directories in the local provider's PATH (`NEXUS_SANDBOX_TOOLS_PATH`), test.
+- [x] 2. build_runtime.py: relocatable shebangs, `node`, `git`, `ffmpeg`, `headless-browser` steps; pins in runtime.json.
+- [x] 3. stack.ts: pass the tool folders; `delimiter` instead of ":"; test.
+- [x] 4. verify_runtime.py + run it on mac-arm64, fix what it finds.
+- [x] 5. Smoke from a relocated copy with a minimal PATH: python/pytest/node/npm/git/ffmpeg.
+- [x] 6. Rebuild arm64 dmg; run the agent gate again (stock, scheduler; add one JS task to prove Node works) with Docker stopped.
+- [~] 7. mac-x64: DROPPED by the user ("only build arm"). Built anyway: audit 0 problems and Rosetta smoke 14/14 passed on the build folder; the dmg was built but its installed copy was never verified or booted.
+- [x] 8. THIRD_PARTY_NOTICES (git, ffmpeg source offer, Node), README, review.
+
+## Review
+- Shipped (arm64 only): relocatable console scripts, bundled Node 22, git 2.56 (GPLv2), ffmpeg 9.0.2 (LGPL), `headless-browser` wrapper, agent PATH from `NEXUS_SANDBOX_TOOLS_PATH`, macOS floor 15.0 declared once, `verify_runtime.py` gate. dmg 621 MB.
+- Evidence: verify_runtime on the build folder and on the runtime copied out of the final dmg: 0 problems, smoke passed. 9 sandbox/bundled-tool tests pass. Earlier this phase: backend 352 passed, desktop 13 tests, mypy at baseline.
+- Agent run from the dmg-installed stack with Docker off: the agent ran the bundled Node (v22.23.4, sum 231, correct). The run itself never reached "verified": the verifier demands >= 3 self-written Python tests, so non-Python tasks loop until the wall-clock limit. OPEN: make verification language-aware.
+- Gate on the new dmg (3 passes): stock 3/3, scheduler 3/3, mdlite 0/3 (previous gate 1/3, flaky task). Wall times were 26-165 s for the same 2 attempts against ~35 s before; sandbox time per run 0.2-0.4 s, so the wait is the model gateway. Not compared under identical conditions; treat as unexplained, not as proven noise.
+- Found while building Intel (kept, shared by both builds): `arch -x86_64 make` fails (CLT has no Intel slice) so the compiler gets `-arch`; git's Makefile overrides `CC` so it is passed on the make command line; sharp is retargeted from the npm registry with sha512 check; the verifier runs the Intel smoke through the runtime's own Python.
+- Still open: Windows exe, signing/notarization, lowering the macOS floor, Intel installed-copy verification (not needed now).

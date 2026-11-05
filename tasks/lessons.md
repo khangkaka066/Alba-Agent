@@ -44,3 +44,12 @@ The Docker provider hid this with a separate /tmp tmpfs. Anything that replaces 
 - When a test loop mixes `&&` and `||`, `A && B || break` breaks when A is false; write the wait condition as a function and test it once by hand.
 - A one-off slow batch (280 s against 35 s) right after configuring a provider was not reproduced in 12 later runs; record it as unexplained instead of calling it noise or a regression.
 
+
+## "Runs on any machine" is a property you test, not assume (Phase 37)
+- Never state what a base image contains from memory; read its Dockerfile. I said the sandbox image had Node; it has no Node and no git. A wrong parity claim sends the packaging work in the wrong direction.
+- pip picks wheels by the BUILDER's OS version: building on macOS 27 produced a bundle that needed macOS 15 without saying so. Pin the target OS in one declared place (installer's minimum version), make the build answer as that OS, and have an audit compare the highest version actually needed against the claim.
+- Console scripts written by pip carry the builder's absolute interpreter path. Rewrite them to find the interpreter next to the script, and prove it by running from a copy in a folder whose name has a space.
+- Test the package with a stripped PATH (system folders + bundled folders). A tool that works only because Homebrew is on PATH is not packaged.
+- A transient provider test failure (ERROR with 0 models) right after startup passed on retry; retry once before debugging, but record it.
+- A non-Python task through the Python-oriented verifier (needs >= 3 self-written Python tests) never reaches "verified" and the coder/reviewer loop runs until the wall-clock limit. Prove a bundled tool by reading what the agent produced in its computer directory, not by waiting for the run to finish.
+- macOS has no `timeout` command and BSD `sed -i` needs an empty suffix argument (`sed -i ''`).

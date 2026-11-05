@@ -4,7 +4,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { allowedUserEnv, freePort, generateSecrets, loadOrCreateSecrets, parseUserEnv, portInUse } from "./stack";
+import { allowedUserEnv, bundledToolDirectories, freePort, generateSecrets, loadOrCreateSecrets, parseUserEnv, portInUse } from "./stack";
 
 test("secrets are created once, kept private, and never regenerated over existing data", () => {
   const data = join(mkdtempSync(join(tmpdir(), "nexus-stack-")), "data");
@@ -45,4 +45,14 @@ test("a free port is free until something listens on it", async () => {
 test("a line in the user's file cannot repoint the app's own database, queue or keys", () => {
   const user = parseUserEnv(["NEXUS_DB_HOST=evil", "NEXUS_REDIS_PASSWORD=x", "NEXUS_SECRET_KEY=x", "NEXUS_SANDBOX_PROVIDER=docker", "NEXUS_LOCAL_MODE=false", "NEXUS_PLUGIN_PATCHES=/tmp/x.yaml", "NEXUS_AUTOGEN_API_KEY=ok", "NEXUS_MODEL_RATES_JSON={}"].join("\n"));
   assert.deepEqual(allowedUserEnv(user), { NEXUS_AUTOGEN_API_KEY: "ok", NEXUS_MODEL_RATES_JSON: "{}" });
+});
+
+test("only the tool folders this build contains go on the agent's PATH, in a fixed order", () => {
+  const present = new Set([join("/r", "git", "bin"), join("/r", "node", "bin")]);
+  assert.deepEqual(bundledToolDirectories("/r", (path) => present.has(path)), [join("/r", "node", "bin"), join("/r", "git", "bin")]);
+  assert.deepEqual(bundledToolDirectories("/r", () => false), []);
+});
+
+test("the user's file cannot replace the agent's tool folders", () => {
+  assert.deepEqual(allowedUserEnv(parseUserEnv("NEXUS_SANDBOX_TOOLS_PATH=/evil/bin")), {});
 });

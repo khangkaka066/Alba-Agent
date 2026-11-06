@@ -65,3 +65,15 @@ def test_models_of_providers_that_are_not_connected_are_not_offered() -> None:
 def test_a_provider_the_server_holds_a_key_for_keeps_its_price_table_models() -> None:
     rates = {("openai", "gpt-4.1-mini"): 1, ("anthropic", "claude-sonnet-4-6"): 1}
     assert reachable_model_names(rates, [], {"anthropic"}) == {"anthropic/claude-sonnet-4-6"}
+
+
+def test_the_strong_model_comes_from_trusted_models_not_from_a_keyword_match_in_the_whole_list() -> None:
+    listed = ("openai/gpt-5-codex-high", "openai/gpt-6-luna", "openai/gpt-4.1-mini")
+    context = _context(available_models=listed, trusted_models=("openai/gpt-6-luna",))
+    assert context.frontier_model("openai/gpt-6-luna") == "openai/gpt-6-luna", "gpt-5-codex-high matches the 'gpt-5' hint but answers 404"
+
+
+def test_a_trusted_model_that_matches_a_hint_is_preferred_and_without_trust_the_list_is_searched() -> None:
+    trusted = _context(available_models=("openai/a", "openai/gpt-5-x"), trusted_models=("openai/mine", "openai/gpt-5-y"))
+    assert trusted.frontier_model("openai/mine") == "openai/gpt-5-y"
+    assert _context(available_models=("openai/a", "openai/gpt-5-x")).frontier_model("openai/a") == "openai/gpt-5-x"

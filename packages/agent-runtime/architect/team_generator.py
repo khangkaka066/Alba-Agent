@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from architect.adaptive import Assessment, assess, build_solo_workflow, is_small_script_request, strong_model
+from architect.adaptive import Assessment, assess, build_solo_workflow, is_small_script_request
 from architect.units import MAX_UNITS, MIN_UNITS, UnitsDraft, build_units_workflow
 from hooks.claims import deliverables_in
 from nexus_core_schema_templates.studios import STUDIO_BLUEPRINTS, STUDIO_BY_ID, StudioBlueprint, build_studio_graph, detect_studio
@@ -73,6 +73,12 @@ class ArchitectWorkspaceContext(BaseModel):
     def fallback_model(self) -> str:
         """The model used when none is requested: the user's own default, never just the first name in a long list."""
         return (self.trusted_models or self.available_models or ("openai/gpt-4.1-mini",))[0]
+
+    def frontier_model(self, fallback: str) -> str:
+        """A frontier-class model for the hard parts (repair attempt, directors): the first one among the models known to work,
+        else `fallback`. Searching the whole list by keyword also finds names the provider lists but cannot serve."""
+        pool = self.trusted_models or self.available_models
+        return next((name for name in pool if any(hint in name for hint in _FRONTIER_MODEL_HINTS) and "mini" not in name), fallback)
 
     @property
     def consensus_pool(self) -> tuple[str, ...]:
@@ -317,7 +323,7 @@ class MetaArchitectService:
             "If the request cannot be split like this, still return the best split you can. Return JSON only.\n" + json.dumps({"requirement": prompt}, ensure_ascii=False),
             UnitsDraft,
         )
-        strong = strong_model(models, model, _FRONTIER_MODEL_HINTS)
+        strong = context.frontier_model(model)
         spec = self._validator(build_units_workflow(
             draft, workflow_id=workflow_id, tenant_id=context.tenant_id, workspace_id=context.workspace_id, version=version,
             unit_model=model, integrate_model=strong,
@@ -347,7 +353,7 @@ class MetaArchitectService:
     ) -> tuple[WorkflowSpec, dict[str, Any]]:
         models = context.available_models
         model = preferred_model if preferred_model in models else context.fallback_model
-        repair_model = strong_model(models, model, _FRONTIER_MODEL_HINTS)
+        repair_model = context.frontier_model(model)
         title = " ".join(prompt.split())[:70]
         spec = self._validator(build_solo_workflow(
             workflow_id=workflow_id, tenant_id=context.tenant_id, workspace_id=context.workspace_id, version=version,
@@ -379,9 +385,7 @@ class MetaArchitectService:
         studio_rigor: Literal["standard", "full_studio"] = "full_studio" if rigor == "full_studio" else "standard"
         models = context.available_models
         default_model = preferred_model if preferred_model in models else context.fallback_model
-        director_model = preferred_model if preferred_model in models else next(
-            (name for name in models if any(hint in name for hint in _FRONTIER_MODEL_HINTS) and "mini" not in name), default_model,
-        )
+        director_model = preferred_model if preferred_model in models else context.frontier_model(default_model)
         probe = build_studio_graph(blueprint, studio_rigor, model=default_model, director_model=director_model)
         department_keys = [item["id"] for item in probe.departments if item["id"] != "direction"]
         draft = await self._draft(

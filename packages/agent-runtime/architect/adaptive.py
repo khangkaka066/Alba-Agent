@@ -91,11 +91,6 @@ def assess(prompt: str, input_file_names: Sequence[str] = ()) -> Assessment:
     return Assessment("team", "the request does not clearly ask for code, so a planned team is used")
 
 
-def strong_model(available: Sequence[str], fallback: str, hints: Sequence[str]) -> str:
-    """The first available frontier-class model for the repair attempt, or the fallback when none is listed."""
-    return next((name for name in available if any(hint in name for hint in hints) and "mini" not in name), fallback)
-
-
 def build_solo_workflow(
     *, workflow_id: UUID, tenant_id: UUID, workspace_id: UUID, version: int, name: str, model: str, repair_model: str,
 ) -> WorkflowSpec:

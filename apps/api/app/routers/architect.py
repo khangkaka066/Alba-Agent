@@ -157,6 +157,15 @@ def _approved_chat_models(model_names: set[str]) -> tuple[str, ...]:
     return tuple(sorted(approved))
 
 
+def reachable_model_names(rates: Any, credentials: Sequence[Any], platform_providers: set[str]) -> set[str]:
+    """Only models the workspace can call: what its connected providers list, plus the price-table models of providers the
+    server itself holds a key for. The price table alone names models of every provider, connected or not."""
+    names = {f"{provider}/{model}" for provider, model in rates if provider in platform_providers}
+    for credential in credentials:
+        names.update(f"{credential.provider}/{model}" for model in credential.available_models)
+    return names
+
+
 def trusted_default_models(credentials: Sequence[Any], model_names: set[str]) -> tuple[str, ...]:
     """The models the user set as defaults on connected providers, default provider first, orchestrator before the rest.
 
@@ -226,15 +235,11 @@ async def _workspace_context(request: Request, context: TenantContext, preferred
             ),
             impact_score=min(1.0, impact),
         ))
-    model_names = {
-        f"{provider}/{model}" for provider, model in services.model_rates
-    }
-    for credential in credentials:
-        for model in credential.available_models:
-            model_names.add(f"{credential.provider}/{model}")
+    platform = {provider for variable, provider in PLATFORM_PROVIDERS if os.environ.get(variable)}
+    model_names = reachable_model_names(services.model_rates, credentials, platform)
     # A model id typed by the user need not be in any list: it is accepted when a provider that can serve it is connected.
     if preferred_model and preferred_model not in model_names:
-        reachable = {credential.provider for credential in credentials} | {provider for variable, provider in PLATFORM_PROVIDERS if os.environ.get(variable)}
+        reachable = {credential.provider for credential in credentials} | platform
         if preferred_model.partition("/")[0] in reachable:
             model_names.add(preferred_model)
     tool_map = services.workspace_tools.get((context.tenant_id, context.workspace_id), {})

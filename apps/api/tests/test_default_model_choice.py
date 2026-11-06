@@ -9,7 +9,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from uuid import uuid4
 
-from app.routers.architect import trusted_default_models
+from app.routers.architect import reachable_model_names, trusted_default_models
 from architect.team_generator import ArchitectWorkspaceContext
 
 LISTED = {"openai/MiniMax-M2.5", "openai/claude-3-5-haiku-20241022", "openai/gpt-6-luna", "openai/gpt-4.1-mini"}
@@ -54,3 +54,14 @@ def test_without_defaults_the_old_behaviour_is_kept() -> None:
 def test_consensus_pool_uses_trusted_models_only() -> None:
     context = _context(available_models=tuple(sorted(LISTED)), trusted_models=("openai/gpt-6-luna", "openai/gpt-4.1-mini"))
     assert context.consensus_pool[:2] == ("openai/gpt-6-luna", "openai/gpt-4.1-mini")
+
+
+def test_models_of_providers_that_are_not_connected_are_not_offered() -> None:
+    rates = {("openai", "gpt-4.1-mini"): 1, ("anthropic", "claude-sonnet-4-6"): 1}
+    gateway = SimpleNamespace(provider="openai", available_models=["gpt-6-luna"])
+    assert reachable_model_names(rates, [gateway], set()) == {"openai/gpt-6-luna"}
+
+
+def test_a_provider_the_server_holds_a_key_for_keeps_its_price_table_models() -> None:
+    rates = {("openai", "gpt-4.1-mini"): 1, ("anthropic", "claude-sonnet-4-6"): 1}
+    assert reachable_model_names(rates, [], {"anthropic"}) == {"anthropic/claude-sonnet-4-6"}

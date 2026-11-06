@@ -122,5 +122,5 @@ def test_third_party_provider_is_tested_with_a_model_it_actually_lists(monkeypat
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: real(transport=httpx.MockTransport(handler), **kwargs))  # providers uses the same module object
     models, _ = asyncio.run(providers._ping("shopaikey", "https://gateway.example/v1", "key", None))
     assert models == ["vendor-embed-1", "vendor-chat-1", "vendor-chat-2"]
-    assert asked == ["vendor-chat-1"], "the built-in default model is not requested, and embeddings are skipped"
+    assert set(asked) == {"vendor-chat-1", "vendor-chat-2"}, "only models the provider lists are asked (the built-in default is not), and embeddings are skipped"
     assert PRESETS_BY_ID["shopaikey"].name == "Nexus Harness"

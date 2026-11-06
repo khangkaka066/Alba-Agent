@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import json
 import os
@@ -377,6 +378,63 @@ async def set_default_models(values: dict[str, str], request: Request, context: 
     return values
 
 
+# First pass is wide, later passes narrow: a gateway answers a burst with 429/503/timeouts, which says nothing about the model.
+PROBE_PASSES = (24, 8, 4)
+PROBE_BUDGET_SECONDS = 15.0
+PROBE_TIMEOUT_SECONDS = 8.0
+# Names of models that are not chat models; the chat endpoint says 404 for them, which says nothing about the account.
+NOT_CHAT_PROBED = ("video", "imagine", "sora")
+# A model the account is refused for good: it does not exist there, or the account has no access to it.
+# Anything else (429, 5xx, a timeout, a 400 about parameters) does not prove the model is unusable.
+REFUSED_FOR_GOOD = frozenset({403, 404})
+THROTTLED = frozenset({429, 500, 502, 503, 504})
+
+
+async def usable_models(client: httpx.AsyncClient, base_url: str, headers: dict[str, str], models: list[str],
+                        deadline: float = PROBE_BUDGET_SECONDS, pause: float = 1.0) -> list[str]:
+    """The listed models this key can really call. A gateway advertises every model it knows, some of which answer 404 or 403
+    for this account; each chat model is asked for one token. A model is dropped only when it is refused twice: under a burst a
+    gateway also answers 404 for models that work. Throttled or failed answers are asked again in a narrower pass. Models still
+    undecided when the time budget ends stay listed, non-chat models are kept as listed, and the order is kept."""
+    loop = asyncio.get_running_loop()
+    stop = loop.time() + deadline
+    refusals: dict[str, int] = {}
+    pending = [model for model in models if _is_chat_model(model) and not any(part in model.lower() for part in NOT_CHAT_PROBED)]
+
+    async def ask(model: str, gate: asyncio.Semaphore) -> str:
+        """"refused", "usable" or "unknown"."""
+        async with gate:
+            if loop.time() >= stop:
+                return "unknown"
+            try:
+                response = await client.post(f"{base_url}/chat/completions", headers=headers, timeout=PROBE_TIMEOUT_SECONDS,
+                                             json={"model": model, "messages": [{"role": "user", "content": "OK"}], "max_tokens": 1})
+            except httpx.HTTPError:
+                return "unknown"
+        if response.status_code in REFUSED_FOR_GOOD:
+            return "refused"
+        return "unknown" if response.status_code in THROTTLED else "usable"
+
+    for width in PROBE_PASSES:
+        if not pending or loop.time() >= stop:
+            break
+        gate = asyncio.Semaphore(width)
+        verdicts = await asyncio.gather(*(ask(model, gate) for model in pending))
+        undecided: list[str] = []
+        for model, verdict in zip(pending, verdicts):
+            if verdict == "refused":
+                refusals[model] = refusals.get(model, 0) + 1
+            elif verdict == "usable":
+                refusals.pop(model, None)
+                continue
+            if refusals.get(model, 0) < 2:
+                undecided.append(model)
+        pending = undecided
+        if pending and pause:
+            await asyncio.sleep(pause)
+    return [model for model in models if refusals.get(model, 0) < 2]
+
+
 async def _ping(preset_id: str, base_url: str, api_key: str, model: str | None) -> tuple[list[str], dict[str, object] | None]:
     preset = PRESETS_BY_ID[preset_id]
     discovered: list[str] = []
@@ -398,6 +456,8 @@ async def _ping(preset_id: str, base_url: str, api_key: str, model: str | None) 
             listing = await client.get(f"{base_url}/models", headers=headers)
             if listing.is_success:
                 discovered = [str(item["id"]) for item in listing.json().get("data", []) if isinstance(item, dict) and isinstance(item.get("id"), str)]
+            if discovered:
+                discovered = await usable_models(client, base_url, headers, discovered) or discovered
             if discovered and model_name not in discovered:
                 # A third-party provider rarely serves our built-in default model; test with one it actually lists.
                 model_name = next((item for item in discovered if _is_chat_model(item)), discovered[0])

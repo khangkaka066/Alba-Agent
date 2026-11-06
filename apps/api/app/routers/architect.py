@@ -22,7 +22,7 @@ from app.models.scope import scoped_session
 from app.handoff import Source, copy_sources, describe_for_architect, resolve_sources
 from app.routers.common import get_services
 from app.routers.conversations import append_message, start_conversation
-from app.routers.providers import PLATFORM_PROVIDERS
+from app.routers.providers import PLATFORM_PROVIDERS, suspect_models
 from app.routers.workflows import _check_scope, _sync_learning_policies
 from bots.runner import cron_matches
 from flows.compiler import FlowCompiler
@@ -159,10 +159,12 @@ def _approved_chat_models(model_names: set[str]) -> tuple[str, ...]:
 
 def reachable_model_names(rates: Any, credentials: Sequence[Any], platform_providers: set[str]) -> set[str]:
     """Only models the workspace can call: what its connected providers list, plus the price-table models of providers the
-    server itself holds a key for. The price table alone names models of every provider, connected or not."""
+    server itself holds a key for. The price table alone names models of every provider, connected or not. A model the last
+    connection test saw refused is left out here (the architect chooses by itself); the user can still pick it by hand."""
     names = {f"{provider}/{model}" for provider, model in rates if provider in platform_providers}
     for credential in credentials:
-        names.update(f"{credential.provider}/{model}" for model in credential.available_models)
+        doubtful = suspect_models(getattr(credential, "settings", None))
+        names.update(f"{credential.provider}/{model}" for model in credential.available_models if model not in doubtful)
     return names
 
 

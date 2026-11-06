@@ -7,6 +7,8 @@ import ipaddress
 import json
 import os
 import socket
+from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Annotated, Any, cast
 from urllib.parse import urlsplit
@@ -222,21 +224,22 @@ async def chat_models(request: Request, context: READ) -> dict[str, object]:
     entries: dict[str, dict[str, object]] = {}
     default: str | None = None
 
-    def add(provider: str, model: str, group: str, source: str, local: bool) -> None:
+    def add(provider: str, model: str, group: str, source: str, local: bool, unverified: bool = False) -> None:
         identifier = f"{provider}/{model}"
         if identifier not in entries and _approved_chat_models({identifier}):
-            entries[identifier] = {"id": identifier, "model": model, "provider": provider, "group": group, "source": source, "local": local}
+            entries[identifier] = {"id": identifier, "model": model, "provider": provider, "group": group, "source": source, "local": local, "unverified": unverified}
 
     for row in rows:
         preset = PRESETS_BY_ID.get(row.preset_id or row.name)
         if preset is None or preset.category not in MODEL_CATEGORIES:
             continue
-        chosen = row.default_models.get("orchestrator") or next((item for item in row.available_models if _is_chat_model(item)), "")
+        doubtful = suspect_models(row.settings)
+        chosen = row.default_models.get("orchestrator") or next((item for item in row.available_models if _is_chat_model(item) and item not in doubtful), "")
         if chosen and default is None:
             default = f"{row.provider}/{chosen}"
         for model in row.available_models:
             if _is_chat_model(model):
-                add(row.provider, model, preset.name, "workspace", preset.local)
+                add(row.provider, model, preset.name, "workspace", preset.local, model in doubtful)
     if budget is not None and budget.remaining_usd > 0:
         for variable, provider in PLATFORM_PROVIDERS:
             if not os.environ.get(variable):
@@ -378,6 +381,35 @@ async def set_default_models(values: dict[str, str], request: Request, context: 
     return values
 
 
+@dataclass(frozen=True)
+class ModelDecision:
+    available: list[str]
+    suspects: list[str]
+    unlisted: list[str]
+
+
+def pinned_models(settings: Mapping[str, Any] | None) -> list[str]:
+    """The model ids the user declared for this connection (`custom_model_ids`), in order, without repeats."""
+    raw = str((settings or {}).get("custom_model_ids", ""))
+    return list(dict.fromkeys(item.strip() for item in raw.split(",") if item.strip()))
+
+
+def suspect_models(settings: Mapping[str, Any] | None) -> set[str]:
+    """Models the last connection test saw refused twice; they are flagged in the picker and never chosen automatically."""
+    return {item for item in str((settings or {}).get("suspect_models", "")).split(",") if item}
+
+
+def decide_models(pinned: list[str], discovered: list[str], refused: set[str]) -> ModelDecision:
+    """What a connection offers. The user's pin wins over the gateway's advertised list (a gateway lists everything it knows);
+    models the test saw refused stay selectable but are flagged; pinned names the gateway does not list are reported."""
+    available = list(pinned) if pinned else list(discovered)
+    return ModelDecision(
+        available=available,
+        suspects=[model for model in available if model in refused],
+        unlisted=[model for model in pinned if discovered and model not in discovered],
+    )
+
+
 # First pass is wide, later passes narrow: a gateway answers a burst with 429/503/timeouts, which says nothing about the model.
 PROBE_PASSES = (24, 8, 4)
 PROBE_BUDGET_SECONDS = 15.0
@@ -435,6 +467,19 @@ async def usable_models(client: httpx.AsyncClient, base_url: str, headers: dict[
     return [model for model in models if refusals.get(model, 0) < 2]
 
 
+async def assess_models(preset_id: str, base_url: str, api_key: str, settings: Mapping[str, Any], discovered: list[str]) -> ModelDecision:
+    """What a connection test concludes about the models: the user's pin (else the gateway's list), with the models the
+    gateway refuses twice flagged. The probe is a soft signal for hosted OpenAI-compatible gateways; nothing is removed by it."""
+    pinned = pinned_models(settings)
+    preset = PRESETS_BY_ID[preset_id]
+    refused: set[str] = set()
+    if preset.protocol == "openai-compatible" and preset_id != "ollama" and not preset.local:
+        checked = pinned or discovered
+        async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0), follow_redirects=False) as probe:
+            refused = set(checked) - set(await usable_models(probe, base_url, {"Authorization": f"Bearer {api_key}"}, checked))
+    return decide_models(pinned, discovered, refused)
+
+
 async def _ping(preset_id: str, base_url: str, api_key: str, model: str | None) -> tuple[list[str], dict[str, object] | None]:
     preset = PRESETS_BY_ID[preset_id]
     discovered: list[str] = []
@@ -456,8 +501,6 @@ async def _ping(preset_id: str, base_url: str, api_key: str, model: str | None) 
             listing = await client.get(f"{base_url}/models", headers=headers)
             if listing.is_success:
                 discovered = [str(item["id"]) for item in listing.json().get("data", []) if isinstance(item, dict) and isinstance(item.get("id"), str)]
-            if discovered:
-                discovered = await usable_models(client, base_url, headers, discovered) or discovered
             if discovered and model_name not in discovered:
                 # A third-party provider rarely serves our built-in default model; test with one it actually lists.
                 model_name = next((item for item in discovered if _is_chat_model(item)), discovered[0])
@@ -527,7 +570,7 @@ async def test_credential(credential_id: UUID, request: Request, context: BUILD)
         row = await session.scalar(select(ModelCredential).where(ModelCredential.id == credential_id))
         if row is None:
             raise not_found("Provider credential was not found in this workspace")
-        preset_id, provider, api_base, models, default_models = row.preset_id or row.name, row.provider, row.base_url, row.available_models, row.default_models
+        preset_id, provider, api_base, models, default_models, settings = row.preset_id or row.name, row.provider, row.base_url, row.available_models, row.default_models, dict(row.settings or {})
         encrypted_fields = cipher.decode_fields(cipher.decrypt(row.encrypted_key, context.tenant_id, context.workspace_id, provider))
         api_key = encrypted_fields.get("api_key") or next(iter(encrypted_fields.values()), "")
     start = datetime.now(timezone.utc)
@@ -539,9 +582,10 @@ async def test_credential(credential_id: UUID, request: Request, context: BUILD)
             await _resolve_public_url(api_base)
         ping_model = default_models.get("embedding") or default_models.get("orchestrator") or (models[0] if models else None)
         discovered, balance = await _ping(preset_id, api_base, api_key, ping_model)
+        decision = await assess_models(preset_id, api_base, api_key, settings, discovered)
         result_status, safe_error = "connected", None
     except (httpx.HTTPError, ValueError, KeyError, OSError, json.JSONDecodeError):
-        discovered, balance = [], None
+        discovered, balance, decision = [], None, None
         result_status, safe_error = "error", "Connection test failed; verify the provider key, URL, and model selection."
     elapsed_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
     async with scoped_session(services.engine, context.tenant_id, context.workspace_id) as session:
@@ -552,6 +596,10 @@ async def test_credential(credential_id: UUID, request: Request, context: BUILD)
         row.last_tested_at = datetime.now(timezone.utc)
         row.safe_error = safe_error
         row.live_balance = balance
-        if discovered:
-            row.available_models = discovered
-    return {"credential_id": str(credential_id), "status": result_status.upper(), "latency_ms": elapsed_ms, "available_models": discovered or models, "balance": balance, "error": safe_error}
+        if decision is not None and decision.available:
+            row.available_models = decision.available
+            kept = {key: value for key, value in dict(row.settings or {}).items() if key != "suspect_models"}
+            row.settings = {**kept, **({"suspect_models": ",".join(decision.suspects)} if decision.suspects else {})}
+    shown = decision.available if decision is not None and decision.available else models
+    return {"credential_id": str(credential_id), "status": result_status.upper(), "latency_ms": elapsed_ms, "available_models": shown, "balance": balance, "error": safe_error,
+            "suspect_models": decision.suspects if decision is not None else [], "unlisted_models": decision.unlisted if decision is not None else []}

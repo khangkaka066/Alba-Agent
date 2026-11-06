@@ -344,7 +344,10 @@ const vi = {
   "harness.url": "URL API của nhà cung cấp",
   "harness.using": "Đang dùng {key}. Dán khóa mới để thay",
   "harness.modelsLabel": "Mô hình (tuỳ chọn, cách nhau bằng dấu phẩy)",
-  "harness.modelsPlaceholder": "Để trống để tự lấy danh sách từ nhà cung cấp",
+  "harness.modelsPlaceholder": "Để trống: dùng cả danh sách của nhà cung cấp. Nhập: chỉ dùng các mô hình này",
+  "harness.suspect": " {count} mô hình bị nhà cung cấp từ chối khi thử ({names}); vẫn chọn được nhưng có thể không chạy.",
+  "harness.unlisted": " Nhà cung cấp không liệt kê: {names}. Kiểm tra lại tên.",
+  "model.unverified": "Chưa chắc chạy được",
 
   "browser.blankHint": "Trang trống? Trang web có thể không cho nhúng. Dùng nút mở bằng trình duyệt hệ thống.",
   "browser.external": "Mở bằng trình duyệt hệ thống",
@@ -748,7 +751,10 @@ const en = {
   "harness.url": "Provider API URL",
   "harness.using": "Using {key}. Paste a new key to replace it",
   "harness.modelsLabel": "Models (optional, comma separated)",
-  "harness.modelsPlaceholder": "Leave blank to fetch the list from the provider",
+  "harness.modelsPlaceholder": "Empty: use the provider's whole list. Type ids: use only those models",
+  "harness.suspect": " {count} models were refused when tried ({names}); you can still pick them, but they may not run.",
+  "harness.unlisted": " Not listed by the provider: {names}. Check the spelling.",
+  "model.unverified": "May not run",
 
   "browser.blankHint": "Blank page? The site may refuse to be embedded. Use the button to open it in your system browser.",
   "browser.external": "Open in the system browser",

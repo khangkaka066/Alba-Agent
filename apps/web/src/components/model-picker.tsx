@@ -61,7 +61,7 @@ export function ModelPicker({ compact = false, disabled = false, onOpenSettings 
       <div role="listbox" aria-label={t("model.choose")}>
         {(() => {
           const item = (model: (typeof models)[number], label = model.model) => <button type="button" role="option" aria-selected={model.id === selected} key={model.id} className={`model-menu__item ${model.id === selected ? "is-selected" : ""}`} onClick={() => pick(model.id)}>
-            <span>{label}</span>{model.id === selected && <span aria-hidden="true">✓</span>}</button>;
+            <span>{label}</span>{model.unverified && <span className="model-menu__badge model-menu__badge--warn" title={t("model.unverified")}>{t("model.unverified")}</span>}{model.id === selected && <span aria-hidden="true">✓</span>}</button>;
           if (query.trim()) return view.matches.length ? view.matches.map((model) => item(model, `${model.group} · ${model.model}`)) : <p className="model-menu__hint">{t("model.noMatch")}</p>;
           return <>
             {view.recent.length > 0 && <div className="model-menu__group" role="group" aria-label={t("model.recent")}><h4>{t("model.recent")}</h4>{view.recent.map((model) => item(model, `${model.group} · ${model.model}`))}</div>}

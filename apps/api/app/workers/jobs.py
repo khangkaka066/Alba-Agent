@@ -13,11 +13,11 @@ from uuid import UUID
 from celery import Celery  # type: ignore[import-untyped]
 from sqlalchemy import select
 
-from app.models import AuditLog, RunCheckpoint, WorkflowRun
+from app.models import AuditLog, ModelCredential, RunCheckpoint, WorkflowRun
 from app.models.scope import scoped_session
 from app.services import AppServices, TaskDispatcher, create_default_services
 from callbacks.event_bus import RuntimeEventEmitter
-from checkpoints.failure import describe_failure
+from checkpoints.failure import describe_failure, is_model_not_found, with_model_suggestions
 from flows.compiler import public_error
 from flows.state import WorkflowState
 from nexus_core_schema.models import RuntimeEventType
@@ -116,7 +116,13 @@ class WorkerExecutor:
                 if run is not None and run.status not in ("failed", "completed", "paused"):
                     run.status = "failed"
                     run.finished_at = datetime.now(timezone.utc)
-                    run.failure = describe_failure(error)
+                    failure = describe_failure(error)
+                    if is_model_not_found(error):
+                        from app.routers.architect import trusted_default_models
+                        connected = (await session.scalars(select(ModelCredential).where(ModelCredential.status == "connected"))).all()
+                        known = {f"{row.provider}/{model}" for row in connected for model in row.available_models}
+                        failure = with_model_suggestions(failure, trusted_default_models(connected, known))
+                    run.failure = failure
                     session.add(AuditLog(
                         tenant_id=tenant_id, workspace_id=workspace_id,
                         actor_id=None, action="workflow.failed", target_type="workflow_run",

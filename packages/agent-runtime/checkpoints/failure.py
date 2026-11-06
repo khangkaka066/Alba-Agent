@@ -6,6 +6,7 @@ import re
 import traceback
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
+from collections.abc import Sequence
 from typing import Any
 
 _SECRETS = (
@@ -42,3 +43,19 @@ def describe_failure(error: BaseException, *, node_id: str | None = None, node_l
         "traceback_summary": _trace(error),
         "occurred_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+_MISSING_MODEL = re.compile(r"model[_ ]not[_ ]found|unknown model|no such model|(?:model\b.*(?:not found|does not exist))|(?:(?:not found|does not exist)\b.*\bmodel)", re.IGNORECASE)
+
+
+def is_model_not_found(error: BaseException) -> bool:
+    """True when a provider says the requested model does not exist for this account (not a missing file or run)."""
+    return bool(_MISSING_MODEL.search(f"{type(error).__name__} {error}"))
+
+
+def with_model_suggestions(failure: dict[str, Any], suggestions: Sequence[str]) -> dict[str, Any]:
+    """A copy of the stored failure that names models the user can switch to; unchanged when there are none."""
+    if not suggestions:
+        return failure
+    hint = " Try a model you set as default: " + ", ".join(suggestions[:3]) + "."
+    return {**failure, "error_message": str(failure["error_message"]) + hint, "suggested_models": list(suggestions[:3])}

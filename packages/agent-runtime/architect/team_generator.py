@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from architect.adaptive import Assessment, assess, build_solo_workflow, strong_model
+from architect.adaptive import Assessment, assess, build_solo_workflow, is_small_script_request, strong_model
 from architect.units import MAX_UNITS, MIN_UNITS, UnitsDraft, build_units_workflow
 from hooks.claims import deliverables_in
 from nexus_core_schema_templates.studios import STUDIO_BLUEPRINTS, STUDIO_BY_ID, StudioBlueprint, build_studio_graph, detect_studio
@@ -58,6 +58,9 @@ class ArchitectWorkspaceContext(BaseModel):
     tenant_id: UUID
     workspace_id: UUID
     available_models: tuple[str, ...] = ()
+    # Models the user chose as their defaults (a connected provider lists everything it knows, some of which answer 404):
+    # the only ones known to work, so the fallback and the consensus pair come from here first.
+    trusted_models: tuple[str, ...] = ()
     mcp_tools: tuple[ToolDescriptor, ...] = ()
     knowledge_bases: tuple[KnowledgeBaseDescriptor, ...] = ()
     verified_capsules: tuple[VerifiedCapsuleDescriptor, ...] = ()
@@ -65,6 +68,15 @@ class ArchitectWorkspaceContext(BaseModel):
     skill_slugs: tuple[str, ...] = ()
     skill_keywords: dict[str, tuple[str, ...]] = Field(default_factory=dict)
     builtin_tool_ids: tuple[str, ...] = ()
+
+    @property
+    def fallback_model(self) -> str:
+        """The model used when none is requested: the user's own default, never just the first name in a long list."""
+        return (self.trusted_models or self.available_models or ("openai/gpt-4.1-mini",))[0]
+
+    @property
+    def consensus_pool(self) -> tuple[str, ...]:
+        return self.trusted_models or self.available_models
 
 
 class _AgentDraft(BaseModel):
@@ -230,7 +242,7 @@ class MetaArchitectService:
         if effective == "units" and existing_workflow_spec is None:
             return await self._generate_units(prompt, workspace_context, workflow_id=workflow_id or uuid4(), version=version, preferred_model=preferred_model)
         if effective in ("auto", "solo") and existing_workflow_spec is None:
-            if effective == "auto" and studio is not None:
+            if effective == "auto" and studio is not None and not (studio.domain == "software" and assess(prompt, input_file_names).level == "solo" and is_small_script_request(prompt)):
                 effective = "full_studio"
             else:
                 assessment = Assessment("solo", "a single coder and reviewer was requested") if effective == "solo" else assess(prompt, input_file_names)
@@ -296,7 +308,7 @@ class MetaArchitectService:
         preferred_model: str | None,
     ) -> tuple[WorkflowSpec, dict[str, Any]]:
         models = context.available_models
-        model = preferred_model if preferred_model in models else (models[0] if models else "openai/gpt-4.1-mini")
+        model = preferred_model if preferred_model in models else context.fallback_model
         draft = await self._draft(
             "Split this request into independent units that different people could build separately, then one integration step. "
             f"Use {MIN_UNITS} to {MAX_UNITS} units. Write `contract`: the exact module and file names, function and class signatures, "
@@ -334,7 +346,7 @@ class MetaArchitectService:
         preferred_model: str | None,
     ) -> tuple[WorkflowSpec, dict[str, Any]]:
         models = context.available_models
-        model = preferred_model if preferred_model in models else (models[0] if models else "openai/gpt-4.1-mini")
+        model = preferred_model if preferred_model in models else context.fallback_model
         repair_model = strong_model(models, model, _FRONTIER_MODEL_HINTS)
         title = " ".join(prompt.split())[:70]
         spec = self._validator(build_solo_workflow(
@@ -366,7 +378,7 @@ class MetaArchitectService:
     ) -> tuple[WorkflowSpec, dict[str, Any]]:
         studio_rigor: Literal["standard", "full_studio"] = "full_studio" if rigor == "full_studio" else "standard"
         models = context.available_models
-        default_model = preferred_model if preferred_model in models else (models[0] if models else "openai/gpt-4.1-mini")
+        default_model = preferred_model if preferred_model in models else context.fallback_model
         director_model = preferred_model if preferred_model in models else next(
             (name for name in models if any(hint in name for hint in _FRONTIER_MODEL_HINTS) and "mini" not in name), default_model,
         )
@@ -424,7 +436,7 @@ class MetaArchitectService:
         previous = "start"
         previous_learning_agent: str | None = None
         available_models = context.available_models
-        default_model = preferred_model if preferred_model in available_models else (available_models[0] if available_models else "openai/gpt-4.1-mini")
+        default_model = preferred_model if preferred_model in available_models else context.fallback_model
         tool_ids = {tool.id for tool in context.mcp_tools} | set(context.builtin_tool_ids)
         builtin_tool_ids = set(context.builtin_tool_ids)
         capsule_candidates = list(context.verified_capsules)
@@ -545,7 +557,8 @@ class MetaArchitectService:
                         context_task_ids=tuple(item.id for item in tasks),
                     ))
                 consensus = stage.consensus or bool(re.search(r"\b(finance|financial|legal|medical|high[- ]stakes)\b", stage.purpose, re.I))
-                consensus_models = tuple(dict.fromkeys(available_models[:2])) if len(available_models) >= 2 else ()
+                consensus_models = tuple(dict.fromkeys(context.consensus_pool[:2]))
+                consensus_models = consensus_models if len(consensus_models) >= 2 else ()
                 from nexus_core_schema.models import ConsensusConfigSpec
                 consensus_config = ConsensusConfigSpec(
                     enabled=consensus and len(consensus_models) >= 2,

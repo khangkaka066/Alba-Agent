@@ -36,7 +36,7 @@ from crews.builder import CrewBuilder
 from flows.compiler import CompiledWorkflow, FlowCompiler
 from flows.state import WorkflowState
 from nexus_computer_sandbox import ComputerAccess, ComputerSandboxSupervisor, DockerSandboxProvider
-from nexus_core_schema.models import CrewNodeSpec, KnowledgeCapsuleSpec, PersistentBotSpec, PropagationScope, SensitivityLevel, RAGNodeSpec, RuntimeEventType, WorkflowSpec
+from nexus_core_schema.models import CrewNodeSpec, KnowledgeCapsuleSpec, PersistentBotSpec, PropagationScope, SensitivityLevel, RAGNodeSpec, RuntimeEventType, TaskSpec, WorkflowSpec
 from nexus_core_schema.artifacts import artifact_directory
 from nexus_core_schema.template_outputs import BUILTIN_OUTPUT_SCHEMAS
 from nexus_model_gateway import CredentialCipher, LiteLLMEmbeddingRouter, LiteLLMRouter, ModelRate, UsageRecord
@@ -159,6 +159,11 @@ class AppServices:
     def crew_builder(self, tenant_id: UUID | None = None, workspace_id: UUID | None = None) -> CrewBuilder:
         tools = self.workspace_tools.get((tenant_id, workspace_id), {}) if tenant_id is not None and workspace_id is not None else {}
         return CrewBuilder(self.output_schemas, tools, skill_loader=SkillLoader())
+
+    def consensus_schema(self, task: TaskSpec) -> type[BaseModel]:
+        """The model a task's answer must fit. Generated teams describe it as JSON (`Architect_<stage>_<n>Output`),
+        so the registered table alone cannot answer; the builder knows both kinds."""
+        return self.crew_builder().schema_for_task(task)
 
     async def _runtime_crew_builder(self, tenant_id: UUID, workspace_id: UUID, run_id: UUID, extra_tools: dict[str, Any] | None = None) -> CrewBuilder:
         async with scoped_session(self.engine, tenant_id, workspace_id) as session:
@@ -542,7 +547,7 @@ class AppServices:
 
             if isinstance(node, CrewNodeSpec):
                 task_text = "\n".join(task.description for task in node.tasks)
-                expected = self.output_schemas[node.tasks[-1].output_schema]
+                expected = self.consensus_schema(node.tasks[-1])
             else:
                 task_text = str(node.coder_instructions or node.label)
                 expected = None

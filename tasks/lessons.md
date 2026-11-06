@@ -62,3 +62,9 @@ The Docker provider hid this with a separate /tmp tmpfs. Anything that replaces 
 - Pick demo data on purpose: a run started through the benchmark adapter showed the benchmark's rules text in the user bubble, and a blocked run produced junk files. A README image must show a task that really finished.
 - On macOS `pgrep -f` matches other apps' helper processes (here the user's Antigravity); never `pkill` by a loose pattern, kill by the exact command line you started.
 - BSD `sed -i` needs `-i ''`; use Python for multi-line edits.
+
+## Three gateway failures had three separate causes (Phase 39)
+- `KeyError: 'Architect_crew_1_3Output'` was a dict lookup in the consensus handler against the table of REGISTERED schemas; architect teams describe their schema as JSON, so the name was never in that table. When a generated name shows up as a bare `KeyError`, grep who looks it up by name and send it through the same resolver the crew builder uses.
+- "model not found 404": the gateway advertised 232 models and `MiniMax-M2.5` answers 404. Sorted, an upper-case name comes first, and every "first of the list" fallback landed on it unless the user picked a model by hand. A provider's model list is not a list of working models: the models the user chose as defaults are the only ones known to work. Probe the gateway with a real call before blaming the code (`/models` listing vs. `/chat/completions`).
+- A 7-department studio for a 60-line script: the studio detector needs only "build" + "app" and auto mode let it beat the small-code assessment. A heuristic that overrules another must be told what the other one knows (file name, "tiny", "60 lines").
+- Prove a fix on the exact scenario that failed (same prompt, no pinned model): 421 s with no file before, 77 s with todo.py and tests after. Two API tests (Redis, sandbox files) were already red on the untouched code; check by stashing before calling them unrelated.

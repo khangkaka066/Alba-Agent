@@ -6,6 +6,7 @@ import json
 import os
 import re
 from datetime import datetime, timezone
+from collections.abc import Sequence
 from typing import Annotated, Any, Awaitable, Callable, Literal, cast
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -140,6 +141,12 @@ async def _json_with_retry(ask: Callable[[str], Awaitable[str]]) -> Any:
 NON_CHAT_NAME_PARTS = ("embed", "whisper", "tts", "dall-e", "image", "moderation", "veo", "speech")
 
 
+def _approved_chat_models_in_order(names: Sequence[str]) -> tuple[str, ...]:
+    """The chat models among `names`, keeping their order (the sorted view of `_approved_chat_models` would lose it)."""
+    keep = set(_approved_chat_models(set(names)))
+    return tuple(name for name in names if name in keep)
+
+
 def _approved_chat_models(model_names: set[str]) -> tuple[str, ...]:
     """Chat-capable models this workspace can reach; a missing price schedule never excludes a model."""
     approved: list[str] = []
@@ -148,6 +155,22 @@ def _approved_chat_models(model_names: set[str]) -> tuple[str, ...]:
         if separator and provider and model not in NON_CHAT_MODELS and not any(part in model.lower() for part in NON_CHAT_NAME_PARTS):
             approved.append(full_name)
     return tuple(sorted(approved))
+
+
+def trusted_default_models(credentials: Sequence[Any], model_names: set[str]) -> tuple[str, ...]:
+    """The models the user set as defaults on connected providers, default provider first, orchestrator before the rest.
+
+    A provider's model list is whatever it advertises, and some entries answer 404 when called, so the choices made by
+    the user (the same ones the status pill shows) are the only names known to work."""
+    ordered = sorted(credentials, key=lambda row: not row.is_default)
+    trusted: list[str] = []
+    for row in ordered:
+        defaults = row.default_models or {}
+        for role in sorted(defaults, key=lambda name: name != "orchestrator"):
+            full = f"{row.provider}/{defaults[role]}"
+            if full in model_names and full not in trusted:
+                trusted.append(full)
+    return tuple(trusted)
 
 
 async def free_workflow_name(session: AsyncSession, name: str, version: int) -> str:
@@ -228,6 +251,7 @@ async def _workspace_context(request: Request, context: TenantContext, preferred
     return ArchitectWorkspaceContext(
         tenant_id=context.tenant_id, workspace_id=context.workspace_id,
         available_models=_approved_chat_models(model_names), mcp_tools=tools,
+        trusted_models=_approved_chat_models_in_order(trusted_default_models(credentials, model_names)),
         knowledge_bases=tuple(KnowledgeBaseDescriptor(id=row.id, name=row.name) for row in kb_rows),
         verified_capsules=tuple(verified), output_schema_names=tuple(sorted(services.output_schemas)),
         skill_slugs=tuple(skill_catalog),
@@ -250,7 +274,8 @@ def _json_generator(request: Request, context: TenantContext, workspace: Archite
         source = "Requested" if preferred_model else "Configured"
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY if preferred_model else status.HTTP_503_SERVICE_UNAVAILABLE,
                             f"{source} model {configured} is not available in this workspace. Connect a provider or subscription that serves it, or choose a connected chat model.")
-    model = configured or next((name for name in candidates if name.startswith("openai/")), None) or next(iter(candidates), None)
+    trusted = tuple(name for name in workspace.trusted_models if name in candidates)
+    model = configured or next(iter(trusted), None) or next((name for name in candidates if name.startswith("openai/")), None) or next(iter(candidates), None)
     if model is None:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "No chat model is connected for the Meta-Architect; connect a subscription plan or API key in Settings")
 

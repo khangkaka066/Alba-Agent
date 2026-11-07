@@ -10,5 +10,16 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="vi" data-theme="dark"><body><LocaleProvider>{children}</LocaleProvider></body></html>;
+  return (
+    <html lang="vi" data-theme="dark">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(window.nexusDesktop)document.documentElement.dataset.desktop=window.nexusDesktop.platform;const t=localStorage.getItem("nexus_theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}catch(e){}`,
+          }}
+        />
+      </head>
+      <body><LocaleProvider>{children}</LocaleProvider></body>
+    </html>
+  );
 }

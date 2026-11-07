@@ -41,10 +41,11 @@ function HarnessCard({ token, saved, onChanged }: { token: string; saved?: Crede
   const [models, setModels] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [warning, setWarning] = useState("");
   const [error, setError] = useState("");
   useEffect(() => { if (saved) { setUrl(saved.base_url ?? ""); setModels(saved.settings.custom_model_ids ?? ""); } }, [saved]);
   const save = async () => {
-    setBusy(true); setError(""); setMessage("");
+    setBusy(true); setError(""); setMessage(""); setWarning("");
     try {
       const credential = await apiRequest<Credential>("/api/v1/settings/credentials", token, { method: "POST", body: JSON.stringify({
         preset_id: "shopaikey", api_key: key, base_url: url.trim(), is_default: true, settings: models.trim() ? { custom_model_ids: models.trim() } : {},
@@ -53,7 +54,8 @@ function HarnessCard({ token, saved, onChanged }: { token: string; saved?: Crede
       setKey("");
       const suspect = result.suspect_models ?? [], unlisted = result.unlisted_models ?? [];
       const warnings = (suspect.length ? t("harness.suspect", { count: suspect.length, names: suspect.slice(0, 4).join(", ") }) : "") + (unlisted.length ? t("harness.unlisted", { names: unlisted.slice(0, 4).join(", ") }) : "");
-      setMessage(result.status === "CONNECTED" ? t("harness.savedVerified", { models: result.available_models.length ? t("harness.models", { count: result.available_models.length }) : "" }) + warnings : result.error ?? t("harness.unverified"));
+      if (warnings) setWarning(warnings);
+      setMessage(result.status === "CONNECTED" ? t("harness.savedVerified", { models: result.available_models.length ? t("harness.models", { count: result.available_models.length }) : "" }) : result.error ?? t("harness.unverified"));
       await onChanged();
     } catch (reason) { setError(readError(reason)); }
     finally { setBusy(false); }
@@ -66,6 +68,8 @@ function HarnessCard({ token, saved, onChanged }: { token: string; saved?: Crede
     <label className="field harness-card__models"><span>{t("harness.modelsLabel")}</span><input value={models} onChange={(event) => setModels(event.target.value)} placeholder={t("harness.modelsPlaceholder")} spellCheck={false} /></label>
     <button className="button button-primary" disabled={busy || !key.trim() || !url.trim().startsWith("https://") || !token} onClick={() => void save()}>{busy ? t("common.checking") : t("common.saveCheck")}</button>
     {message && <p className="harness-card__note" role="status">{message}</p>}
+    {warning && <p className="harness-card__warning" role="alert"><span className="warning-symbol" aria-hidden="true">⚠</span><span>{warning}</span></p>}
+    {saved?.safe_error && !warning && <p className="harness-card__warning" role="alert"><span className="warning-symbol" aria-hidden="true">⚠</span><span>{saved.safe_error}</span></p>}
     {error && <p className="inline-error" role="alert">{error}</p>}
   </div>;
 }
@@ -163,7 +167,20 @@ export function ProviderSettings({ token, onNavigate }: { token: string; onNavig
     return credential.available_models.filter((id) => !preset.models.some((model) => model.id === id)).map((id) => { const model: Model = { id, kind: "chat", prompt_usd_per_million: null, completion_usd_per_million: null }; return { ...model, value: modelReference(preset, model), label: `${preset.name} · ${id}` }; });
   });
   const allModels = [...presetModels, ...customModels];
-  const card = (preset: Preset) => { const saved = savedByPreset.get(preset.id); return <article className="provider-card" key={preset.id}><div className="provider-card-top"><span className="provider-icon">{preset.icon}</span><span className={`provider-status provider-status--${saved?.status.toLowerCase() ?? "unconfigured"}`}>{saved ? saved.status === "CONNECTED" ? t("common.connected") : saved.status : t("common.notAdded")}</span></div><h3>{preset.name}</h3><p>{preset.description}</p>{saved?.masked_key && <div className="provider-masked-key">{saved.masked_key}</div>}<button className="button button-quiet provider-configure" onClick={() => requestConfigure(preset)}>{saved ? t("settings.manage") : preset.local ? t("settings.connectLocal") : t("settings.addKey")}</button></article>; };
+  const card = (preset: Preset) => {
+    const saved = savedByPreset.get(preset.id);
+    return <article className="provider-card" key={preset.id}>
+      <div className="provider-card-top">
+        <span className="provider-icon">{preset.icon}</span>
+        <span className={`provider-status provider-status--${saved?.status.toLowerCase() ?? "unconfigured"}`}>{saved ? saved.status === "CONNECTED" ? t("common.connected") : saved.status : t("common.notAdded")}</span>
+      </div>
+      <h3>{preset.name}</h3>
+      <p>{preset.description}</p>
+      {saved?.masked_key && <div className="provider-masked-key">{saved.masked_key}</div>}
+      {saved?.safe_error && <p className="provider-card__warning" role="alert"><span className="warning-symbol" aria-hidden="true">⚠</span><span>{saved.safe_error}</span></p>}
+      <button className="button button-quiet provider-configure" onClick={() => requestConfigure(preset)}>{saved ? t("settings.manage") : preset.local ? t("settings.connectLocal") : t("settings.addKey")}</button>
+    </article>;
+  };
   return <main className="provider-settings">
     <header className="provider-page-header"><div><h1>{t("settings.title")}</h1><p>{t("settings.subtitle")}</p></div></header>
     {error && <div className="provider-alert provider-alert--error" role="alert">{error}</div>}

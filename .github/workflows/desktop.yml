@@ -1,0 +1,44 @@
+name: Desktop CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/desktop/**"
+      - "scripts/package/**"
+      - ".github/workflows/desktop.yml"
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - "scripts/package/**"
+      - ".github/workflows/desktop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    name: Desktop macOS (Apple Silicon)
+    runs-on: macos-14
+    steps:
+      - name: Verify Apple Silicon runner
+        run: |
+          echo "Operating System: $(uname -s)"
+          echo "Kernel Release: $(uname -r)"
+          echo "Architecture: $(uname -m)"
+          test "$(uname -m)" = "arm64"
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Type check apps/desktop
+        run: pnpm --filter @nexus/desktop check
+      - name: Run desktop tests (node --test)
+        run: pnpm --filter @nexus/desktop test

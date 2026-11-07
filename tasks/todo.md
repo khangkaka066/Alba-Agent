@@ -356,12 +356,12 @@ Goal: for a request that is unclear or has several reasonable ways to be built, 
 
 ## Plan
 - [ ] Schema in core-schema: `ClarifyQuestion{id, text, options[{label, description, recommended}], allow_other}`, `PlanOption{id, level, summary, agents, est_seconds, tradeoffs, recommended, reason}` (no cost field: the user is not shown cost), `PlanProposal{assumptions, questions, options}`.
-- [ ] `architect/clarify.py`: one model call returning `PlanProposal`; hard limits (≤4 questions, 2–4 options each, exactly one recommended per question and per proposal); drop any question whose answer is already in the prompt or the input files; `status = ready` when nothing needs asking.
-- [ ] API: `POST /v1/architect/propose` (returns proposal or `ready`), and `generate-workflow` accepts `answers` and `chosen_option_id`; default `interactive=false` keeps today's behaviour for service keys.
-- [ ] Persist the proposal and the answers as conversation messages (`meta.kind = clarification | proposal | answer`), so a thread resumes where it stopped and the audit log records what was chosen.
-- [ ] Answers are appended to the requirement as an explicit "Decisions made with the user" block that the architect must treat as binding.
-- [ ] Web: question cards with a recommended badge, free-text "Other", and a one-click "Use recommended"; the quickbar shows a compact version.
-- [ ] Tests: limits and one-recommended invariant, clear prompts skip questions, answers reach the architect prompt, non-interactive callers are never blocked, tenant scoping on the stored messages.
+- [x] `architect/clarify.py`: one model call returning `PlanProposal`; hard limits (≤4 questions, 2–4 options each, exactly one recommended per question and per proposal); drop any question whose answer is already in the prompt or the input files; `status = ready` when nothing needs asking.
+- [x] API: `POST /v1/architect/propose` (returns proposal or `ready`), and `generate-workflow` accepts `answers` and `chosen_option_id`; default `interactive=false` keeps today's behaviour for service keys.
+- [x] Persist the proposal and the answers as conversation messages (`meta.kind = clarification | proposal | answer`), so a thread resumes where it stopped and the audit log records what was chosen.
+- [x] Answers are appended to the requirement as an explicit "Decisions made with the user" block that the architect must treat as binding.
+- [x] Web: question cards with a recommended badge, free-text "Other", and a one-click "Use recommended"; the quickbar shows a compact version.
+- [x] Tests: limits and one-recommended invariant, clear prompts skip questions, answers reach the architect prompt, non-interactive callers are never blocked, tenant scoping on the stored messages.
 - [ ] Evaluation (weak by nature, say so): take 8 fully specified tasks, remove one binding clause from each prompt, and score (a) did a question surface the missing clause, (b) questions asked per task on the untouched prompts (burden; target ≤1 on average), (c) pass rate when a scripted user answers with the recommended option versus no clarification.
 
 ## Open risks
@@ -392,9 +392,9 @@ Goal: run agent code on the user's own machine without Docker, with the layered 
 - [x] Sensitive-write rule: creating or editing executable or config files (hooks, `.vscode`, shell rc, `sandbox.json`-style files) is an Ask, never an Allow (the Antigravity RCE chain).
 - [x] `LocalSandboxProvider` implementing `ComputerProvider`: per-run directory under a temp root, commands run through `sandbox-exec` with a generated profile (write only inside the run directory, no network unless the policy grants it), timeout and output cap as in the Docker provider.
 - [x] Wire as a provider name `local`, chosen by configuration; `docker` stays the default.
-- [ ] Approval flow: an Ask result reuses the existing approval cards; headless callers (benchmark, service keys) get Deny, never a hang.
+- [x] Approval flow: an Ask result reuses the existing approval cards; headless callers (benchmark, service keys) get Deny, never a hang.
 - [x] Behaviour tests (direct, not benchmark): `cat .env` is blocked, writing outside the run directory fails, a network call fails with no grant, `python -m unittest` runs, files uploaded and downloaded round-trip, a path escape (`../`, symlink) is rejected, timeout kills the process tree.
-- [ ] Docs: what the local mode does and does NOT protect (no per-host network filter, macOS only).
+- [x] Docs: what the local mode does and does NOT protect (no per-host network filter, macOS only).
 
 ## Gates before moving on (stop and re-plan if any fails)
 1. Existing test suite passes; mypy stays at the 22-error baseline in 8 files.

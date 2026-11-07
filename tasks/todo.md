@@ -674,7 +674,9 @@ Merging to `main`, creating and pushing `web`, deleting files from `main`.
 
 ## Phase 43 status and the docker branch (written when the split was prepared)
 - `main` = desktop (this branch removes the Docker deployment files and documents); `docker` = `main` plus those files, the merge rules in `docs/docker-branch.md` and `docker-images.yml`. Docker is meant to be the base for a server / web deployment and for a Windows build later.
-- Prepared: `docker` pushed (cut from the same tree as `main` after PR #1). `-s ours` merge of the desktop commit into `docker` is done only after that commit is on `main`.
+- Done (2026-11-07): PR #1 (all work) and PR #2 (the split) merged into `main`; `main` = a4c0f99, CI `verify` green on both pull requests and on the push to `main` (the first green `main` in a while). `docker` = `main` + the Docker files: `git merge -s ours origin/main` once, then `ci.yml` and `tasks/` copied from `main`; CI `verify` green on `docker` too. A simulated later change on `main` (shared code, README, desktop README) merged into a copy of `docker` without a conflict, kept `docker`'s README (`merge=ours`) and left the Docker files untouched.
+- The local checkout is on `main`; `git remote set-branches origin main` stops fetching other branches (fetch `docker` by name when needed, e.g. `git fetch origin docker && git worktree add ../Nexus-docker docker`). Merged local branches were deleted; the remote branches `feature/local-execution-policy` and `feature/desktop-main` were left on GitHub.
+- Not verified: `docker-images.yml` has never run; the production compose has never been run from this branch.
 - Found on the way: CI on `main` was red because the `images` job used the repository name as it is (`Nexus-Agent`) in the image tag and the registry needs lower case; `verify` was green. The job now lives only on `docker`, with lower-case names and no automatic publishing.
 
 ### Before exposing the docker branch to the Internet (not done; the stack has not been run from this branch)

@@ -671,3 +671,16 @@ Keep `main` checked out; `git remote set-branches origin main` stops fetching `w
 
 ## Needs the user's go-ahead (outward-facing)
 Merging to `main`, creating and pushing `web`, deleting files from `main`.
+
+## Phase 43 status and the docker branch (written when the split was prepared)
+- `main` = desktop (this branch removes the Docker deployment files and documents); `docker` = `main` plus those files, the merge rules in `docs/docker-branch.md` and `docker-images.yml`. Docker is meant to be the base for a server / web deployment and for a Windows build later.
+- Prepared: `docker` pushed (cut from the same tree as `main` after PR #1). `-s ours` merge of the desktop commit into `docker` is done only after that commit is on `main`.
+- Found on the way: CI on `main` was red because the `images` job used the repository name as it is (`Nexus-Agent`) in the image tag and the registry needs lower case; `verify` was green. The job now lives only on `docker`, with lower-case names and no automatic publishing.
+
+### Before exposing the docker branch to the Internet (not done; the stack has not been run from this branch)
+1. Run the production compose on a test server and one real task; Docker's daemon did not answer on the development Mac, so none of this was exercised here.
+2. `NEXUS_LOCAL_MODE` must be false (README: local mode gives anyone who reaches the API an owner session); the production compose does not set it, so check what it defaults to.
+3. The api and worker containers mount `/var/run/docker.sock`: whoever takes over one of them controls the host's Docker. Use a separate sandbox host, rootless Docker / gVisor, a socket proxy, or the cloud providers already in the code (`e2b`, `daytona`).
+4. Capacity: 2 worker threads, 4 sandbox slots per process, nodes of one run serialised. Plan quotas and a queue before many users.
+5. Agent accuracy and cost problems apply to the web version too (false "done" in 21/30 tasks, cost per success).
+6. Monitoring, rate limits and an off-host copy of the Postgres backups are not set up.

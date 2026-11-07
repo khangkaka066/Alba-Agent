@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Literal
@@ -76,6 +77,8 @@ def _passes(command: str, folder: Path) -> bool:
 
 
 def test_the_sandbox_checks_accept_the_files_they_ask_for_and_reject_empty_ones(tmp_path: Path) -> None:
+    if shutil.which("python") is None:
+        pytest.skip("'python' executable is not on PATH to run sandbox verification checks")
     good: dict[str, dict[str, str]] = {
         "calendar_build": {"marketing/content_calendar.csv": "date,channel,format,title,caption,asset\n2026-11-10,tiktok,video,Teaser,Hi,teaser.mp4\n",
                            "marketing/channel_packages.json": '{"tiktok":{"caption":"a"},"youtube":{"caption":"b"},"facebook":{"caption":"c"}}'},

@@ -23,7 +23,7 @@ from app.auth.context import hash_password
 from app.models import ApprovalRequest, AuditLog, BotRoutine, KnowledgeBase, PersistentBot, Tenant, User, Workflow, WorkflowRun, Workspace, WorkspaceMember
 from app.models.scope import scoped_session
 from app.services import AppServices
-from app.workers.jobs import CeleryDispatcher, WorkerExecutor
+from app.workers.jobs import CeleryDispatcher, WorkerExecutor, _redis_url
 from nexusgen_bridge.sandbox_team import NexusGenSandboxRunner
 from nexus_computer_sandbox import ComputerSandboxSupervisor, DockerSandboxProvider
 from nexus_core_schema.models import RuntimeEventType
@@ -219,6 +219,15 @@ def test_api_auth_workflow_approval_and_event_stream() -> None:
 def test_celery_dispatcher_enqueues_to_redis() -> None:
     if not os.environ.get("NEXUS_REDIS_PASSWORD") and not os.environ.get("NEXUS_REDIS_URL"):
         pytest.skip("Task queue Redis connection is not configured")
+
+    from redis import Redis as SyncRedis
+
+    redis_url = _redis_url()
+    try:
+        with SyncRedis.from_url(redis_url, socket_connect_timeout=1, socket_timeout=1) as ping_client:
+            ping_client.ping()
+    except Exception as exc:
+        pytest.skip(f"Task queue Redis broker is not reachable at {redis_url}: {exc}")
 
     async def check() -> None:
         dispatcher = CeleryDispatcher()

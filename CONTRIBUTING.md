@@ -14,11 +14,12 @@ Thanks for helping. Bug reports, ideas, docs and code are all welcome.
 
 ```bash
 git clone https://github.com/khangkaka066/Nexus-Agent.git && cd Nexus-Agent
-cp .env.example .env            # fill the secrets as described in README.md
-docker compose up -d --build    # http://localhost:3000
+pnpm install
+python3 scripts/package/build_runtime.py mac-arm64   # once: assembles the runtime the app runs
+pnpm --filter @nexus/desktop dev                     # the app, from source
 ```
 
-The API and `packages/` are mounted into the containers with auto-reload. The Celery worker does not reload: run `docker compose restart worker` after changing runtime code.
+See [apps/desktop/README.md](apps/desktop/README.md) for the details. The backend tests do not need the app: `pytest` (the ones that need Postgres, Redis or Docker are skipped when they are not available). A Docker-based setup, with its compose files, lives on the `docker` branch.
 
 ## Before you open a pull request
 

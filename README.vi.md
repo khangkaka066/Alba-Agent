@@ -66,26 +66,36 @@ Phần lớn dự án đa-agent chỉ là thư viện: bạn tự viết điều
 
 ## ⚡ Cài đặt nhanh
 
-Cần Docker Compose, và một gói AI bạn đã dùng (ChatGPT, Claude, Gemini, GitHub Copilot) hoặc một API key.
+Cần một gói AI bạn đã dùng (ChatGPT, Claude, Gemini, GitHub Copilot) hoặc một API key.
+
+### Ứng dụng desktop (macOS, Apple Silicon, không cần Docker)
+
+Bộ cài mang theo toàn bộ sản phẩm: PostgreSQL, Redis, Qdrant, API, worker và giao diện web khởi động ngay trong ứng dụng; lệnh của agent dùng Node, git và ffmpeg đi kèm, nên không phải cài gì thêm cho máy.
 
 ```bash
-git clone https://github.com/khangkaka066/Nexus-Agent.git && cd Nexus-Agent
-cp .env.example .env
-openssl rand -hex 32      # dán vào: NEXUS_POSTGRES_PASSWORD, NEXUS_RUNTIME_DB_PASSWORD,
-                          #          NEXUS_REDIS_PASSWORD, NEXUS_SECRET_KEY, NEXUS_API_KEY_PEPPER
-openssl rand -base64 32   # dán vào: NEXUS_CREDENTIAL_ENCRYPTION_KEY_BASE64
-docker compose up -d --build
+python3 scripts/package/build_runtime.py mac-arm64     # tải (kiểm sha256) và lắp runtime
+python3 scripts/package/verify_runtime.py mac-arm64    # kiểm tra tính di động và chạy thử; phải qua
+pnpm --filter @nexus/desktop build:mac                 # apps/desktop/release/NexusAgent-<version>-mac-arm64.dmg
 ```
 
-Mở **http://localhost:3000**. Chế độ local không cần đăng ký: *Local Workspace* được tạo sẵn. Sau đó:
+Mở file `.dmg` và kéo NexusAgent vào Applications. Yêu cầu và giới hạn:
+
+- **macOS 15 trở lên trên Apple Silicon.** Chưa có bản Intel hay Windows.
+- **File `.dmg` chưa ký và chưa công chứng**, nên lần đầu macOS yêu cầu xác nhận (bấm chuột phải vào ứng dụng, chọn *Open*).
+- **Không đóng gói trình duyệt.** Lệnh `headless-browser` của agent cần Chrome, Chromium, Edge hoặc Brave đã cài sẵn.
+- Chưa có bản tải sẵn; hãy tự dựng bằng ba lệnh trên.
+
+### Máy chủ, Linux và Windows
+
+Trên `main` chưa có bộ cài cho các nền tảng này. Bản triển khai Docker (mọi hệ điều hành có Docker, và máy chủ tự lưu trữ có HTTPS) nằm ở nhánh [`docker`](https://github.com/khangkaka066/Nexus-Agent/tree/docker); bản Windows mới ở mức kế hoạch, chưa bắt đầu.
+
+### Lần chạy đầu
+
+Mở ứng dụng. Không cần đăng ký: *Local Workspace* được tạo sẵn. Sau đó:
 
 1. **Cài đặt AI → Mô hình & khóa:** kết nối một model (xem [Kết nối mô hình](#-kết-nối-mô-hình)).
 2. Gõ điều bạn muốn ở màn hình **Làm việc** rồi Enter.
 3. Mở file đội tạo ra, tải xuống, hoặc chuyển cho một đội khác.
-
-Trên Linux đặt `NEXUS_DOCKER_GID` theo group của `/var/run/docker.sock` và chạy `sudo chown -R 10001 data/artifacts` để container ghi được kết quả. API và `packages/` được mount với `--reload`; sau khi sửa code runtime hãy chạy `docker compose restart worker` (worker không tự nạp lại).
-
-> **Chế độ local** (`NEXUS_LOCAL_MODE=true`, mặc định trong `docker-compose.yml`) cấp phiên chủ sở hữu cho bất kỳ ai truy cập được API. Chỉ dùng trên máy cá nhân; cổng web và API đã bind vào `127.0.0.1`. Trên máy chủ dùng chung hoặc công khai, đặt `NEXUS_LOCAL_MODE=false` để yêu cầu tài khoản.
 
 ---
 
@@ -95,7 +105,7 @@ Trên Linux đặt `NEXUS_DOCKER_GID` theo group của `/var/run/docker.sock` v�
 |---|---|---|
 | 🧠 | **AI Meta-Architect** | Biến một câu thành đội biên dịch được: agent, nhiệm vụ, công cụ, tri thức và cổng duyệt. |
 | 🏢 | **Đội phân tầng** | Giám đốc, trưởng phòng, chuyên viên chạy song song, có hợp đồng sản phẩm và vòng làm lại. |
-| 💻 | **Code sandbox** | Agent viết và kiểm tra code trong Docker (không mạng, bỏ capability, giới hạn tài nguyên) đến khi đạt. |
+| 💻 | **Code sandbox** | Agent viết và kiểm tra code trong sandbox của hệ điều hành macOS (có chính sách lệnh: chặn, hỏi, cho phép) đến khi đạt. Nhánh `docker` chạy code trong container. |
 | ✅ | **Phê duyệt** | Bước nhạy cảm dừng ở thẻ *Allow once / Always allow / Deny*; mọi quyết định được ghi lại. |
 | 🗂️ | **Lịch sử tác vụ** | Mỗi tác vụ và hội thoại được lưu; mở lại, xóa hoặc chạy lại. |
 | 🩺 | **Lỗi dễ đọc** | Thẻ lỗi nêu phòng ban và agent dừng, lỗi đã lọc thông tin nhạy cảm. Chạy lại riêng bước lỗi (phòng ban xong được giữ) hoặc cả đội. |
@@ -150,7 +160,7 @@ flowchart TB
     API --> RD[("Redis: sự kiện")]
     API --> WK["Worker (Celery)"]
     WK --> RT["Runtime: NexusAI Flows + NexusGen"]
-    RT --> SB["Docker sandbox"]
+    RT --> SB["OS sandbox (macOS)"]
     RT --> QD[("Qdrant: RAG")]
     RT --> GW["Cổng model (LiteLLM)"]
 ```
@@ -165,7 +175,7 @@ Runtime được lắp từ các plugin: kết nối, truy cập model, checkpoi
 | `packages/agent-runtime` | Biên dịch flow, crew, cầu NexusGen, time travel, consensus, plugin kernel |
 | `packages/learning-transfer` | Knowledge capsule, tường lửa phạm vi, self-healing prompt |
 | `packages/model-gateway` | Provider, connector gói đăng ký, giá, FinOps |
-| `packages/computer-sandbox` | Sandbox Docker và cloud |
+| `packages/computer-sandbox` | Sandbox cục bộ (macOS), Docker và cloud |
 | `packages/rag-engine`, `mcp-hub`, `builtin-tools` | RAG, công cụ MCP và OpenAPI, công cụ dựng sẵn |
 | `packages/core-schema` | Schema dùng chung và blueprint studio |
 
@@ -204,7 +214,7 @@ Dùng bộ chọn model ở đầu trang (hoặc nút nhỏ trong ô nhập) đ�
 | Gói đăng ký | `NEXUS_CODEX_HOME`, `NEXUS_CLAUDE_HOME`, `NEXUS_GEMINI_HOME`, `NEXUS_COPILOT_HOME` |
 | Plugin | `NEXUS_PLUGINS_FILE`, `NEXUS_PLUGIN_PATCHES` |
 | Truy cập | `NEXUS_LOCAL_MODE`, `NEXUS_PUBLIC_SIGNUP_ENABLED`, `NEXUS_REGISTRATION_TOKEN`, `NEXUS_CORS_ORIGINS` |
-| Sandbox | `NEXUS_COMPUTER_ROOT`, `NEXUS_DOCKER_GID` |
+| Sandbox | `NEXUS_COMPUTER_ROOT`, `NEXUS_SANDBOX_PROVIDER` |
 
 Danh sách đầy đủ: [.env.example](.env.example). Gọi API bằng khóa có phạm vi: `curl -H "Authorization: Bearer nx-sk-<KEY>" http://localhost:8000/api/v1/workflows`.
 
@@ -215,7 +225,6 @@ Danh sách đầy đủ: [.env.example](.env.example). Gọi API bằng khóa c�
 ```bash
 pytest && mypy packages/ apps/api/          # backend: hơn 180 test, kiểu chặt
 pnpm lint && pnpm check && pnpm test        # frontend
-python3 scripts/smoke_test.py               # toàn hệ thống (cần khóa model)
 ```
 
 CI chạy cùng các lệnh này cộng kiểm tra giấy phép và thương hiệu ở mỗi lần push. Đọc [CONTRIBUTING.md](CONTRIBUTING.md) trước khi mở pull request.

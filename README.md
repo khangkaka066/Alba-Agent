@@ -23,7 +23,6 @@
   <img src="https://img.shields.io/badge/Next.js-15-2f6fed?style=flat&logo=next.js&logoColor=white" alt="Next.js 15">
   <img src="https://img.shields.io/badge/PostgreSQL-RLS-2f6fed?style=flat&logo=postgresql&logoColor=white" alt="PostgreSQL with row-level security">
   <img src="https://img.shields.io/badge/macOS-no%20Docker-2f6fed?style=flat&logo=apple&logoColor=white" alt="Runs on macOS without Docker">
-  <img src="https://img.shields.io/badge/Docker-sandbox-2f6fed?style=flat&logo=docker&logoColor=white" alt="Docker sandbox">
   <img src="https://img.shields.io/badge/MCP-ready-2f6fed?style=flat" alt="MCP">
 </p>
 
@@ -45,7 +44,7 @@
 Most multi-agent projects are libraries: you write the orchestration, the sandbox, the review step and the UI yourself. NexusAgent is the finished product built on top of them. It is a self-hosted web and desktop app where you type a goal, an AI architect designs a whole **team** of agents for it, the team runs inside an isolated sandbox, and a human approves the sensitive steps.
 
 - **Team, not chatbot.** A request becomes a structured team: directors, department leads and specialists, with a quality gate that sends missing work back to the right department.
-- **Runs on your Mac without Docker.** The desktop app carries its own database, queue, vector store, API, Node, git and ffmpeg; agent commands run in an operating-system sandbox. Docker stays available for servers and Linux.
+- **Runs on your Mac without Docker.** The desktop app carries its own database, queue, vector store, API, Node, git and ffmpeg; agent commands run in an operating-system sandbox. A server version that runs in Docker is kept on the [`docker` branch](https://github.com/khangkaka066/Nexus-Agent/tree/docker).
 - **Safe by design.** Code runs in a locked-down sandbox. Sensitive actions stop at an approval card. Every decision is written to an audit log.
 - **Honest results.** A team that claims a file it never wrote fails with a clear message (media is never invented) instead of finishing as if it had delivered.
 - **Bring any model.** Use your ChatGPT, Claude, Gemini or GitHub Copilot plan, an API key, any OpenAI-compatible gateway, or a local Ollama model.
@@ -112,7 +111,7 @@ Every shortcut can be changed in **Settings → General**. On narrow windows the
 
 You need either an AI subscription you already use (ChatGPT, Claude, Gemini, GitHub Copilot) or an API key.
 
-### Option A: the desktop app (macOS, Apple Silicon, no Docker)
+### The desktop app (macOS, Apple Silicon, no Docker)
 
 The installer carries the whole product: PostgreSQL, Redis, Qdrant, the API, the worker and the web app start inside the app. Agent commands find Node 22, git and ffmpeg inside the app too, so nothing has to be installed on the Mac.
 
@@ -131,38 +130,17 @@ Open the `.dmg` and drag NexusAgent to Applications. Requirements and limits, st
 
 Details: [apps/desktop/README.md](apps/desktop/README.md).
 
-### Option B: Docker (any OS, servers)
+### Server, Linux and Windows
 
-You need Docker Compose.
+There is no installer for them on `main`. A Docker deployment (any OS with Docker, and self-hosted servers with HTTPS) is kept on the [`docker` branch](https://github.com/khangkaka066/Nexus-Agent/tree/docker); a Windows build is planned and has not been started. The desktop app can also open a window onto a server you run from that branch (*Settings* in the app, an HTTPS address).
 
-```bash
-git clone https://github.com/khangkaka066/Nexus-Agent.git && cd Nexus-Agent
-./scripts/quickstart.sh
-```
+## First run
 
-The script checks Docker (it must answer and have about 6 GB of memory or more, otherwise runs time out), creates `.env` with generated secrets, fills the sandbox settings on Linux, and starts the stack. It never overwrites an existing `.env`: only keys that are still empty are filled. `./scripts/quickstart.sh --check` only reports problems.
-
-<details><summary>Manual setup</summary>
-
-```bash
-cp .env.example .env
-openssl rand -hex 32      # paste into: NEXUS_POSTGRES_PASSWORD, NEXUS_RUNTIME_DB_PASSWORD,
-                          #             NEXUS_REDIS_PASSWORD, NEXUS_SECRET_KEY, NEXUS_API_KEY_PEPPER
-openssl rand -base64 32   # paste into: NEXUS_CREDENTIAL_ENCRYPTION_KEY_BASE64
-docker compose up -d --build
-```
-
-</details>
-
-Open **http://localhost:3000**. There is no sign-up in local mode: a *Local Workspace* is created for you. Then:
+Open the app. There is no sign-up: a *Local Workspace* is created for you. Then:
 
 1. **Settings → Models:** connect a model (see [Connect a model](#-connect-a-model)).
 2. Type what you want and press Enter.
 3. Open the files the team produced in the right panel, review them, accept or download them, or hand them to another team.
-
-On Linux set `NEXUS_DOCKER_GID` to the group of `/var/run/docker.sock` and run `sudo chown -R 10001 data/artifacts` so the containers can write results. The API and `packages/` are mounted with `--reload`; after changing runtime code run `docker compose restart worker`, which does not reload by itself.
-
-> **Local mode** (`NEXUS_LOCAL_MODE=true`, the default in `docker-compose.yml`) gives anyone who can reach the API an owner session. Use it on a personal machine only; the web and API ports are bound to `127.0.0.1`. On a shared or public server set `NEXUS_LOCAL_MODE=false` to require accounts.
 
 ---
 
@@ -172,7 +150,7 @@ On Linux set `NEXUS_DOCKER_GID` to the group of `/var/run/docker.sock` and run `
 |---|---|---|
 | 🧠 | **AI Meta-Architect** | Turns a sentence into a compilable team: agents, tasks, tools, knowledge and approval gates. |
 | 🏢 | **Hierarchical teams** | Directors, department leads and specialists work in parallel waves with artifact contracts and a rework loop. |
-| 💻 | **Code sandbox** | Coder and reviewer agents run code until it verifies: in Docker (no network, dropped capabilities, resource limits) or, in the macOS app, in an operating-system sandbox with a command policy (deny, ask, allow). |
+| 💻 | **Code sandbox** | Coder and reviewer agents run code until it verifies: in the macOS app, in an operating-system sandbox with a command policy (deny, ask, allow). The Docker branch runs the code in containers instead (no network, dropped capabilities, resource limits). |
 | ✅ | **Human approval** | Sensitive steps pause on an *Allow once / Always allow / Deny* card; every decision is audited. |
 | 🗂️ | **Task history** | Every task and its conversation is saved; reopen it, delete it, or retry it. |
 | 🩺 | **Readable failures** | The failure card names the department and agent that stopped and the sanitised error. Retry only the failed step (finished departments are kept) or the whole team. |
@@ -227,12 +205,12 @@ flowchart TB
     API --> RD[("Redis: events")]
     API --> WK["Worker (Celery)"]
     WK --> RT["Runtime: NexusAI Flows + NexusGen"]
-    RT --> SB["Docker sandbox"]
+    RT --> SB["OS sandbox (macOS)"]
     RT --> QD[("Qdrant: RAG")]
     RT --> GW["Model gateway (LiteLLM)"]
 ```
 
-The runtime is assembled from plugins: connections, model access, checkpoints, tools, and the sandbox supervisor with its Docker provider are independent plugins mounted by a small kernel (`python -m nexus_plugins dump-config` prints what a process boots). See [AGENTS.md](AGENTS.md) for the rules.
+The runtime is assembled from plugins: connections, model access, checkpoints, tools, and the sandbox supervisor with its providers (local macOS, Docker, cloud) are independent plugins mounted by a small kernel (`python -m nexus_plugins dump-config` prints what a process boots). See [AGENTS.md](AGENTS.md) for the rules.
 
 | Path | Role |
 |---|---|
@@ -242,7 +220,7 @@ The runtime is assembled from plugins: connections, model access, checkpoints, t
 | `packages/agent-runtime` | Flow compiler, crews, NexusGen bridge, time travel, consensus, plugin kernel |
 | `packages/learning-transfer` | Knowledge capsules, scope firewall, self-healing prompts |
 | `packages/model-gateway` | Providers, subscription connectors, pricing, FinOps |
-| `packages/computer-sandbox` | Docker and cloud sandbox providers |
+| `packages/computer-sandbox` | Local (macOS), Docker and cloud sandbox providers |
 | `packages/rag-engine`, `mcp-hub`, `builtin-tools` | Retrieval, MCP and OpenAPI tools, built-in tools |
 | `packages/core-schema` | Shared schemas and the studio blueprints |
 
@@ -281,7 +259,7 @@ Use the model selector in the message box to switch model per task, including an
 | Plans | `NEXUS_CODEX_HOME`, `NEXUS_CLAUDE_HOME`, `NEXUS_GEMINI_HOME`, `NEXUS_COPILOT_HOME` |
 | Plugins | `NEXUS_PLUGINS_FILE`, `NEXUS_PLUGIN_PATCHES` |
 | Access | `NEXUS_LOCAL_MODE`, `NEXUS_PUBLIC_SIGNUP_ENABLED`, `NEXUS_REGISTRATION_TOKEN`, `NEXUS_CORS_ORIGINS` |
-| Sandbox | `NEXUS_COMPUTER_ROOT`, `NEXUS_DOCKER_GID` |
+| Sandbox | `NEXUS_COMPUTER_ROOT`, `NEXUS_SANDBOX_PROVIDER` |
 
 Everything is listed in [.env.example](.env.example). Call the API with a scoped key: `curl -H "Authorization: Bearer nx-sk-<KEY>" http://localhost:8000/api/v1/workflows`.
 
@@ -292,7 +270,6 @@ Everything is listed in [.env.example](.env.example). Call the API with a scoped
 ```bash
 pytest && mypy packages/ apps/api/          # backend: 180+ tests, strict typing
 pnpm lint && pnpm check && pnpm test        # frontend
-python3 scripts/smoke_test.py               # full stack (needs a model key)
 ```
 
 CI runs the same commands plus licence and branding checks on every push. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
@@ -329,4 +306,4 @@ If NexusAgent saves you time, a star helps other people find it, and sharing a s
 - Only permissively licensed dependencies are used (checked in CI); see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - Released under the [MIT License](LICENSE).
 
-<sub>**Topics:** multi-agent, ai-agents, agent-orchestration, llm, workflow-automation, mcp, rag, human-in-the-loop, docker-sandbox, self-hosted, fastapi, nextjs, multi-tenant, ai-workflow-builder.</sub>
+<sub>**Topics:** multi-agent, ai-agents, agent-orchestration, llm, workflow-automation, mcp, rag, human-in-the-loop, desktop-app, macos, fastapi, nextjs, multi-tenant, ai-workflow-builder.</sub>

@@ -44,9 +44,10 @@ export function ModelPicker({ compact = false, disabled = false, onOpenSettings 
     pick(parsed.id);
   };
   const missing = selected === null;
+  const currentModel = models.find((item) => item.id === selected);
   return <div className={`model-picker ${compact ? "model-picker--compact" : ""}`} ref={root}>
-    <button type="button" className={`model-trigger ${missing ? "model-trigger--missing" : ""} ${compact ? "model-trigger--compact" : ""}`} disabled={disabled} aria-haspopup="dialog" aria-expanded={open}
-      title={missing ? t("pill.titleAdd") : t("model.current", { model: modelLabel(selected) })} onClick={() => {
+    <button type="button" className={`model-trigger ${missing ? "model-trigger--missing" : ""} ${currentModel?.unverified ? "model-trigger--unverified" : ""} ${compact ? "model-trigger--compact" : ""}`} disabled={disabled} aria-haspopup="dialog" aria-expanded={open}
+      title={missing ? t("pill.titleAdd") : currentModel?.unverified ? `${modelLabel(selected)} (${t("model.unverified")})` : t("model.current", { model: modelLabel(selected) })} onClick={() => {
         // Open towards the side with more room, and never taller than that room, so the custom-id box is always reachable.
         const rect = root.current?.getBoundingClientRect();
         if (rect) { const above = rect.top - 12, below = window.innerHeight - rect.bottom - 12; const up = compact && above > below; setPlace({ up, room: Math.max(220, Math.min(560, up ? above : below)) }); }
@@ -54,6 +55,7 @@ export function ModelPicker({ compact = false, disabled = false, onOpenSettings 
         setOpen((value) => !value); setProblem(""); setQuery("");
       }}>
       <span className="model-trigger__dot" /><span className="model-trigger__name">{missing ? t("pill.add") : modelLabel(selected)}</span>
+      {currentModel?.unverified && <span className="model-menu__badge model-menu__badge--warn" title={t("model.unverified")}>{t("model.unverified")}</span>}
       <svg className="model-trigger__chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
     </button>
     {open && <div className={`model-menu ${place.up ? "model-menu--up" : ""}`} style={{ maxHeight: place.room }} role="dialog" aria-label={t("model.choose")}>

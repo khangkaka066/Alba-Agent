@@ -20,7 +20,7 @@ permissions:
 jobs:
   desktop:
     name: Desktop macOS (Apple Silicon)
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Verify Apple Silicon runner
         run: |

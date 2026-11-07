@@ -41,8 +41,6 @@ Maintain the following clean monorepo layout:
 nexus-agent-studio/
 ├── AGENTS.md                          # Master architecture, IP rules & coding conventions
 ├── THIRD_PARTY_NOTICES.md             # Consolidated permissive license attributions
-├── docker-compose.yml                 # Unified stack: postgres, redis, qdrant, sandbox-supervisor, worker, api, web
-├── docker-compose.prod.yml            # Production stack with HTTPS proxy, healthchecks & resource limits
 ├── .env.example
 ├── packages/
 │   ├── core-schema/                   # Shared Pydantic v2 & TypeScript/Zod schemas (Flows, Crews, NexusGen, Bots, Approvals, Capsules)
@@ -84,7 +82,7 @@ nexus-agent-studio/
 │   │   │   ├── components/teammates/  # Persistent Bot profile, Markdown Routine scheduler, Bidirectional Voice UI, Approval Cards + Prompt Diff Modal
 │   │   │   ├── components/inspector/  # Live SSE trace drawer, Time-Travel & A/B Forking Timeline, Live Virtual Desktop Screen & Terminal stream
 │   │   │   └── lib/                   # Typed API client, SSE & WebSocket audio/terminal stream hooks
-│   ├── desktop/                       # Optional Electron shell connecting to local Docker stack or remote HTTPS server
+│   ├── desktop/                       # Electron shell: the embedded stack on macOS (no Docker) or a window onto a remote HTTPS server
 │   └── mobile/                        # Optional Expo (iOS/Android) client for chatting, voice calls & approving actions on the go
 ```
 
@@ -180,7 +178,7 @@ The process is assembled at boot from a list of plugins instead of being wired b
 - **Automated Verification Before Completing Any Task:**
   1. Run backend lint, typechecks & unit/integration tests: `pytest` and `mypy packages/ apps/api/`
   2. Run frontend typechecks & tests: `pnpm lint && pnpm check && pnpm test`
-  3. Run full-stack E2E smoke test: `python3 scripts/smoke_test.py`
+  3. Full-stack E2E smoke test (`python3 scripts/smoke_test.py`) exists only on the `docker` branch
   4. Run IP & Branding Hygiene Check:
      ```bash
      # Must return 0 matches in user-facing code and configs:

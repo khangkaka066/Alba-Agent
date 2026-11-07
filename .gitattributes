@@ -1,0 +1,6 @@
+# On the docker branch the top-level documents describe the Docker deployment. Keep them when `main` is merged in
+# (needs `git config merge.ours.driver true` once; see docs/docker-branch.md).
+README.md merge=ours
+README.vi.md merge=ours
+AGENTS.md merge=ours
+CONTRIBUTING.md merge=ours

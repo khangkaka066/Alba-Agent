@@ -5,4 +5,6 @@ files = ["packages", "apps/api"]
 mypy_path = ["packages/core-schema/templates"]
 
 [tool.pytest.ini_options]
-testpaths = ["apps/api/tests"]
+testpaths = ["apps/api/tests", "packages/agent-runtime/tests", "packages/learning-transfer/tests", "packages/model-gateway/tests"]
+# The package tests import their package by name; apps/api/tests/conftest.py does the same for the API tests.
+pythonpath = ["packages/agent-runtime", "packages/learning-transfer", "packages/model-gateway", "packages/core-schema/python", "packages/core-schema/templates"]

@@ -49,9 +49,11 @@ function HarnessCard({ token, saved, onChanged }: { token: string; saved?: Crede
       const credential = await apiRequest<Credential>("/api/v1/settings/credentials", token, { method: "POST", body: JSON.stringify({
         preset_id: "shopaikey", api_key: key, base_url: url.trim(), is_default: true, settings: models.trim() ? { custom_model_ids: models.trim() } : {},
       }) });
-      const result = await apiRequest<{ status: string; available_models: string[]; error: string | null }>(`/api/v1/settings/credentials/${credential.id}/test`, token, { method: "POST" });
+      const result = await apiRequest<{ status: string; available_models: string[]; suspect_models?: string[]; unlisted_models?: string[]; error: string | null }>(`/api/v1/settings/credentials/${credential.id}/test`, token, { method: "POST" });
       setKey("");
-      setMessage(result.status === "CONNECTED" ? t("harness.savedVerified", { models: result.available_models.length ? t("harness.models", { count: result.available_models.length }) : "" }) : result.error ?? t("harness.unverified"));
+      const suspect = result.suspect_models ?? [], unlisted = result.unlisted_models ?? [];
+      const warnings = (suspect.length ? t("harness.suspect", { count: suspect.length, names: suspect.slice(0, 4).join(", ") }) : "") + (unlisted.length ? t("harness.unlisted", { names: unlisted.slice(0, 4).join(", ") }) : "");
+      setMessage(result.status === "CONNECTED" ? t("harness.savedVerified", { models: result.available_models.length ? t("harness.models", { count: result.available_models.length }) : "" }) + warnings : result.error ?? t("harness.unverified"));
       await onChanged();
     } catch (reason) { setError(readError(reason)); }
     finally { setBusy(false); }

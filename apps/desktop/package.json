@@ -2,7 +2,7 @@
   "name": "@nexus/desktop",
   "version": "1.0.0",
   "private": true,
-  "description": "NexusAgent desktop app: a native window for your local Docker stack or a remote HTTPS server.",
+  "description": "NexusAgent desktop app: one installer that runs the whole stack on your machine (no Docker), or a window onto a remote HTTPS server.",
   "author": "NexusAgent",
   "license": "MIT",
   "main": "dist/main.js",
@@ -12,10 +12,14 @@
     "test": "tsc -p tsconfig.json && node --test dist/*.test.js",
     "build": "tsc -p tsconfig.json && electron-builder",
     "build:dir": "tsc -p tsconfig.json && electron-builder --dir",
-    "build:mac": "tsc -p tsconfig.json && electron-builder --mac dmg",
+    "build:mac": "tsc -p tsconfig.json && electron-builder --mac dmg --arm64",
+    "build:mac-x64": "tsc -p tsconfig.json && electron-builder --mac dmg --x64",
     "build:win": "tsc -p tsconfig.json && electron-builder --win nsis",
     "build:linux": "tsc -p tsconfig.json && electron-builder --linux AppImage",
-    "licenses": "node ../../scripts/check-npm-licenses.mjs"
+    "licenses": "node ../../scripts/check-npm-licenses.mjs",
+    "runtime:mac": "python3 ../../scripts/package/build_runtime.py mac-arm64",
+    "runtime:mac-x64": "python3 ../../scripts/package/build_runtime.py mac-x64",
+    "verify:mac": "python3 ../../scripts/package/verify_runtime.py mac-arm64"
   },
   "build": {
     "appId": "ai.nexusagent.desktop",
@@ -37,7 +41,14 @@
         "dmg"
       ],
       "identity": null,
-      "hardenedRuntime": false
+      "minimumSystemVersion": "15.0",
+      "hardenedRuntime": false,
+      "extraResources": [
+        {
+          "from": "runtime/mac-${arch}",
+          "to": "runtime"
+        }
+      ]
     },
     "dmg": {
       "title": "NexusAgent"

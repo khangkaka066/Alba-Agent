@@ -1,0 +1,16 @@
+# Only for the macOS local mode (scripts/run-local.sh): publishes Postgres, Redis and Qdrant on 127.0.0.1 so the API and worker can run on
+# the host instead of in containers. The data network is internal, so the three services also join a normal one for the port mapping.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.host-ports.yml up -d postgres redis qdrant
+services:
+  postgres:
+    ports: ["127.0.0.1:5432:5432"]
+    networks: [data, hostnet]
+  redis:
+    ports: ["127.0.0.1:6379:6379"]
+    networks: [data, hostnet]
+  qdrant:
+    ports: ["127.0.0.1:6333:6333"]
+    networks: [data, hostnet]
+networks:
+  hostnet: {}

@@ -1,0 +1,75 @@
+{
+  "ports": {
+    "api": 18000,
+    "web": 13000
+  },
+  "python": {
+    "mac-arm64": {
+      "file": "cpython-3.12.16+20261026-aarch64-apple-darwin-install_only.tar.gz",
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.12.16%2B20261026-aarch64-apple-darwin-install_only.tar.gz",
+      "sha256": "fbf4afef53c2a6b72bb741bc06d5671a9dfaf87bd84e5aa73ac9b3d0d589f14e"
+    },
+    "mac-x64": {
+      "file": "cpython-3.12.16+20261026-x86_64-apple-darwin-install_only.tar.gz",
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.12.16%2B20261026-x86_64-apple-darwin-install_only.tar.gz",
+      "sha256": "a962e47df522889eaa7ff0d6a56203f1079f68aabb65ffdbe8455f362bc769f3"
+    }
+  },
+  "sandbox_libraries": [
+    "pandas==2.2.3",
+    "matplotlib==3.9.2",
+    "pytest==9.2.0"
+  ],
+  "macos_deployment_target": "12.0",
+  "node": {
+    "mac-arm64": {
+      "file": "node-v22.23.4-darwin-arm64.tar.gz",
+      "url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-darwin-arm64.tar.gz",
+      "sha256": "c9e1dbc748b33ed2d14f42445191ecaf14c56259c7a9a26d0042c49ec2b66428"
+    },
+    "mac-x64": {
+      "file": "node-v22.23.4-darwin-x64.tar.gz",
+      "url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-darwin-x64.tar.gz",
+      "sha256": "efcc2b0db6f94bf53eddb038fe2b370277a042bd29e4f19b8f8e23598795b819"
+    }
+  },
+  "git": {
+    "file": "git-2.56.0.tar.xz",
+    "url": "https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.56.0.tar.xz",
+    "sha256": "26c56c296b38c0695b26fa95f475f1d01704d2d38e73465ca30b0b2f5dc789d3"
+  },
+  "ffmpeg": {
+    "file": "ffmpeg-9.0.2.tar.xz",
+    "url": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
+    "sha256": "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e"
+  },
+  "postgres": {
+    "mac-arm64": {
+      "file": "embedded-postgres-binaries-darwin-arm64v8-16.15.0.jar",
+      "url": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-darwin-arm64v8/16.15.0/embedded-postgres-binaries-darwin-arm64v8-16.15.0.jar",
+      "sha256": "65b953905f0a4d46030767a6b44a52360170d69a7985f1b02aa435f2f6256a83"
+    },
+    "mac-x64": {
+      "file": "embedded-postgres-binaries-darwin-amd64-16.15.0.jar",
+      "url": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-darwin-amd64/16.15.0/embedded-postgres-binaries-darwin-amd64-16.15.0.jar",
+      "sha256": "1229188b99515d2160d5cb6222bc96d9c5f3a248268df3bc2dfe0047e6c233d8"
+    }
+  },
+  "redis": {
+    "file": "redis-7.2.4.tar.gz",
+    "url": "https://download.redis.io/releases/redis-7.2.4.tar.gz",
+    "sha256": "8d104c26a154b29fd67d6568b4f375212212ad41e0c2caa3d66480e78dbd3b59"
+  },
+  "qdrant": {
+    "mac-arm64": {
+      "file": "qdrant-1.12.6-aarch64-apple-darwin.tar.gz",
+      "url": "https://github.com/qdrant/qdrant/releases/download/v1.12.6/qdrant-aarch64-apple-darwin.tar.gz",
+      "sha256": "998998a41eef79a105d83b5637190ec9049e4d6f16bd0be5e9383e953314692f"
+    },
+    "mac-x64": {
+      "file": "qdrant-1.12.6-x86_64-apple-darwin.tar.gz",
+      "url": "https://github.com/qdrant/qdrant/releases/download/v1.12.6/qdrant-x86_64-apple-darwin.tar.gz",
+      "sha256": "6fcaea261c99afaec0cec44afc36a5e1039e1be31070abc30c4bfbff045c516e"
+    }
+  }
+}

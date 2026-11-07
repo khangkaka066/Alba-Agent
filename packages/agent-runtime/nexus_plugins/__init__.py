@@ -15,12 +15,12 @@ def default_registry() -> PluginRegistry:
     from .infrastructure import InfrastructurePlugin
     from .llm import GatewayLlmPlugin
     from .memory import CheckpointsPlugin
-    from .sandbox import DockerSandboxPlugin, SandboxSupervisorPlugin
+    from .sandbox import DockerSandboxPlugin, LocalSandboxPlugin, SandboxSupervisorPlugin
     from .sandbox_runner import SandboxRunnerPlugin
     from .tools import ToolRegistryPlugin
 
     registry = PluginRegistry()
-    for plugin in (InfrastructurePlugin, GatewayLlmPlugin, CheckpointsPlugin, SandboxSupervisorPlugin, DockerSandboxPlugin, SandboxRunnerPlugin, ToolRegistryPlugin):
+    for plugin in (InfrastructurePlugin, GatewayLlmPlugin, CheckpointsPlugin, SandboxSupervisorPlugin, DockerSandboxPlugin, LocalSandboxPlugin, SandboxRunnerPlugin, ToolRegistryPlugin):
         registry.register(plugin.name, plugin)
     return registry
 

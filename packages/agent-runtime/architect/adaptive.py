@@ -39,6 +39,25 @@ _NEEDS_PLANNED_TEAM = re.compile(
     re.IGNORECASE,
 )
 
+# A request that names a source file or calls itself small is a script, unless it also names something only a product has.
+_SMALL = re.compile(r"\b(tiny|small|simple|quick|single[- ]file|one[- ]file|script|cli|command[- ]line|\d+ lines)\b", re.IGNORECASE)
+_SOURCE_FILE = re.compile(r"\b[\w-]+\.(?:py|js|ts|go|rs|java|c|cpp|sh)\b")
+_PRODUCT_SCALE = re.compile(
+    r"\b(saas|platform|dashboard|web ?site|web ?app|front-?end|back-?end|database|authenticat\w*|login|accounts?|"
+    r"multi-?user|micro-?services?|mobile|ios|android|deploy\w*|production)\b",
+    re.IGNORECASE,
+)
+
+
+def is_small_script_request(prompt: str) -> bool:
+    """True for "build todo.py, a tiny command-line app": a file or a size word, and nothing that only a product has.
+
+    The studio detector keys on "build" plus "app", which a one-file program also says; this keeps such a request on the light path."""
+    if _PRODUCT_SCALE.search(prompt):
+        return False
+    return bool(_SOURCE_FILE.search(prompt) or _SMALL.search(prompt))
+
+
 SOLO_INSTRUCTIONS = (
     "Complete the request exactly as written, working only on the files in the working directory. Before the first "
     "execution, list every behavioural clause the request or the docstrings state. Fix root causes, not the "
@@ -70,11 +89,6 @@ def assess(prompt: str, input_file_names: Sequence[str] = ()) -> Assessment:
     if code:
         return Assessment("solo", f"the request is about code ('{code.group(0).lower()}'), so one coder and reviewer is enough")
     return Assessment("team", "the request does not clearly ask for code, so a planned team is used")
-
-
-def strong_model(available: Sequence[str], fallback: str, hints: Sequence[str]) -> str:
-    """The first available frontier-class model for the repair attempt, or the fallback when none is listed."""
-    return next((name for name in available if any(hint in name for hint in hints) and "mini" not in name), fallback)
 
 
 def build_solo_workflow(

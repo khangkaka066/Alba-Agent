@@ -1,0 +1,6 @@
+# Plugin patch for the macOS local mode (scripts/run-local.sh): agent code runs in the macOS sandbox instead of a Docker container.
+plugins:
+  - id: sandbox-docker
+    disabled: true
+  - id: sandbox-local
+    disabled: false

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import inspect
 import json
@@ -32,6 +33,101 @@ from verification import (
     Evidence, Status, VerificationReport, build_probe, build_self_test_probe, decide, parse_probe_output, parse_self_test_output,
     protected_test_hashes,
 )
+
+# Pattern matching test filenames — kept in sync with verification.probe._TEST_NAME.
+_TEST_NAME_RE = re.compile(r"^(test_[A-Za-z0-9_]*|[A-Za-z0-9_]*_test)\.py$")
+from .patcher import compile_patch_script, is_patch_text, parse_patch_blocks
+
+
+_FAILURE_LINE_RE = re.compile(
+    r"^(?:"
+    r"FAIL:|FAILED|ERROR:|AssertionError:|AssertionError |"
+    r"NameError:|TypeError:|ValueError:|SyntaxError:|"
+    r"IndexError:|KeyError:|AttributeError:|ImportError:|"
+    r"ModuleNotFoundError:|FileNotFoundError:|"
+    r"assert |FAILURES"
+    r")",
+)
+
+
+def compact_log(text: str, max_chars: int = 2500) -> str:
+    """Trim excessive execution logs while preserving crucial tracebacks and failure lines.
+
+    Guarantees:
+    - Never exceeds max_chars and never exceeds 16,384 characters hard ceiling.
+    - Deduplicates failure lines in O(n) time using a set.
+    - Caps failure lines to a strict character budget within max_chars.
+    """
+    text = text.strip()
+    # Absolute ceiling: never allow output larger than 16,384 chars or max_chars
+    ceiling = min(max(max_chars, 500), 16_384)
+    if len(text) <= ceiling:
+        return text
+
+    # Extract failure lines with O(1) deduplication
+    seen: set[str] = set()
+    unique_failures: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped and _FAILURE_LINE_RE.match(stripped):
+            if stripped not in seen:
+                seen.add(stripped)
+                unique_failures.append(stripped)
+
+    # Allocate strict character budgets
+    head_len = min(400, ceiling // 5)
+    tail_len = min(600, ceiling // 4)
+    # Banner and overhead budget (~120 chars)
+    overhead = 120
+    max_failure_budget = max(0, ceiling - head_len - tail_len - overhead)
+
+    kept_failures: list[str] = []
+    curr_failure_len = 0
+    overflow_count = 0
+    for idx, f in enumerate(unique_failures):
+        line_len = len(f) + 1  # include newline
+        reserve = 45  # reserve room for "... and N other unique failure line(s)" note
+        if curr_failure_len + line_len + reserve <= max_failure_budget:
+            kept_failures.append(f)
+            curr_failure_len += line_len
+        else:
+            overflow_count = len(unique_failures) - idx
+            break
+
+    if overflow_count > 0:
+        kept_failures.append(f"... and {overflow_count} other unique failure line(s)")
+
+    failures_block = "\n".join(kept_failures)
+    head = text[:head_len]
+    tail = text[-tail_len:]
+    trimmed = len(text) - head_len - tail_len
+
+    parts = [head]
+    if failures_block:
+        parts.append(f"\n\n[... {trimmed} chars truncated — unique failures below ...]\n")
+        parts.append(failures_block)
+        parts.append(f"\n\n{tail}")
+    else:
+        parts.append(f"\n\n[... {trimmed} chars truncated ...]\n\n{tail}")
+
+    result = "".join(parts)
+    if len(result) > ceiling:
+        return result[:ceiling]
+    return result
+
+
+def extract_failure_summary(stdout: str, stderr: str) -> str:
+    """Extract a concise single-line failure reason from execution output."""
+    combined = (stderr + "\n" + stdout).strip()
+    for line in reversed(combined.splitlines()):
+        line = line.strip()
+        if any(line.startswith(err) for err in (
+            "AssertionError:", "NameError:", "TypeError:", "ValueError:", "SyntaxError:",
+            "IndexError:", "KeyError:", "AttributeError:", "FAILED", "PatchError:"
+        )):
+            return line[:160]
+    lines = [l.strip() for l in combined.splitlines() if l.strip()]
+    return lines[-1][:160] if lines else "Non-zero exit code"
 
 def require_declared_files(report: VerificationReport, declared: tuple[str, ...], present: tuple[str, ...]) -> VerificationReport:
     """A node that declares its deliverables is not verified until those files exist.
@@ -150,6 +246,8 @@ class NexusGenSandboxRunner:
         reviewer_client = await self._model_client(spec.reviewer_model, emitter)
         run_started = time.monotonic()
         attempts = 0
+        attempts_history: list[dict[str, Any]] = []
+        initial_files_staged = False
         script_label = f"{re.sub(r'[^A-Za-z0-9_]', '_', spec.id)[:36]}_{uuid4().hex[:8]}"
         last_execution: SandboxExecution | None = None
         reviewer_summary = ""
@@ -190,7 +288,7 @@ class NexusGenSandboxRunner:
 
         async def execute_python(code: str) -> str:
             """Execute Python in the approved isolated run computer and return verification output."""
-            nonlocal attempts, last_execution, last_evidence
+            nonlocal attempts, last_execution, last_evidence, initial_files_staged
             attempts += 1
             last_evidence = None
             if attempts > spec.max_rounds:
@@ -206,6 +304,47 @@ class NexusGenSandboxRunner:
                 spec.id,
             )
 
+            # Check if code is a SEARCH/REPLACE diff patch
+            if is_patch_text(code):
+                try:
+                    blocks = parse_patch_blocks(code)
+                    code_to_run = compile_patch_script(blocks)
+                except ValueError as err:
+                    attempts_history.append({
+                        "attempt": attempts,
+                        "exit_code": 1,
+                        "status": "FAILED",
+                        "error_summary": f"PatchError: {err}",
+                    })
+                    return json.dumps({
+                        "exit_code": 1,
+                        "stdout": "",
+                        "stderr": f"PatchError: {err}",
+                        "artifacts": last_execution.artifacts if last_execution else (),
+                        "attempts_history": attempts_history,
+                    })
+            else:
+                # Fast syntax validation before container execution
+                try:
+                    ast.parse(code)
+                except SyntaxError as err:
+                    err_msg = f"SyntaxError: {err.msg} at line {err.lineno}: {err.text or ''}".strip()
+                    attempts_history.append({
+                        "attempt": attempts,
+                        "exit_code": 1,
+                        "status": "FAILED",
+                        "error_summary": err_msg,
+                    })
+                    return json.dumps({
+                        "exit_code": 1,
+                        "stdout": "",
+                        "stderr": err_msg,
+                        "artifacts": last_execution.artifacts if last_execution else (),
+                        "attempts_history": attempts_history,
+                        "syntax_error": True,
+                    })
+                code_to_run = code
+
             async def output_sink(stream: str, content: str) -> None:
                 await emitter.emit(
                     RuntimeEventType.SANDBOX_TERMINAL_OUTPUT,
@@ -213,32 +352,59 @@ class NexusGenSandboxRunner:
                     spec.id,
                 )
 
+            # Only re-stage protected tests if initial_files have already been
+            # successfully written to the sandbox filesystem on a prior run_python call.
+            # If attempt 1 exited early (syntax error or patch parse error), initial files
+            # were never written yet, so they must be staged now.
+            staged_files = input_files
+            if initial_files_staged and input_files:
+                staged_files = {
+                    name: data
+                    for name, data in input_files.items()
+                    if _TEST_NAME_RE.match(name.rsplit("/", 1)[-1])
+                }
+
             last_execution = await self._supervisor.run_python(
                 emitter.tenant_id,
                 emitter.workspace_id,
                 emitter.run_id,
-                code,
+                code_to_run,
                 spec.verification_command,
                 attempts,
                 spec.timeout_seconds,
                 output_sink,
-                input_files=input_files,
+                input_files=staged_files,
                 script_label=script_label,
             )
-            result: dict[str, object] = {
-                "exit_code": last_execution.exit_code,
-                "stdout": last_execution.stdout[-16_384:],
-                "stderr": last_execution.stderr[-16_384:],
-                "artifacts": last_execution.artifacts,
-            }
+            initial_files_staged = True
+            verdict = None
             if last_execution.exit_code == 0:
                 last_evidence = await probe_evidence()
                 verdict = require_declared_files(
                     decide(last_evidence, execution_ok=True, min_added_tests=spec.min_added_tests if protected_tests else 0),
                     spec.expected_artifact_paths, last_execution.artifacts)
-                result["verification"] = verdict.as_dict()
                 if verdict.status is Status.VERIFIED:
                     verified_stop.set()
+
+            is_verified = verdict is not None and verdict.status is Status.VERIFIED
+            status = "VERIFIED" if is_verified else ("PASSED" if last_execution.exit_code == 0 else "FAILED")
+            err_summary = None if last_execution.exit_code == 0 else extract_failure_summary(last_execution.stdout, last_execution.stderr)
+            attempts_history.append({
+                "attempt": attempts,
+                "exit_code": last_execution.exit_code,
+                "status": status,
+                "error_summary": err_summary,
+            })
+
+            result: dict[str, object] = {
+                "exit_code": last_execution.exit_code,
+                "stdout": compact_log(last_execution.stdout),
+                "stderr": compact_log(last_execution.stderr),
+                "artifacts": last_execution.artifacts,
+                "attempts_history": attempts_history,
+            }
+            if verdict is not None:
+                result["verification"] = verdict.as_dict()
             return json.dumps(result)
 
         native_tools = await self._tool_resolver(emitter.tenant_id, emitter.workspace_id, emitter.run_id, spec.tool_ids) if spec.tool_ids and self._tool_resolver is not None else []
@@ -252,6 +418,9 @@ class NexusGenSandboxRunner:
                 "Write Python to solve the task. Call execute_python for each attempt. "
                 "Read the execution result and repair failures. Never claim completion without a zero exit code. "
                 "When the result has a verification block, a trusted probe judged your work: keep repairing until its status is verified. "
+                "To repair existing files, you can output SEARCH/REPLACE diff blocks to execute_python instead of rewriting full files:\n"
+                "<<<<<<< SEARCH: filename.py\nold lines\n=======\nnew lines\n>>>>>>> REPLACE\n"
+                "You can batch multiple SEARCH/REPLACE blocks for different files in a single turn.\n"
                 + (
                     "The task ships tests; never edit them. They cover only part of the behaviour: the task text and the "
                     "docstrings state more, and a grader checks all of it. Before your first execute_python call, list every "
@@ -280,7 +449,7 @@ class NexusGenSandboxRunner:
                 "Review the code and execution result. Reply APPROVED with a short summary only "
                 "after verification exits zero, a verification block (if present) says verified, and every file named in the "
                 "task's deliverable contract exists. "
-                "Otherwise describe the repair needed."
+                "Otherwise describe the repair needed in 1-2 concise sentences without repeating code or logs."
                 + (f"\n\nReview focus:\n{spec.reviewer_instructions}" if spec.reviewer_instructions else "")
             ),
         )

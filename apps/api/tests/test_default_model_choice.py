@@ -1,0 +1,79 @@
+"""The architect must start from the model the user chose, not from the first name a provider happens to list.
+
+A gateway can advertise a model that answers 404 when called. Sorted alphabetically, an upper-case name such as
+`MiniMax-M2.5` comes first, so every fallback (the architect's own model, a team's default model, the consensus pair)
+landed on it unless the user picked a model by hand."""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+from uuid import uuid4
+
+from app.routers.architect import reachable_model_names, trusted_default_models
+from architect.team_generator import ArchitectWorkspaceContext
+
+LISTED = {"openai/MiniMax-M2.5", "openai/claude-3-5-haiku-20241022", "openai/gpt-6-luna", "openai/gpt-4.1-mini"}
+
+
+def _credential(provider: str = "openai", default: bool = True, **defaults: str) -> SimpleNamespace:
+    return SimpleNamespace(provider=provider, is_default=default, default_models=dict(defaults))
+
+
+def _context(**kwargs: object) -> ArchitectWorkspaceContext:
+    return ArchitectWorkspaceContext(tenant_id=uuid4(), workspace_id=uuid4(), **kwargs)  # type: ignore[arg-type]
+
+
+def test_user_defaults_come_first_orchestrator_before_fast() -> None:
+    trusted = trusted_default_models([_credential(fast="gpt-4.1-mini", orchestrator="gpt-6-luna")], LISTED)
+    assert trusted == ("openai/gpt-6-luna", "openai/gpt-4.1-mini")
+
+
+def test_default_provider_is_read_before_the_others() -> None:
+    other = _credential("anthropic", default=False, orchestrator="claude-sonnet")
+    mine = _credential(orchestrator="gpt-6-luna")
+    assert trusted_default_models([other, mine], LISTED | {"anthropic/claude-sonnet"})[0] == "openai/gpt-6-luna"
+
+
+def test_a_default_the_provider_no_longer_lists_is_dropped() -> None:
+    assert trusted_default_models([_credential(orchestrator="retired-model")], LISTED) == ()
+
+
+def test_fallback_is_the_trusted_model_not_the_alphabetical_first() -> None:
+    context = _context(available_models=tuple(sorted(LISTED)), trusted_models=("openai/gpt-6-luna",))
+    assert sorted(LISTED)[0] == "openai/MiniMax-M2.5"
+    assert context.fallback_model == "openai/gpt-6-luna"
+
+
+def test_without_defaults_the_old_behaviour_is_kept() -> None:
+    context = _context(available_models=("openai/a", "openai/b"))
+    assert context.fallback_model == "openai/a"
+    assert context.consensus_pool == ("openai/a", "openai/b")
+    assert _context().fallback_model == "openai/gpt-4.1-mini"
+
+
+def test_consensus_pool_uses_trusted_models_only() -> None:
+    context = _context(available_models=tuple(sorted(LISTED)), trusted_models=("openai/gpt-6-luna", "openai/gpt-4.1-mini"))
+    assert context.consensus_pool[:2] == ("openai/gpt-6-luna", "openai/gpt-4.1-mini")
+
+
+def test_models_of_providers_that_are_not_connected_are_not_offered() -> None:
+    rates = {("openai", "gpt-4.1-mini"): 1, ("anthropic", "claude-sonnet-4-6"): 1}
+    gateway = SimpleNamespace(provider="openai", available_models=["gpt-6-luna"])
+    assert reachable_model_names(rates, [gateway], set()) == {"openai/gpt-6-luna"}
+
+
+def test_a_provider_the_server_holds_a_key_for_keeps_its_price_table_models() -> None:
+    rates = {("openai", "gpt-4.1-mini"): 1, ("anthropic", "claude-sonnet-4-6"): 1}
+    assert reachable_model_names(rates, [], {"anthropic"}) == {"anthropic/claude-sonnet-4-6"}
+
+
+def test_the_strong_model_comes_from_trusted_models_not_from_a_keyword_match_in_the_whole_list() -> None:
+    listed = ("openai/gpt-5-codex-high", "openai/gpt-6-luna", "openai/gpt-4.1-mini")
+    context = _context(available_models=listed, trusted_models=("openai/gpt-6-luna",))
+    assert context.frontier_model("openai/gpt-6-luna") == "openai/gpt-6-luna", "gpt-5-codex-high matches the 'gpt-5' hint but answers 404"
+
+
+def test_a_trusted_model_that_matches_a_hint_is_preferred_and_without_trust_the_list_is_searched() -> None:
+    trusted = _context(available_models=("openai/a", "openai/gpt-5-x"), trusted_models=("openai/mine", "openai/gpt-5-y"))
+    assert trusted.frontier_model("openai/mine") == "openai/gpt-5-y"
+    assert _context(available_models=("openai/a", "openai/gpt-5-x")).frontier_model("openai/a") == "openai/gpt-5-x"

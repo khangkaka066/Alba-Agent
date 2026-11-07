@@ -7,7 +7,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from nexus_computer_sandbox import ComputerSandboxSupervisor, DockerSandboxProvider
+from nexus_computer_sandbox import ComputerSandboxSupervisor, DockerSandboxProvider, LocalSandboxProvider
+from nexus_computer_sandbox.execution_policy import ExecutionPolicy
 from nexus_kernel import Context, Plugin
 from nexus_plugins.seams import DATABASE, SANDBOX
 
@@ -32,3 +33,16 @@ class DockerSandboxPlugin(Plugin):
         root = Path(str(config.get("root") or os.environ.get("NEXUS_COMPUTER_ROOT", "/tmp/nexus-computers")))
         image = str(config.get("image") or os.environ.get("NEXUS_SANDBOX_IMAGE", "python:3.11-slim"))
         ctx.on_dispose(ctx.service(SANDBOX).add_provider(DockerSandboxProvider(root, image=image)))
+
+
+class LocalSandboxPlugin(Plugin):
+    """Computers on this machine without Docker, inside the macOS sandbox with the execution policy. Not in the default list: add it with a
+    patch file and set NEXUS_SANDBOX_PROVIDER=local. `strict: true` asks before every command; with nobody to answer, an ask is a refusal."""
+
+    name = "sandbox.local"
+    requires = (SANDBOX,)
+
+    async def apply(self, ctx: Context, config: Mapping[str, Any]) -> None:
+        root = Path(str(config.get("root") or os.environ.get("NEXUS_COMPUTER_ROOT", "/tmp/nexus-computers")))
+        policy = ExecutionPolicy(strict=bool(config.get("strict", False)))
+        ctx.on_dispose(ctx.service(SANDBOX).add_provider(LocalSandboxProvider(root, policy=policy)))

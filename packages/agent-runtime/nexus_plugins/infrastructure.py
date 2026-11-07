@@ -22,6 +22,7 @@ class InfrastructurePlugin(Plugin):
         ctx.on_dispose(engine.dispose)
         redis = Redis(
             host=str(config.get("redis_host") or os.environ.get("NEXUS_REDIS_HOST", "redis")),
+            port=int(os.environ.get("NEXUS_REDIS_PORT", "6379")),
             password=os.environ["NEXUS_REDIS_PASSWORD"], decode_responses=True,
         )
         ctx.on_dispose(redis.aclose)

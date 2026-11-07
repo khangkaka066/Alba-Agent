@@ -42,7 +42,7 @@ def _crew(identifier: str, label: str, agent: AgentSpec, task: TaskSpec) -> Crew
     return CrewNodeSpec(id=identifier, label=label, agents=(agent,), tasks=(task,))
 
 
-def _sandbox(identifier: str, label: str, instructions: str, verify: str = "python -m compileall -q /workspace") -> NexusGenSandboxNodeSpec:
+def _sandbox(identifier: str, label: str, instructions: str, verify: str = "python -m compileall -q .") -> NexusGenSandboxNodeSpec:
     return NexusGenSandboxNodeSpec(
         id=identifier, label=label, coder_model=DEFAULT_MODEL, reviewer_model=DEFAULT_MODEL,
         coder_instructions=instructions,
@@ -117,13 +117,13 @@ def build_template_catalog() -> tuple[WorkflowTemplate, ...]:
     data_nodes = (
         StartNodeSpec(id="trigger", label="Dataset input", input_schema={"type": "object", "properties": {"dataset": {"type": "string", "description": "CSV text content"}, "dataset_base64": {"type": "string", "description": "Base64-encoded XLSX workbook content"}, "filename": {"type": "string"}, "question": {"type": "string"}}}),
         _crew("plan", "Analysis plan", DATA_ANALYST, _task("plan_metrics", "analyst", "Inspect the supplied dataset and question from {input}. Produce a statistical analysis plan, data validation checks, and the metrics needed to answer the question.", "A structured analysis plan with metrics, checks, and assumptions.", "DataAnalysisPlan")),
-        _sandbox("analyze", "Calculate and chart", "Read the mounted CSV or XLSX path listed in mounted_files from /workspace using pandas/openpyxl. Validate rows, columns, missing values, and units before computing requested metrics. Save labeled matplotlib charts in /workspace/artifacts and print a compact machine-readable summary. Never fabricate data or overwrite source input.", "python -m compileall -q /workspace"),
+        _sandbox("analyze", "Calculate and chart", "Read the mounted CSV or XLSX path listed in mounted_files from the working directory using pandas/openpyxl. Validate rows, columns, missing values, and units before computing requested metrics. Save labeled matplotlib charts in an artifacts folder in the working directory and print a compact machine-readable summary. Never fabricate data or overwrite source input.", "python -m compileall -q ."),
         _crew("report", "Executive report", DATA_WRITER, _task("write_report", "executive_writer", "Use the supplied request {input} and verified prior workflow results {nodes} to write an executive report with key findings, recommended actions, and limitations.", "A concise executive report grounded in measured results.", "ExecutiveDataReport")),
     )
     qa_nodes = (
         StartNodeSpec(id="trigger", label="Project or API input", input_schema={"type": "object", "properties": {"sandbox_files": {"type": "object", "description": "Small source files added by the workspace operator"}, "openapi_document": {"type": "string", "description": "Supplied OpenAPI document"}}}),
         _crew("plan", "Bounded test plan", QA_ARCHITECT, _task("plan_tests", "qa_architect", "Inspect only the user-provided local project snapshot or OpenAPI document in {input}. Map its important interfaces and propose bounded, non-destructive functional and security tests.", "A scoped test plan with explicit exclusions.", "SecurityTestPlan")),
-        _sandbox("verify", "Run local checks", "Inspect only the operator-supplied source files mounted in /workspace. Create focused pytest tests and non-invasive static checks based on those files and the prior test plan, run them locally, and record exact results. Do not access the network, production systems, credentials, or external repositories.", "python -m pytest -q /workspace"),
+        _sandbox("verify", "Run local checks", "Inspect only the operator-supplied source files mounted in the working directory. Create focused pytest tests and non-invasive static checks based on those files and the prior test plan, run them locally, and record exact results. Do not access the network, production systems, credentials, or external repositories.", "python -m pytest -q ."),
         _crew("review", "Audit summary", QA_REVIEW, _task("summarize_audit", "security_reviewer", "Use prior workflow state {nodes} and observed sandbox results to summarize test outcomes. Separate confirmed issues from unverified risks and propose remediation without opening issues or pull requests.", "A factual audit summary with test outcomes and unresolved risks.", "SecurityAuditReport")),
         ApprovalGateNodeSpec(id="approval", label="Review before publishing", action_description="Review proposed findings before creating external issues or pull requests.", required_role="admin", boundary_rules=("external_issue_creation", "pull_request_creation")),
     )

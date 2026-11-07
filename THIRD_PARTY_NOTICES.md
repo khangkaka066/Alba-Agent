@@ -444,3 +444,27 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 Copyright (c) the respective upstream copyright holders, as identified in each distribution's license file.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use the relevant distribution except in compliance with the License. You may obtain a copy of the License at <https://www.apache.org/licenses/LICENSE-2.0>. Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+
+## Programs bundled in the desktop installer
+
+The desktop installer (`apps/desktop`, built by `scripts/package/build_runtime.py`) ships unmodified upstream programs next to the application. Each keeps its own license, which applies to that program only:
+
+- PostgreSQL 16 (PostgreSQL License), from the zonky.io embedded-postgres-binaries distribution.
+- Redis 7.2.4 (BSD 3-Clause), built from the upstream source release. Later Redis versions use different licenses and are not bundled.
+- Qdrant 1.12.6 (Apache-2.0), upstream release binary.
+- CPython 3.12 (Python Software Foundation License), from python-build-standalone, with the Python packages listed in `apps/api/requirements.txt` under their own licenses.
+- Electron (MIT) and the Node.js runtime it embeds.
+- Node.js 22 LTS and npm (MIT, with the licenses of npm's own dependencies inside `node/lib/node_modules/npm`), upstream release binary, for commands that agents run. Separate from the Node.js inside Electron.
+- Git 2.56.0 (GNU GPL version 2), built from the unmodified upstream source with `scripts/package/build_runtime.py`, for commands that agents run.
+- FFmpeg 9.0.2 (GNU LGPL version 2.1 or later), built from the unmodified upstream source with `--disable-gpl --disable-nonfree` and without any third-party codec library, for commands that agents run. H.264 and AAC use the operating system's VideoToolbox and AudioToolbox.
+
+### Source code of the GPL and LGPL programs
+
+Git and FFmpeg are separate programs that the application starts as commands; they are not linked into it and the application's own code is not under their licenses. Their complete corresponding source is the upstream release below, unmodified, and the exact build commands are in `scripts/package/build_runtime.py` and `scripts/package/runtime.json` (which pins the source archive by SHA-256). Anyone who received the installer may obtain that source from the addresses below, and from the publisher of this installer on request, for at least three years after the release:
+
+- Git 2.56.0: https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.56.0.tar.xz
+- FFmpeg 9.0.2: https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz
+
+The licenses are in the `COPYING` files of those archives. FFmpeg is relinkable: its libraries are linked statically into `ffmpeg` and `ffprobe`; rebuilding them from the same source with the same commands produces equivalent programs, and the files in the app's `runtime/tools/bin` folder can be replaced by ones built that way. The license texts of Node.js, Git and FFmpeg are shipped beside each program (`LICENSE*` files in `runtime/node`, `runtime/git`, `runtime/tools`).
+
+A Chromium-based browser is not shipped. The `headless-browser` command uses Google Chrome, Chromium, Microsoft Edge or Brave when one is installed in `/Applications`, and says so when none is.

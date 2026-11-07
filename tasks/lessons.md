@@ -79,3 +79,18 @@ The Docker provider hid this with a separate /tmp tmpfs. Anything that replaces 
 - A feature can be half-built: `custom_model_ids` pinned the list at save time, then the connection test overwrote it with the gateway's list. When a setting exists, grep every writer of the field it should control.
 - Use a probe as a signal (flag, avoid choosing automatically), not as a verdict (hide): its answers depend on the gateway's mood.
 - A key that worked an hour ago was rejected (401 "Invalid token") before the last live check, so that check was replaced by tests with a mock gateway (`httpx.MockTransport`). Custom provider URLs must be public HTTPS, so a local fake gateway cannot be used through the API; test the function that decides, and keep the endpoint thin.
+
+## Implementing from a paper (Phase 42)
+- Read the paper's text, not only its abstract, before coding from a request that cites it. Of what the request attributed to arXiv:2608.05643, the algorithm, tau = 0.7, tau_sim = 0.85, H(N), Eq. 6-9 and eta were there; the 0.92 prune, the early stop (the paper says it uses no stopping policy), tier table, (5, 3) and auto-quarantine were not, and the paper warns against the last one (a negative trace-level B(d) does not imply worse final answers). Label extensions as ours in code and docs.
+- Two quantities can hide under one name: rho_rec / rho_reg (question level, plurality-vote flips) and mu_{W->C} / mu_{C->W} (trace level). Keep them as two functions.
+- A threshold calibrated for one embedder and one text length does not transfer: 0.85 gave ARI 0 on short rollouts for every embedder I tried. Calibrate per embedder, on held-out data.
+- Match name hints as whole words: "gemini" contains "mini" and was classified as a small model.
+- New test folders are not collected unless `testpaths` lists them. Two `conftest.py` files without packages make mypy stop at "Duplicate module named conftest" and hide every other error; `pythonpath` in pyproject avoids both.
+- `pdfplumber` extracts a two-column paper well enough to search, but columns interleave: read equations from the appendix paragraph that defines them, and confirm the symbols with a grep.
+
+## Improving a measure without fooling myself (Phase 42, embeddings)
+- Split the labelled data before tuning: tune on some problems, judge on problems written afterwards. The gate that looked fine on the tuning problems failed on the held-out ones (17-77% false alarms against the 10% it was tuned for); without the split I would have shipped it.
+- Look for the cause before the model: swapping among six encoders moved AUC by about 0.05, removing the shared topic moved it by about 0.09 for all of them.
+- A sweep that ends at its edge has not found the optimum. The first grid stopped at tau = 0, where the best value sat; widening it to negative values raised exact-cluster-count from about 0.15 to 0.6-0.7.
+- Record what failed next to what worked (largest-gap cut, lexical + dense concatenation, dense ensembles, absolute gate); the next person will try the same ideas.
+- Fixed-size caches of embeddings made 100+ configuration comparisons cheap; embed once, vary the analysis.

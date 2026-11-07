@@ -565,3 +565,109 @@ One hand-rolled React app: `components/studio-app.tsx` (379-line monolith: sideb
 - Suggest: a run that fails with a provider "model not found" gets `suggested_models` and a sentence naming the user's default models (`failure.is_model_not_found`, `with_model_suggestions`, `workers/jobs.py`).
 - Evidence: API suite 427 passed (same 2 Redis/sandbox failures as on untouched code); web tsc, eslint clean, 62 node tests pass. The live gateway check could not be repeated: the ShopAIKey key now answers 401 "Invalid token" (checked with `/models` and a one-token chat), so pinned/flagged behaviour is covered by mock-gateway tests only.
 - Not verified: the picker badge and the settings warning have not been seen in a browser; the dmg was not rebuilt; the DB path of the failure suggestions (`jobs.py`) has no automated test (the pure parts do).
+
+# Phase 42 — Breadth-depth refinement (arXiv:2608.05643) — PLAN, not started
+Source: Bilal et al., "Refining Over Resampling: Test-Time Self-Correction for LLM Reasoning", arXiv:2608.05643v1, 6 Aug 2026. Text read from the PDF (pdfplumber). Evaluated on MATH benchmarks with open-weight models (Qwen2.5-1.5B / Math-7B, Ministral-8B, LLaMA-3.1-8B); no code tasks, no hosted API models.
+
+## What the paper does say (checked in the text)
+- Algorithm 1 / Eq. (3)-(5): generator, critic, corrector roles conditioned as g ~ pi_G(x, r^(d-1)), c ~ pi_C(x, g), r ~ pi_R(x, g, c); N i.i.d. rollouts at fixed tau = 0.7; default N = 8, D = 4. When the critic finds no error it "explicitly confirms the trace" (Sec 3.3). Answer extraction Phi then plurality vote V, no verifier / PRM / learned stopping policy (Sec 3.4, 5).
+- Table 2: explicit critique helps "in most settings" (not all: Qwen2.5-Math-7B AIME24 is 10.0 with and without).
+- A.2: rho_rec(d), rho_reg(d) = QUESTION-level flips of the plurality-vote answer (Eq. 6-7). A.3: mu_{W->C}(d), mu_{C->W}(d) = ROLLOUT-level flips over (q, i) pairs (Eq. 8-9); B(d) = mu_{W->C} - mu_{C->W}. Two different quantities; the request treats them as one.
+- A.4: U(d) = E[1[|A(d)| = 1]] (answer agreement) and terminal diversity D = E[1[|A(D)| > 1]] — DIAGNOSTICS, not a stopping rule. Full agreement "remains relatively rare".
+- A.6: embeddings all-MiniLM-L6-v2 (384-d), agglomerative clustering, average linkage, cosine distance, threshold 1 - tau_sim with tau_sim = 0.85; p_j(N), R(N), f_max(N), H(N) = -sum p_j log2 p_j. Used ONLY for the redundancy analysis (Fig. 1); it "does not affect the main accuracy results".
+- Sec 3.5 / A.7: C_gen = sum 2 P_gen (T_in + T_out) FLOPs; eta = 10^3 (a_ours - a_base) / (C_ours - C_base), accuracy in points averaged over five benchmarks, compute in TFLOPs.
+- Table 3: accuracy is NOT monotonic in N or D (Qwen2.5-1.5B, AMC23, N=3: 21.05 / 27.5 / 20.5 / 20.5 for D=2..5); the paper concludes moderate settings, N = 8, D = 4, are a stable trade-off. A.8: refinement is "most compute-efficient for smaller models".
+
+## What the request adds (extensions — to be labelled as ours, not the paper's)
+- 0.92 similarity prune and "orthogonal perspective" injection (no 0.92 anywhere in the paper).
+- Early stop when the critic reports zero defects in a majority and U(d) = 1.
+- Cluster + critique-score selection for open-ended artifacts (code, reports).
+- Reading B(d) as a skill / capsule signal and AUTO-quarantining on B(d) < 0. The paper warns the opposite: a negative rollout-level B(d) "does not necessarily imply lower final accuracy" because plurality voting suppresses isolated harmful flips (A.3), and B(d) "can be negative for some models and depths" (A.8).
+- Tier table (5,3) / (8,4) / lean (1,1), (3,2) for Ollama 1.5B-8B, gpt-4.1-mini, frontier models.
+- eta for hosted API models: their parameter count P is not public, so TFLOPs cannot be computed; tokens or USD must stand in (label them eta_tokens / eta_usd).
+
+## Findings in our repo that shape the work
+- Paths: `packages/agent-runtime/consensus/` exists (engine.py, 48 lines: draft / cross-critique / arbiter over several models; production consensus actually lives in `apps/api/app/services.py` consensus_handler). `packages/learning-transfer/learning_transfer/negative_transfer_detector.py` exists (89 lines: TIS score, minimum_applications = 5, `TransferCircuitBreaker` quarantine already wired in `routers/learning_transfer.py`). `packages/model-gateway/nexus_model_gateway/auto_distill.py` exists (75 lines). Intelligence tab = `studio-app.tsx` line ~393: EvolutionHost, LearningTransferRadar, FinOpsDistillationPanel.
+- Existing transfer data is two UNPAIRED groups (baseline vs treatment). mu_{W->C} / mu_{C->W} need the SAME trace before and after (a pair); inside the refinement loop that pair is natural (g_i^(d) vs r_i^(d)), for skills / capsules it needs paired replays or retries.
+- "Correct / wrong" needs an oracle. The paper uses gold answers. Here the oracle is the verification probe (Status.VERIFIED) or a human approval; without one the flip metrics are undefined.
+- No sentence-embedding library in `apps/api/requirements.txt`; embeddings are available through the gateway (`LiteLLMEmbeddingRouter`, billed) only.
+- Cost: N = 8, D = 4 is 8 + 3*8*4 = 104 model calls per task, each with a growing context, against well under 10 today. At ~0.03 USD/task now that is roughly 10-20x. Must be opt-in with a budget guard.
+
+## Phasing (each phase ends green and committed on its own)
+- [x] Phase A — pure library, no wiring, no network: `consensus/breadth_depth_refiner.py` (injected generate / critique / correct / extract / embed callables; stages 1-3; H(N), cluster mass, U(d), diversity D; early stop; plurality vote; deterministic tie-break), pluggable `Embedder` (lexical fallback for tests), tests with scripted policies.
+- [x] Phase B — metrics: `negative_transfer_detector.py` gains rho_rec / rho_reg (question level), mu_{W->C} / mu_{C->W} / B(d) (rollout level) from paired observations, a minimum-sample guard and a significance check, and feeds the EXISTING circuit breaker (recommendation first, human approval for rollback). `auto_distill.py` gains a compute ledger, eta (TFLOPs when P known, else tokens / USD), and `allocate_breadth_depth(model_tier, task)`.
+- [ ] Phase C — wiring behind an opt-in flag + budget guard: hosted-model adapter in services, diagnostics persisted in the run's node output (no migration), `GET` endpoint, Intelligence panel in `apps/web` (vi / en strings, tests).
+- [ ] Phase D — live check on the gateway with a small N, D (needs a free API key / balance; the benchmark of the cost work must be finished first).
+
+## Safe to do while the branch-B benchmark runs
+The benchmark stack runs from `apps/desktop/runtime/mac-arm64` with data in `/tmp/nexus_bench_data` (checked with ps). Phases A and B only edit `packages/` and add tests, make no API calls and are light on CPU. Do NOT touch `apps/desktop/runtime`, `benchmarks/code-tasks/{bench,tasks,results}`, ports 13000 / 18000, or the ShopAIKey key until it finishes.
+
+## Decisions taken (answers of the user, 2026-11-07)
+- Scope A+B first. Negative transfer: RECOMMEND, a person approves (`assess_flips` sets `requires_human_approval`, `recommend_quarantine`; nothing rolls back by itself).
+- Refinement stays OFF by default; `allocate_breadth_depth` only suggests (N, D) per model tier and `fit_to_call_budget` trims it to a call cap. Chosen by me when asked to balance accuracy against cost: the paper's Table 3 is not monotonic and N = 8, D = 4 is ~104 calls per task.
+- Embedder behind an interface; lexical is the default; MiniLM (ONNX, local) compared against it.
+
+## Review (Phase 42, A and B)
+- Built: `consensus/diversity.py` (cosine, average-linkage clusters at tau_sim, R(N), f_max, H(N), redundant pairs), `consensus/embedders.py` (LexicalEmbedder, MiniLMOnnxEmbedder), `consensus/breadth_depth_refiner.py` (Algorithm 1: breadth, G -> C -> R per depth as parallel batches, mandatory critique, plurality vote, deterministic tie-break, open-ended selection by dominant cluster, early stop, redundancy inject / prune, call budget, oracle flip counts), `negative_transfer_detector.py` (flip_rates, question_level_rates, assess_flips with an exact sign test and a final-outcome guard, flag_for_review), `auto_distill.py` (tier, allocation, call-budget fit, compute ledger, eta with a unit label).
+- Tests: 82 new (agent-runtime 36, learning-transfer 14, model-gateway 32); `pyproject.toml` testpaths + pythonpath register them (before, only apps/api/tests was collected). Whole repo: 544 passed, the same 2 old failures (Redis, sandbox files); mypy strict unchanged at 2 errors.
+- Embedder comparison (48 hand-written rollouts, 4 problems x 3 approaches x 4 wordings, single thread, Apple Silicon; indicative only):
+
+| embedder | AUC same-vs-other approach | ARI @ paper tau 0.85 | ARI held-out calibrated | H error calibrated (bits) | 8 texts (median) | process RSS | model |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| lexical (default) | 0.575 | 0.00 | 0.03 | 0.69 | 1.5 ms | 29 MB | none |
+| lexical, no batch IDF | 0.573 | 0.00 | -0.05 | 0.69 | 1.5 ms | 31 MB | none |
+| lexical, unigrams only | 0.599 | 0.00 | 0.03 | 1.13 | 1.8 ms | 31 MB | none |
+| MiniLM fp32 | 0.681 | 0.00 | 0.26 | 0.65 | 267 ms | 225 MB | 86 MB |
+| MiniLM int8 (arm64) | 0.672 | 0.00 | 0.30 | 0.64 | 80 ms | 119 MB | 22 MB |
+
+  Reading: MiniLM separates solution approaches better than the bag of words, but both are weak on short rollouts of ONE problem (they share the topic): even MiniLM puts same-approach pairs at 0.51 cosine and other-approach pairs at 0.44. The paper's tau_sim = 0.85 makes every rollout its own cluster on this kind of text (ARI 0, H always log2 N), so the threshold has to be calibrated per embedder and text length (leave-one-problem-out gave about 0.54 for MiniLM, about 0.08-0.15 for the lexical one). int8 shows no visible accuracy loss against fp32 and is 3x faster, half the memory, a quarter of the size. Speed is irrelevant next to a model call (80 ms against seconds); the real costs are packaging (22 MB model + onnxruntime / tokenizers / numpy, which the bundle already has as transitive dependencies but `requirements.txt` does not list) and one more thing to verify.
+  Sanity of the ONNX embedder: 0.89 for "The new movie is awesome" vs "...so great", -0.03 for the cat sentence, unit-length 384-d vectors, matching the sentence-transformers documentation.
+- Not done: Phase C (wiring behind a flag, services adapter, endpoint, Intelligence panel, vi / en strings) and Phase D (a live run through the gateway). Nothing calls a model yet and nothing is shown to users.
+- Limits worth keeping in mind: the paper tests math with extractable answers; code is our extension. For code the better oracle is the test probe (`Status.VERIFIED`), which the paper does not use. Flip rates need an oracle and a PAIR per trace; the existing capsule data are two unpaired groups, so wiring them needs paired replays.
+
+## Embedding improvement (Phase 42, follow-up; phases C and D paused at the user's request)
+Goal: make the rollout-diversity figures (clusters, H(N)) trustworthy. Method: 8 hand-written problems (96 rollouts: 3 approaches x 4 wordings each). Everything was tuned on the first four ("design"); the last four were written afterwards and only used to judge ("test").
+- Diagnosis: rollouts of ONE problem share its topic, which dominates their cosine; same approach 0.51 vs another approach 0.44 for MiniLM. The paper's tau_sim = 0.85 (meant for long math traces) then leaves every short rollout alone: ARI 0.00, H error 1.48 bits for every encoder except gte-small.
+- What worked: remove what the rollouts share (the problem statement's direction, then the batch mean), re-normalise, cluster at cosine -0.1. Pairwise AUC 0.68-0.77 -> 0.85-0.90 on test. The cut -0.1 was the best for all six sentence encoders, chosen on design, confirmed on test; useful window about -0.2..0.0.
+- What did not work (dropped): cutting the dendrogram at its largest jump (ARI 0); concatenating the lexical embedder with a dense one (AUC and ARI got worse); ensembling two dense encoders (no better than gte-small alone); a gate on the raw mean similarity to detect "all rollouts are one approach" (absolute level does not transfer between problems: tuned for 10% false alarms, 17-77% on the unseen four; the problem-relative form was better but unstable across encoders, 5-29%).
+- Final numbers through `analyze_directions` (30 random 8-of-12 batches per problem), paper setting -> new default:
+
+| encoder | design ARI | TEST ARI | TEST exact #clusters | TEST H error (bits) | size |
+|---|---:|---:|---:|---:|---:|
+| paper setting, any MiniLM | 0.00 | 0.00 | 0.00 | 1.49 | |
+| MiniLM-L6 int8 | 0.31 | 0.62 | 0.68 | 0.17 | 22 MB |
+| MiniLM-L12 int8 | 0.45 | 0.60 | 0.69 | 0.16 | 32 MB |
+| gte-small fp32 | 0.43 | 0.58 | 0.66 | 0.21 | 127 MB |
+| lexical (no model) | 0.06 | 0.16 | 0.00 | 0.80 | none |
+
+  Per-problem TEST ARI (L6 int8): 0.47, 0.77, 0.84, 0.38 — wide. L6 and L12 are tied within the noise; L6 is the smaller. The lexical embedder stays only as a dependency-free fallback and now says so (`reliable_for_diversity = False`, a warning in the result).
+- Code: `diversity.py` (`dendrogram`, `cut_at_similarity`, `center`, `remove_direction`, `analyze_directions`, `CENTERED_TAU = -0.1`; the largest-gap cut was removed), `embedders.py` (`OnnxSentenceEmbedder` with mean or CLS pooling, MiniLM subclass), refiner config `diversity_view = "centered"` (paper's raw view stays selectable), `tau_centered`, `flat_margin`. Tests: 45 in agent-runtime (one needs `NEXUS_MINILM_DIR`, a real-encoder regression on a labelled fixture), whole repo 552 passed with the same 2 old failures, mypy unchanged at 2.
+- Limits: one author, 8 problems, rollouts of 30-50 words (the paper's are long traces — its 0.85 may well be right for them; measure before assuming otherwise). Centering keeps only RELATIVE differences, so it cannot tell "all rollouts are one approach" from "several"; `flat_margin` is optional and uncalibrated. Fewer than 3 rollouts use the raw view. Timings were taken while the benchmark was running and mean little except as ratios.
+
+# Phase 43 — Two long-lived branches: `main` = desktop app, `web` = hosted (Docker) — PLAN, not started
+Decision (user, 2026-11-07): `main` is the desktop product shown to everyone; a second branch carries the web / Docker deployment. The local machine keeps only `main`.
+
+## What I measured before planning
+- ~95% of the source is shared (api 9.2k, web 9.2k, packages ~16k lines); only `apps/desktop` (829) is desktop-only and `infra/` (220) + the Docker files are web-only. So the branches must differ by ADDED files, never by deleted shared code, or every merge conflicts.
+- Things that look web-only but are not: `packages/agent-runtime/nexus_plugins` and `nexusgen_bridge` import the Docker sandbox provider unconditionally (it stays on main, as an unused plugin); `apps/api/tests/test_billing.py` imports `scripts/issue_enterprise_license.py` (script stays on main with the billing code); `scripts/run-local.sh` needs `quickstart.sh` (`.env`) and `docker-compose.host-ports.yml` (a Docker-based dev route that `stack-cli` has replaced).
+- The desktop app has a second mode (`apps/desktop/src/settings.ts`): a window onto any HTTPS server. Keep it: it is how the desktop app connects to a `web` deployment.
+- A third Dockerfile exists: `packages/computer-sandbox/Dockerfile` (the sandbox image).
+
+## Files that leave `main` (deployment artifacts and their docs only)
+`docker-compose.yml`, `docker-compose.prod.yml`, `docker-compose.host-ports.yml`, `infra/production/`, `apps/api/Dockerfile`, `apps/web/Dockerfile`, `packages/computer-sandbox/Dockerfile`, `scripts/quickstart.sh`, `scripts/smoke_test.py`, `scripts/run-local.sh` (+ `scripts/load_env.py` if nothing else uses it; `.env.example` to be checked), the `images` job of `.github/workflows/ci.yml`, "Option B: Docker" and the compose lines in README.md / README.vi.md / AGENTS.md. All of it stays on `web`.
+
+## Git sequence (so later merges stay clean)
+1. Land the current work on `main` first (1 unpushed commit + uncommitted Phase 42 work): shared code must not change between steps 2 and 4.
+2. Cut `web` from that `main` commit P and push it: it starts as the full current state.
+3. On a feature branch off `main`, make commit D: ONLY the deletions above + README / docs / CI for the desktop. No shared-code edits in D. PR into `main`.
+4. On `web`: `git merge -s ours main` once. It records D as merged without applying the deletions, moves the merge base past D, so later `git merge main` brings only newer shared changes.
+5. On `web`, add only NEW files: `README.web.md`, `.github/workflows/web-images.yml`; the root README on `web` is the one file expected to conflict on each merge (resolve by keeping the web version).
+6. `ci.yml` on both branches triggers on `push` to `main` and `web`.
+7. Shared change: commit on `main`, then `git merge main` into `web`. Desktop-only change: `main` only. Web-only change: `web` only.
+8. Trade-off to keep: `web` also carries `apps/desktop` (never edit it there).
+
+## Local machine
+Keep `main` checked out; `git remote set-branches origin main` stops fetching `web`; a worktree (`git worktree add ../Nexus-web web`) when the web side is needed.
+
+## Needs the user's go-ahead (outward-facing)
+Merging to `main`, creating and pushing `web`, deleting files from `main`.

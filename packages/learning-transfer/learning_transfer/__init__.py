@@ -2,11 +2,20 @@
 
 from .distiller import DistillationCandidate, DistillationTrigger, EpisodicKnowledgeDistiller
 from .negative_transfer_detector import (
+    DepthRates,
     DetectorConfig,
+    FlipAssessment,
+    FlipAssessmentConfig,
+    FlipRates,
+    TraceTransition,
     TransferImpactScore,
     TransferObservation,
     TransferOutcome,
     TransferPairDecision,
+    assess_flips,
+    flag_for_review,
+    flip_rates,
+    question_level_rates,
     score_transfer_pair,
 )
 from .scope_firewall import (
@@ -18,9 +27,10 @@ from .scope_firewall import (
 )
 
 __all__ = [
-    "AgentLearningContext", "DetectorConfig", "DistillationCandidate",
-    "DistillationTrigger", "EpisodicKnowledgeDistiller", "FirewallDecision",
-    "LearningPolicy", "ScopeFirewall", "TransferImpactScore",
+    "AgentLearningContext", "DepthRates", "DetectorConfig", "DistillationCandidate",
+    "DistillationTrigger", "EpisodicKnowledgeDistiller", "FirewallDecision", "FlipAssessment", "FlipAssessmentConfig", "FlipRates",
+    "LearningPolicy", "ScopeFirewall", "TraceTransition", "TransferImpactScore",
     "TransferObservation", "TransferOutcome", "TransferPairDecision",
+    "assess_flips", "flag_for_review", "flip_rates", "question_level_rates",
     "sanitize_capsule", "score_transfer_pair",
 ]

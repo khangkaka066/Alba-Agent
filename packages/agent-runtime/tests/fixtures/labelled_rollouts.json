@@ -1,0 +1,71 @@
+{
+ "two_sum": {
+  "problem": "Given an array of integers and a target, return the indices of two numbers that add up to the target.",
+  "approaches": {
+   "brute_force": [
+    "I'll check every pair of elements with two nested loops. For each i and each j greater than i, I test whether nums[i] + nums[j] equals the target and return those indices when it does. This is O(n^2) time and O(1) extra space.",
+    "Simple approach: try all combinations. Loop over the array, and for every element loop over the elements after it, adding the two values. As soon as a sum matches the target, return the pair. Quadratic time, constant memory.",
+    "Start with an exhaustive search. Two for-loops enumerate every unordered pair; compare their sum with the target and output the first match. The cost is n squared comparisons but it needs no extra data structures.",
+    "Because the input is small, a double loop is enough: iterate i from 0 to n, iterate j from i+1 to n, and if the two numbers add up to the target, return i and j. Time O(n^2), space O(1)."
+   ],
+   "hash_map": [
+    "Use a hash map from value to index. Walk through the array once; for each number compute the complement target minus number and check whether it is already in the map. If so return the stored index and the current one, otherwise store the number. O(n) time, O(n) space.",
+    "I can solve it in a single pass with a dictionary. For every element look up target - element among the values seen so far; a hit gives the answer immediately, a miss means I record the current value and its position.",
+    "Trade memory for speed: keep a lookup table of numbers already visited. At each step ask whether the needed partner (target minus current) exists in the table, returning both indices when it does. Linear time overall.",
+    "Maintain a mapping of seen values to their indices while scanning left to right. The complement of the current number is checked in constant time, so the whole scan is O(n) with O(n) extra space."
+   ],
+   "sort_two_pointers": [
+    "First sort the numbers together with their original indices. Then place one pointer at the start and one at the end: if the sum is too small move the left pointer right, if too large move the right pointer left, until the sum equals the target. O(n log n) time.",
+    "Sorting makes this easy. After ordering the array, use the two-pointer technique from both ends, shrinking the window depending on whether the current sum is below or above the target, and map the answer back to the original positions.",
+    "Sort a copy of the array paired with indices, then sweep inwards with a low and a high index. A sum smaller than the target raises low; a bigger one lowers high. Finding equality returns the stored indices. The sort dominates at O(n log n).",
+    "Order the values first, keeping track of where each came from. Walk two cursors toward each other, advancing the left one when the total is short and retreating the right one when it overshoots, and stop on a match."
+   ]
+  }
+ },
+ "cycle_in_list": {
+  "problem": "Given the head of a singly linked list, determine whether the list contains a cycle.",
+  "approaches": {
+   "hash_set": [
+    "Walk the list and remember every node I have already visited in a hash set. If I reach a node that is already in the set the list has a cycle; if I reach the end (null) it does not. Time O(n), but the set costs O(n) memory.",
+    "Keep a collection of seen node references while traversing. Encountering a repeated node proves a loop exists, whereas hitting None means the list ends. The extra storage grows linearly with the length.",
+    "Track visited nodes in a set as I move along next pointers; the first time a node shows up twice I can answer true, and reaching the tail answers false. Linear time, linear space.",
+    "Traverse once and record identities of the nodes in a lookup structure. A duplicate identity signals a cycle, and running off the end of the list means there is none."
+   ],
+   "floyd_two_speeds": [
+    "Use Floyd's tortoise and hare: a slow pointer moves one step and a fast pointer two steps. If there is a cycle they must eventually meet inside it; if the fast pointer reaches the end there is no cycle. O(1) extra space.",
+    "Run two pointers at different speeds through the list. When the faster one laps the slower one they coincide, which proves a cycle; if the fast one falls off the end the list is acyclic. No memory beyond the two pointers.",
+    "Apply the hare and tortoise technique: advance one pointer by one node and another by two on each iteration, and compare them. Meeting means a loop, a null means no loop. Constant space.",
+    "Send a runner twice as fast as a walker down the list. In a cyclic list the runner catches the walker inside the loop, otherwise the runner hits the end first. Time is linear and space is constant."
+   ],
+   "mutate_nodes": [
+    "Mark nodes as I visit them by overwriting a field, for example setting node.val to a sentinel value. If I ever reach a node that already carries the sentinel, there is a cycle. This destroys the original data.",
+    "Reverse the links while walking: if the traversal comes back to the head after flipping pointers, the list was cyclic. It uses no extra memory but modifies the structure, so I would restore it afterwards.",
+    "Cut each visited node's next pointer to point at a dummy node as I go. Arriving at the dummy again means I looped back; reaching the end of the list normally means no cycle. The list is damaged in the process.",
+    "Change the list as I traverse it: stamp each node with a visited flag and stop when I see a stamped node. It is O(n) time and O(1) space, at the price of mutating the input."
+   ]
+  }
+ },
+ "count_islands": {
+  "problem": "Count the number of islands in a binary grid, where an island is a group of adjacent land cells.",
+  "approaches": {
+   "dfs_recursion": [
+    "Scan every cell; when I find unvisited land, increment the island count and run a depth-first search that marks all connected land cells as visited by recursion. Each cell is visited once, O(rows*cols).",
+    "Flood fill with recursion: for each land cell not yet seen, call a recursive function that sinks the cell and recurses to its four neighbours, then count one more island.",
+    "Use DFS to erase a whole island as soon as I touch it: set visited land to water while recursing in four directions, and add one to the total each time a new search begins.",
+    "Iterate through the grid and launch a recursive depth-first traversal from each fresh land cell, marking everything reachable, so every launch corresponds to exactly one island."
+   ],
+   "bfs_queue": [
+    "Same scan, but explore each island with a queue: push the starting cell, repeatedly pop a cell and enqueue its unvisited land neighbours, marking them as visited. No recursion, so no stack overflow on large grids.",
+    "Breadth-first search from every unvisited land cell, expanding level by level with a deque and marking cells when they are enqueued. Each BFS run covers one full island.",
+    "To avoid deep recursion I process the grid iteratively: a queue holds the frontier of the current island and neighbours are added in order until the queue is empty, then the island counter increases.",
+    "Visit land cells with a FIFO queue instead of the call stack, flagging neighbours as they are added; counting how many times I have to start a fresh search gives the number of islands."
+   ],
+   "union_find": [
+    "Use a disjoint-set union: give each land cell its own set, then union it with its right and bottom land neighbours. The number of islands equals the number of distinct roots among land cells.",
+    "Treat cells as elements of a union-find structure with path compression; merge adjacent land cells and decrement a component counter on every successful union.",
+    "Start with the count equal to the number of land cells and merge neighbouring ones in a DSU; each merge that joins two different sets reduces the count by one, leaving the island total.",
+    "Model connectivity with disjoint sets rather than traversals: link neighbouring land squares, then count the representatives. Near-constant amortized time per union."
+   ]
+  }
+ }
+}

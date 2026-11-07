@@ -94,3 +94,11 @@ The Docker provider hid this with a separate /tmp tmpfs. Anything that replaces 
 - A sweep that ends at its edge has not found the optimum. The first grid stopped at tau = 0, where the best value sat; widening it to negative values raised exact-cluster-count from about 0.15 to 0.6-0.7.
 - Record what failed next to what worked (largest-gap cut, lexical + dense concatenation, dense ensembles, absolute gate); the next person will try the same ideas.
 - Fixed-size caches of embeddings made 100+ configuration comparisons cheap; embed once, vary the analysis.
+
+## Splitting one codebase into two long-lived branches (Phase 43)
+- Measure the overlap first: ~95% of the source was shared, so branches that each hold half of the files would conflict on every merge. Make them differ by files that are only ADDED on one side: the Docker files live only on `docker`, and `main` is `docker` minus them.
+- Deleting files on one branch and merging it into the other would delete them there too. Cut the second branch BEFORE the deletion commit, then merge the deletion with `git merge -s ours` once; later merges bring only newer shared changes. Prove it with a simulated change on a throwaway copy before relying on it.
+- Keep the deletion commit free of shared-code edits (only the removed files, their documents and CI), because `-s ours` drops everything else in it.
+- Check what the "web-only" files are referenced by before removing them: the plugin kernel imports the Docker sandbox provider, a billing test imports a licence script, a dev script needs `quickstart.sh`. Deployment files and their documents can move; code that other code imports cannot.
+- Read why CI is red before adding to it: `main` had been red for days only because one job tagged an image with a repository name containing capitals; the real checks were green.
+- A permission classifier can refuse a merge into the default branch even after the user delegated it; stop, do the rest, and ask. Do not look for a way around it.

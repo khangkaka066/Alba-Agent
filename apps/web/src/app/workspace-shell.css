@@ -289,3 +289,38 @@
 .nx-team-canvas .canvas-toolbar .saved-workflow-picker { display: block; flex: 1 1 160px; width: 180px; min-width: 0; max-width: 220px; min-height: 32px; font-size: 12px; }
 .nx-team-canvas .canvas-toolbar .evolution-toolbar { flex-wrap: wrap; min-width: 0; max-width: 100%; }
 .nx-team-canvas .canvas-toolbar .ag-canvas__log { position: static; }
+
+/* Sidebar view menu: native-style rows, with nested choices outside the scroll column. */
+.nx-sidebar-popup, .nx-sidebar-submenu { width: 296px; max-width: calc(100vw - 16px); padding: 6px; border: 1px solid var(--ag-border-strong); border-radius: 12px; background: var(--ag-panel); color: var(--ag-text); box-shadow: 0 8px 28px #0004; }
+.nx-sidebar-popup { position: fixed; z-index: 300; max-height: calc(100dvh - 16px); }
+.nx-sidebar-menu-row, .nx-sidebar-menu-back { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 35px; padding: 7px 9px; border: 0; border-radius: 5px; background: transparent; color: var(--ag-text); font: inherit; font-size: 13px; line-height: 1.4; text-align: left; cursor: pointer; }
+.nx-sidebar-menu-row > span:first-child { flex: 1; }
+.nx-sidebar-menu-row > .ag-icon { flex: none; color: var(--ag-text-3); }
+.nx-sidebar-menu-row:hover:not(:disabled), .nx-sidebar-menu-row:focus-visible, .nx-sidebar-menu-row[aria-expanded="true"], .nx-sidebar-menu-back:hover { background: var(--ag-hover); }
+.nx-sidebar-menu-row:focus-visible, .nx-sidebar-menu-back:focus-visible { outline: 1px solid var(--ag-border-strong); outline-offset: -1px; }
+.nx-sidebar-menu-row:disabled { color: var(--ag-text-3); opacity: .55; cursor: default; }
+.nx-sidebar-menu-value { color: var(--ag-text-3); white-space: nowrap; font-size: 12px; }
+.nx-sidebar-menu-separator { height: 1px; margin: 6px -6px; background: var(--ag-border); }
+.nx-sidebar-submenu { position: absolute; left: var(--submenu-left, calc(100% + 2px)); top: min(var(--submenu-top, 0px), max(0px, calc(100dvh - var(--popup-top) - 265px - 12px))); width: 230px; max-height: calc(100dvh - var(--popup-top) - 12px); overflow-y: auto; }
+.nx-sidebar-menu-back { display: none; }
+.nx-sidebar-menu-search { width: 100%; min-height: 32px; margin: 0 0 5px; padding: 5px 8px; border: 1px solid var(--ag-border-strong); border-radius: 5px; background: var(--ag-bg); color: var(--ag-text); font: inherit; font-size: 12px; }
+.nx-sidebar-options-trigger.has-filter { color: var(--ag-text); background: var(--ag-hover); }
+.nx-project-heading { display: flex; align-items: center; min-width: 0; }
+.nx-project-heading .ag-group__head { flex: 1; min-width: 0; }
+.nx-project-options { flex: none; opacity: 0; }
+.nx-project-heading:hover .nx-project-options, .nx-project-heading:focus-within .nx-project-options { opacity: 1; }
+.nx-shell .ag-row__open { padding-right: 28px; }
+.ag-row__options { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 24px; height: 26px; border: 0; border-radius: 4px; background: var(--ag-sidebar-bg); color: var(--ag-text-2); cursor: pointer; opacity: 0; }
+.ag-row:hover .ag-row__options, .ag-row:focus-within .ag-row__options { opacity: 1; }
+.ag-row__options:hover { background: var(--ag-hover); color: var(--ag-text); }
+.nx-shell .ag-row.is-unread .ag-row__name { font-weight: 600; color: var(--ag-text); }
+.nx-sidebar-unread { width: 5px; height: 5px; flex: none; border-radius: 50%; background: #448df7; }
+.nx-shell .ag-sidebar[data-density="comfortable"] .ag-row__open { min-height: 44px; padding-block: 12px; }
+@media (max-width: 900px) {
+  .nx-sidebar-popup:has(> .nx-sidebar-submenu) > :not(.nx-sidebar-submenu) { display: none; }
+  .nx-sidebar-submenu { position: static; width: 100%; max-height: calc(100dvh - var(--popup-top) - 24px); border: 0; box-shadow: none; padding: 0; }
+  .nx-sidebar-menu-back { display: flex; color: var(--ag-text-2); border-bottom: 1px solid var(--ag-border); border-radius: 0; margin-bottom: 5px; }
+}
+@media (hover: none) { .ag-row__options, .nx-project-options { opacity: 1; } }
+
+@media (max-height: 360px) { .nx-sidebar-popup:not(:has(> .nx-sidebar-submenu)) { overflow-y: auto; } }

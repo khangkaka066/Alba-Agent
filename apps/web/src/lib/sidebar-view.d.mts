@@ -1,0 +1,14 @@
+export type SidebarState = { groupBy: "project" | "none"; conversationSort: "updated" | "created" | "name"; projectSort: "custom" | "updated" | "name"; filter: "all" | "active" | "attention" | "completed" | "unread"; query: string; compact: boolean; showTime: boolean; showStatus: boolean; autoPin: boolean; archivedOnly: boolean; projectOrder: string[]; archived: Record<string, true>; pinned: Record<string, true>; seen: Record<string, number>; initialized: boolean };
+export type SidebarConversation = { name: string; run: { id: string; conversation_id?: string | null; status: string; created_at: string; updated_at?: string; started_at?: string | null; finished_at?: string | null } };
+export const SIDEBAR_DEFAULTS: SidebarState;
+export function normalizeSidebar(value: unknown): SidebarState;
+export function loadSidebar(storage: Pick<Storage, "getItem">, key: string): SidebarState;
+export function saveSidebar(storage: Pick<Storage, "setItem">, key: string, value: SidebarState): void;
+export function conversationKey(item: SidebarConversation): string;
+export function conversationTime(item: SidebarConversation, field?: "updated" | "created"): number;
+export function isUnread(item: SidebarConversation, state: SidebarState): boolean;
+export function readConversations(state: SidebarState, items: SidebarConversation[]): SidebarState;
+export function isActive(item: SidebarConversation): boolean;
+export function sidebarItems<T extends SidebarConversation>(items: T[], state: SidebarState): T[];
+export function sortSidebarProjects<T extends { name: string; tasks: SidebarConversation[] }>(groups: T[], state: SidebarState): T[];
+export function moveSidebarProject(names: string[], name: string, direction: number): string[];

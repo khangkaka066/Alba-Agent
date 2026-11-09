@@ -1,9 +1,11 @@
+import { SIDEBAR_MESSAGES } from "./sidebar-messages.mjs";
 import { ACCOUNT_MESSAGES } from "./account-messages.mjs";
 import { SETTINGS_MESSAGES } from "./settings-messages.mjs";
 // Interface text in every supported language. Keys are shared; `{name}` marks a value filled in at runtime.
 // Add a key to both tables: the test suite fails when they drift apart or when code uses a key that is missing.
 
 const vi = {
+  ...SIDEBAR_MESSAGES.vi,
   ...SETTINGS_MESSAGES.vi,
   ...ACCOUNT_MESSAGES.vi,
   "upload.choose": "Tải tệp lên",
@@ -694,6 +696,7 @@ const vi = {
 };
 
 const en = {
+  ...SIDEBAR_MESSAGES.en,
   ...SETTINGS_MESSAGES.en,
   ...ACCOUNT_MESSAGES.en,
   "upload.choose": "Upload files",

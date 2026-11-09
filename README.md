@@ -83,6 +83,8 @@ The window follows the layout of modern AI code editors, so what matters is in f
 | `⌘\` | Toggle the agent canvas |
 | `A` / `Y` / `D` | On the first approval card: allow once / always allow (scheduled tasks) / deny |
 
+The options button beside **Projects** groups conversations by project or shows a flat list, sorts by update time, creation date or name, and controls filters, density and timestamps. **Auto Pin** keeps active tasks first. Conversation menus support pinning, read/unread and archive/unarchive; project menus change the custom order. View preferences and these markers are saved on this device, scoped to the signed-in account. Archiving hides a conversation from the default list without deleting it.
+
 Shortcuts can be changed in **Settings → Shortcuts**. On narrow windows the sidebar becomes a drawer and the right panel covers the conversation.
 
 ---

@@ -422,7 +422,7 @@ function Frame(props: FrameProps) {
   return <ShellContext.Provider value={value}><div style={{ "--ag-sidebar-w": `${sidebarWidth}px` } as React.CSSProperties} className={`app-shell app-shell--chat ag-app nx-shell ${props.collapsed ? "is-collapsed" : ""} ${props.mobileNavOpen ? "is-nav-open" : ""}`}>
     <TitleBar page={shownPage} title={current?.name ?? firstWords ?? ""} project={project} collapsed={props.collapsed} onToggleSidebar={props.toggleSidebar} review={review} onShortcuts={() => navigate("shortcuts")} onNewConversation={start} />
     <div className="ag-body" inert={inSettings} aria-hidden={inSettings || undefined}>
-      <Sidebar page={page} conversations={conversations} reload={reload} navigate={navigate} footer={account} />
+      <Sidebar preferenceScope={scope.tenant_id && scope.workspace_id ? `${scope.tenant_id}:${scope.workspace_id}` : ""} page={page} conversations={conversations} reload={reload} navigate={navigate} footer={account} />
       <PanelResize className="ag-sidebar-resize" label={t("layout.sidebar")} value={sidebarWidth} min={200} max={360} initial={240} onChange={resizeSidebar} />
       {props.mobileNavOpen && <button className="ag-scrim" aria-label={t("shell.closeNav")} onClick={props.closeNav} />}
       <main className="ag-main">

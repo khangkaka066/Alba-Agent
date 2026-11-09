@@ -277,16 +277,6 @@ html[data-desktop="win32"] .ag-titlebar__tools, html[data-desktop="linux"] .ag-t
 .ag-mode-switch button:hover { color: var(--ag-text); }
 .ag-mode-switch kbd { margin-left: 5px; color: var(--ag-text-3); font: 10px inherit; }
 .ag-titlebar .ag-titlebar__tools { flex: 1; justify-content: flex-end; min-width: 96px; }
-.ag-workspace-switcher { position: relative; margin-bottom: 8px; border-bottom: 1px solid var(--ag-border); }
-.ag-workspace-switcher > summary { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 8px 10px; cursor: pointer; list-style: none; }
-.ag-workspace-switcher > summary::-webkit-details-marker { display: none; }
-.ag-workspace-switcher summary > span { display: flex; flex: 1; flex-direction: column; gap: 3px; min-width: 0; }
-.ag-workspace-switcher strong { font-size: 14px; font-weight: 600; }
-.ag-workspace-switcher small { overflow: hidden; color: var(--ag-text-2); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.ag-workspace-menu { padding: 4px 4px 10px; }
-.ag-workspace-menu button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 4px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--ag-text-2); text-align: left; cursor: pointer; }
-.ag-workspace-menu button:hover:not(:disabled) { background: var(--ag-hover); color: var(--ag-text); }
-.ag-workspace-menu button:disabled { opacity: .45; cursor: default; }
 .ag-workspace.ag-stage { position: relative; display: grid; grid-template-columns: minmax(0,1fr); height: 100%; overflow: hidden; }
 .ag-stage--mission.has-preview { grid-template-columns: minmax(0,var(--mission-split)) minmax(0,1fr); }
 .ag-stage--editor { grid-template-columns: 220px minmax(0,1fr) 360px !important; }

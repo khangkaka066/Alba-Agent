@@ -27,9 +27,8 @@
 .nx-canvas-toggle:hover, .nx-canvas-toggle.is-active { color: var(--ag-text); background: var(--ag-hover); border-color: var(--ag-border); }
 .nx-shell .ag-sidebar { background: var(--ag-sidebar-bg); border-right: 1px solid var(--ag-border); }
 .nx-shell .ag-sidebar__scroll { padding: 0 10px 16px; scrollbar-width: thin; }
-.nx-shell .ag-workspace-switcher { border: 0; margin: 0 0 14px; }
-.nx-shell .ag-workspace-switcher > summary { min-height: 64px; padding: 12px 8px; gap: 10px; }
-.nx-shell .ag-workspace-switcher strong { font-size: 14px; font-weight: 600; }
+.nx-shell .ag-sidebar-brand { display: flex; align-items: center; min-height: 64px; padding: 12px 8px; gap: 10px; margin-bottom: 14px; }
+.nx-shell .ag-sidebar-brand strong { font-size: 14px; font-weight: 600; }
 .nx-shell .ag-newbtn { display: flex; min-height: 36px; margin-bottom: 24px; border: 1px solid var(--ag-border-strong); border-radius: 7px; background: transparent; padding: 7px 10px; font-size: 13px; font-weight: 400; }
 .nx-shell .ag-newbtn:hover { background: var(--ag-hover); }
 .nx-shell .ag-nav { gap: 3px; margin: 20px 0 24px; }

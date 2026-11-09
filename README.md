@@ -116,7 +116,7 @@ There is no installer for them on `main`. A Docker deployment (any OS with Docke
 
 ## First run
 
-Open the app. There is no sign-up: a *Local Workspace* is created for you. Then:
+Open the app. Your local account is prepared automatically. Open a project folder from **Projects** or the project picker in the chat; there is no workspace setup or switcher. Then:
 
 1. **Settings → Models:** connect a model (see [Connect a model](#-connect-a-model)).
 2. Type what you want and press Enter.
@@ -261,7 +261,7 @@ CI runs the same commands plus licence and branding checks on every push. Curren
 
 - **Posting to TikTok, Facebook and YouTube is not wired yet.** The marketing and film teams write publish-ready packages and checklists and stop at your approval; channel cards store a token and check connectivity only.
 - **Video generation** depends on your provider offering a video API. Agents describe, plan and assemble media; they do not invent files.
-- The interface has a single local workspace for now; the multi-workspace switcher is planned (the backend already isolates workspaces).
+- The desktop interface organizes work by project folders. Tenant and workspace identifiers remain internal server boundaries for accounts, credentials and permissions.
 - **Browser and terminal access depend on the sandbox provider.** The local macOS provider supports interactive terminals, managed background processes and a remote browser screen. Browser checks use the assigned sandbox browser. Dictation needs a browser with speech recognition.
 - The new shell is dark-first; the light theme is not fully restyled yet.
 - With an unusual model gateway the architect may pick model names the gateway does not have (the task then stops with a *model not found* error). Choose a model you have connected, or give the full provider-qualified id.

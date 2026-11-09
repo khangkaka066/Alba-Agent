@@ -12,7 +12,7 @@ import { Icon } from "./icons";
 import { NexusLogo } from "@/components/brand/nexus-agent-logo";
 import type { NavPage } from "./shell-context";
 
-type Props = { onWorkspace: (create: boolean) => void; page: NavPage; conversations: Conversation[]; reload: () => Promise<void>; navigate: (page: NavPage) => void; footer: ReactNode };
+type Props = { page: NavPage; conversations: Conversation[]; reload: () => Promise<void>; navigate: (page: NavPage) => void; footer: ReactNode };
 
 function Row({ item, current, onOpen, onDelete, confirming, setConfirming }: { item: Conversation; current: boolean; onOpen: () => void; onDelete: () => void; confirming: boolean; setConfirming: (value: boolean) => void }) {
   const { t } = useLocale();
@@ -30,7 +30,7 @@ function Row({ item, current, onOpen, onDelete, confirming, setConfirming }: { i
 }
 
 /** Left column: start a conversation, the places around it, projects with their conversations, then the profile menu at the foot. */
-export function Sidebar({ page, conversations, reload, navigate, footer, onWorkspace }: Props) {
+export function Sidebar({ page, conversations, reload, navigate, footer }: Props) {
   const { t } = useLocale();
   const workspace = useWorkspace();
   const [query, setQuery] = useState("");
@@ -64,14 +64,7 @@ export function Sidebar({ page, conversations, reload, navigate, footer, onWorks
 
   return <aside className="ag-sidebar" aria-label={t("shell.sidebar")}>
     <div className="ag-sidebar__scroll">
-      <details className="ag-workspace-switcher" onKeyDown={(event) => { if (event.key === "Escape") { event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}>
-        <summary><NexusLogo size={23} /><span><strong>Alba Agent</strong></span><Icon name="chevronDown" size={13} /></summary>
-        <div className="ag-workspace-menu">
-          <button type="button" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); onWorkspace(false); }}><Icon name="folder" size={14} />{t("studio.switchWorkspace")}</button>
-          <button type="button" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); onWorkspace(true); }}><Icon name="plus" size={14} />{t("studio.newWorkspace")}</button>
-          <button type="button" disabled={!canPickFolder} title={!canPickFolder ? t("studio.desktopFolder") : undefined} onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); void workspace.openFolder(); }}><Icon name="folderPlus" size={14} />{t("home.openFolder")}</button>
-        </div>
-      </details>
+      <div className="ag-sidebar-brand"><NexusLogo size={23} /><strong>Alba Agent</strong></div>
       <button type="button" className="ag-newbtn" onClick={start}><Icon name="plus" size={15} /><span>{t("shell.newConversation")}</span></button>
 
 

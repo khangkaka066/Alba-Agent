@@ -37,8 +37,8 @@ export type { NavPage } from "@/components/shell/shell-context";
 
 const emptyScope = { tenant_id: "", workspace_id: "" };
 
-function AccountDialog({ token, scope, onToken, onScope, onClose, initialRegister = false }: { token: string; scope: WorkspaceScope; onToken: (value: string) => void; onScope: (value: WorkspaceScope) => void; onClose: () => void; initialRegister?: boolean }) {
-  const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [error, setError] = useState(""); const [busy, setBusy] = useState(false); const [registering, setRegistering] = useState(initialRegister);
+function AccountDialog({ token, scope, onToken, onScope, onClose }: { token: string; scope: WorkspaceScope; onToken: (value: string) => void; onScope: (value: WorkspaceScope) => void; onClose: () => void }) {
+  const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [error, setError] = useState(""); const [busy, setBusy] = useState(false); const [registering, setRegistering] = useState(false);
   const [publicSignup, setPublicSignup] = useState<boolean | null>(null);
   const [registration, setRegistration] = useState({ tenant_name: "My organization", workspace_name: "My workspace", display_name: "Workspace owner", setup_token: "" });
   useEffect(() => {
@@ -383,8 +383,6 @@ function Frame(props: FrameProps) {
     window.addEventListener("nexus:set-mode", change);
     return () => window.removeEventListener("nexus:set-mode", change);
   }, [studioMode, setStudioMode, navigate]);
-  const [workspaceDialogOpen, setWorkspaceDialogOpen] = useState(false);
-  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const inSettings = SETTINGS_FAMILY.includes(page);
   const shownPage: NavPage = inSettings ? "studio" : page;
   const toggleDock = useCallback(() => dispatchDock({ type: "toggle" }), [dispatchDock]);
@@ -424,7 +422,7 @@ function Frame(props: FrameProps) {
   return <ShellContext.Provider value={value}><div style={{ "--ag-sidebar-w": `${sidebarWidth}px` } as React.CSSProperties} className={`app-shell app-shell--chat ag-app nx-shell ${props.collapsed ? "is-collapsed" : ""} ${props.mobileNavOpen ? "is-nav-open" : ""}`}>
     <TitleBar page={shownPage} title={current?.name ?? firstWords ?? ""} project={project} collapsed={props.collapsed} onToggleSidebar={props.toggleSidebar} review={review} onShortcuts={() => navigate("shortcuts")} onNewConversation={start} />
     <div className="ag-body" inert={inSettings} aria-hidden={inSettings || undefined}>
-      <Sidebar onWorkspace={(create) => { setCreatingWorkspace(create); setWorkspaceDialogOpen(true); }} page={page} conversations={conversations} reload={reload} navigate={navigate} footer={account} />
+      <Sidebar page={page} conversations={conversations} reload={reload} navigate={navigate} footer={account} />
       <PanelResize className="ag-sidebar-resize" label={t("layout.sidebar")} value={sidebarWidth} min={200} max={360} initial={240} onChange={resizeSidebar} />
       {props.mobileNavOpen && <button className="ag-scrim" aria-label={t("shell.closeNav")} onClick={props.closeNav} />}
       <main className="ag-main">
@@ -445,7 +443,7 @@ function Frame(props: FrameProps) {
       {page === "settings" && <ProviderSettings token={token} onNavigate={navigate} />}
       {page === "intelligence" && <><div className="page-title-row"><div><h1>{t("intelligence.title")}</h1><p>{t("intelligence.body")}</p></div></div><div className="intelligence-stack"><EvolutionHost token={token} onOpened={() => navigate("studio")} /><LearningTransferRadar token={token} /><FinOpsDistillationPanel token={token} /></div></>}
     </SettingsModal>}
-    {(props.accountOpen || workspaceDialogOpen) && <AccountDialog initialRegister={creatingWorkspace} token={token} scope={scope} onScope={props.saveScope} onToken={props.saveToken} onClose={() => { setWorkspaceDialogOpen(false); props.setAccountOpen(false); }} />}
+    {props.accountOpen && <AccountDialog token={token} scope={scope} onScope={props.saveScope} onToken={props.saveToken} onClose={() => props.setAccountOpen(false)} />}
     {props.modal && <IntegrationDialog kind={props.modal} token={token} onClose={() => props.setModal(null)} />}
     {props.commandOpen && <CommandPalette onClose={props.closePalette} onNavigate={navigate} hint={props.hint} onConnect={props.connect} extra={palette} />}
     {props.helpOpen && <ShortcutsDialog bindings={props.bindings} onChange={props.changeBindings} mac={props.mac} onClose={() => props.setHelpOpen(false)} />}

@@ -16,10 +16,11 @@
 :root[data-theme="light"] .app-shell.ag-app.nx-shell { --ag-bg: #ffffff; --ag-panel: #ffffff; --ag-sidebar-bg: #f6f6f6; --ag-raised: #eeeeee; --ag-text: #1f1f1f; --ag-text-2: #505056; --ag-text-3: #65656a; --ag-border: #dedee2; --ag-border-strong: #c8c8ce; --ag-hover: #ededf0; --nx-settings-muted: #606066; }
 :root[data-theme="light"][data-contrast="strong"] .nx-shell { --ag-text-2: #393940; --ag-text-3: #505058; --ag-border: #bdbdc5; }
 .nx-shell button, .nx-shell input, .nx-shell textarea, .nx-shell select { font-family: inherit; }
-.nx-shell .nx-settings-overlay { position: fixed; inset: 0; z-index: 200; padding: 0; background: var(--ag-bg); }
-.nx-shell .nx-settings-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); width: 100%; max-width: none; height: 100dvh; max-height: none; border: 0; border-radius: 0; background: var(--ag-bg); box-shadow: none; overflow: hidden; }
+.nx-shell .nx-settings-overlay { position: fixed; inset: 0; z-index: 200; padding: 32px; background: rgba(0, 0, 0, .22); }
+.nx-shell .nx-settings-layout { position: relative; display: grid; grid-template-columns: 200px minmax(0, 1fr); width: 100%; max-width: 1040px; height: min(760px, calc(100dvh - 64px)); max-height: 100%; border: 1px solid var(--ag-border-strong); border-radius: 18px; background: var(--ag-bg); box-shadow: 0 24px 80px rgba(0, 0, 0, .35); overflow: hidden; }
+.nx-shell .nx-settings-layout:focus-visible { outline: 0; }
 .nx-shell .nx-settings-navigation { min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 12px 10px 0; background: var(--ag-sidebar-bg); border-right: 1px solid var(--ag-border); overflow-y: auto; }
-:root[data-desktop="darwin"] .nx-shell .nx-settings-navigation { padding-top: 48px; }
+
 .nx-settings-navigation > h2 { font-size: 12px; font-weight: 500; color: var(--nx-settings-muted); margin: 1px 6px 5px; }
 .nx-shell .nx-settings-nav-item { min-height: 29px; text-align: left; padding: 5px 7px; border: 0; border-radius: 7px; background: transparent; color: var(--ag-text); font-size: 14px; line-height: 1.4; font-weight: 400; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nx-settings-nav-item:hover { background: var(--ag-hover); }
@@ -29,7 +30,7 @@
 .nx-settings-projects > h3:not(:first-child) { margin-top: 16px; }
 .nx-settings-navigation .ag-settings__foot { padding: 9px 0; margin: 0 -2px; border-top: 1px solid var(--ag-border); }
 .nx-shell .nx-settings-content { position: relative; overflow: auto; padding: 26px max(32px, calc((100% - 760px) / 2)); background: var(--ag-bg); color: var(--ag-text); min-width: 0; scrollbar-width: thin; }
-.nx-settings-content .ag-settings__close { position: fixed; top: 16px; right: 16px; z-index: 5; width: 28px; height: 28px; color: var(--nx-settings-muted); }
+.nx-settings-layout > .ag-settings__close { position: absolute; top: 12px; right: 12px; z-index: 5; width: 32px; height: 32px; color: var(--nx-settings-muted); }
 .nx-settings-page { width: 100%; max-width: 760px; margin: 0 auto; color: var(--ag-text); padding-bottom: 30px; }
 .nx-settings-heading { margin-bottom: 28px; }
 .nx-settings-heading h1 { margin: 0 0 6px; font-size: 21px; line-height: 1.35; font-weight: 600; letter-spacing: -.035em; color: var(--ag-text); }
@@ -143,6 +144,8 @@
   .nx-project-checkout { max-width: 150px; overflow: hidden; }
 }
 @media (max-width: 540px) {
+  .nx-shell .nx-settings-overlay { padding: 12px; }
+  .nx-shell .nx-settings-layout { height: min(760px, calc(100dvh - 24px)); }
   .nx-shell .nx-settings-layout { display: flex; flex-direction: column; }
   .nx-shell .nx-settings-navigation { display: flex; flex-direction: row; flex-wrap: wrap; gap: 3px; padding: 12px 40px 10px 10px; overflow: visible; border-right: 0; border-bottom: 1px solid var(--ag-border); }
   .nx-settings-navigation > h2 { flex-basis: 100%; }
@@ -170,8 +173,6 @@
 }
 @media (prefers-reduced-motion: reduce) { .nx-setting-switch > span { transition: none; } }
 
-/* The covered workspace remains mounted but cannot take focus behind Settings. */
-.nx-shell > .ag-body[aria-hidden="true"] { visibility: hidden; }
 .nx-account-hub { margin-top: 12px; }
 .nx-account-intro { color: var(--ag-text-2); font-size: 13px; line-height: 1.6; margin: 0 0 20px; }
 .nx-account-card { padding: 18px; }
@@ -183,3 +184,8 @@
 .nx-account-waiting { border-left: 2px solid var(--ag-accent); padding-left: 12px; font-size: 13px; line-height: 1.6; }
 .nx-account-waiting p { color: var(--ag-text-2); margin-bottom: 0; }
 .nx-account-session-note { margin-top: 12px; }
+
+@media (max-height: 540px) {
+  .nx-shell .nx-settings-overlay { padding: 12px; }
+  .nx-shell .nx-settings-layout { height: calc(100dvh - 24px); }
+}

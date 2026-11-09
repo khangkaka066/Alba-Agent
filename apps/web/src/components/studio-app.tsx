@@ -215,6 +215,7 @@ type LocalSession = { access_token: string; tenant_id: string; workspace_id: str
 export function StudioApp({ initialPage = "studio" }: { initialPage?: NavPage }) {
   const { t } = useLocale();
   const [page, setPage] = useState<NavPage>(initialPage);
+  const [workPage, setWorkPage] = useState<NavPage>(SETTINGS_FAMILY.includes(initialPage) ? "studio" : initialPage);
   useEffect(() => { document.title = `${t(`page.${page}`)} · Alba Agent`; }, [page, t]);
   const [token, setToken] = useState("");
   const [scope, setScope] = useState<WorkspaceScope>(emptyScope);
@@ -233,6 +234,7 @@ export function StudioApp({ initialPage = "studio" }: { initialPage?: NavPage })
 
   const navigate = useCallback((next: NavPage) => {
     setPage(next);
+    if (!SETTINGS_FAMILY.includes(next)) setWorkPage(next);
     setMobileNavOpen(false);
     if (typeof window !== "undefined" && window.location.pathname !== pagePaths[next]) window.history.pushState({}, "", pagePaths[next]);
   }, []);
@@ -242,6 +244,7 @@ export function StudioApp({ initialPage = "studio" }: { initialPage?: NavPage })
 
   useEffect(() => {
     setPage(initialPage);
+    if (!SETTINGS_FAMILY.includes(initialPage)) setWorkPage(initialPage);
     setBindings(loadBindings(window.localStorage));
     try { setCollapsed(window.localStorage.getItem("nexus_sidebar_collapsed") === "1"); } catch { /* storage can be blocked; the sidebar then starts open */ }
     setMac(/Mac|iPhone|iPad/.test(window.navigator.platform));
@@ -250,7 +253,7 @@ export function StudioApp({ initialPage = "studio" }: { initialPage?: NavPage })
     const modalEvent = (event: Event) => setModal((event as CustomEvent<"api-key" | "widget">).detail);
     const back = () => {
       const match = (Object.entries(pagePaths) as Array<[NavPage, string]>).find(([, href]) => href === window.location.pathname);
-      if (match) setPage(match[0]);
+      if (match) { setPage(match[0]); if (!SETTINGS_FAMILY.includes(match[0])) setWorkPage(match[0]); }
     };
     window.addEventListener("nexus:modal", modalEvent);
     window.addEventListener("popstate", back);
@@ -314,7 +317,7 @@ export function StudioApp({ initialPage = "studio" }: { initialPage?: NavPage })
   const [inspector, setInspector] = useState(false);
   const showDock = useCallback((tab: DockTab) => { if (tab === "canvas") window.dispatchEvent(new CustomEvent("nexus:set-mode", { detail: "mode-canvas" })); else dispatchDock({ type: "show", tab }); }, []);
   const toggleInspector = useCallback(() => { setInspector((value) => !value); window.dispatchEvent(new CustomEvent("nexus:set-mode", { detail: "mode-canvas" })); }, []);
-  const closeSettings = useCallback(() => navigate("studio"), [navigate]);
+  const closeSettings = useCallback(() => navigate(workPage), [navigate, workPage]);
 
   useEffect(() => {
     const keys = (event: KeyboardEvent) => {
@@ -346,7 +349,7 @@ export function StudioApp({ initialPage = "studio" }: { initialPage?: NavPage })
   const logout = localMode === false && token ? () => { saveToken(""); setAccountOpen(true); } : null;
 
   return <ModelProvider token={token}><WorkspaceProvider token={token}>
-    <Frame page={page} navigate={navigate} collapsed={collapsed} mobileNavOpen={mobileNavOpen} closeNav={() => setMobileNavOpen(false)} toggleSidebar={toggleSidebar}
+    <Frame page={page} workPage={workPage} navigate={navigate} collapsed={collapsed} mobileNavOpen={mobileNavOpen} closeNav={() => setMobileNavOpen(false)} toggleSidebar={toggleSidebar}
       dock={dock} dispatchDock={dispatchDock} showDock={showDock} inspector={inspector} toggleInspector={toggleInspector} hint={hint}
       openPalette={() => setCommandOpen(true)} commandOpen={commandOpen} closePalette={() => setCommandOpen(false)} connect={connect}
       token={token} scope={currentScope} accountOpen={accountOpen && localMode === false} setAccountOpen={setAccountOpen} saveScope={saveScope} saveToken={saveToken}
@@ -356,7 +359,7 @@ export function StudioApp({ initialPage = "studio" }: { initialPage?: NavPage })
 }
 
 type FrameProps = {
-  page: NavPage; navigate: (page: NavPage) => void; collapsed: boolean; mobileNavOpen: boolean; closeNav: () => void; toggleSidebar: () => void;
+  page: NavPage; workPage: NavPage; navigate: (page: NavPage) => void; collapsed: boolean; mobileNavOpen: boolean; closeNav: () => void; toggleSidebar: () => void;
   dock: ShellValue["dock"]; dispatchDock: (action: Parameters<typeof dockAfter>[1]) => void; showDock: (tab: DockTab) => void; inspector: boolean; toggleInspector: () => void;
   hint: (action: string) => string; openPalette: () => void; commandOpen: boolean; closePalette: () => void; connect: (() => void) | null;
   token: string; scope: WorkspaceScope; accountOpen: boolean; setAccountOpen: (open: boolean) => void; saveScope: (value: WorkspaceScope) => void; saveToken: (value: string) => void;
@@ -384,7 +387,7 @@ function Frame(props: FrameProps) {
     return () => window.removeEventListener("nexus:set-mode", change);
   }, [studioMode, setStudioMode, navigate]);
   const inSettings = SETTINGS_FAMILY.includes(page);
-  const shownPage: NavPage = inSettings ? "studio" : page;
+  const shownPage: NavPage = inSettings ? props.workPage : page;
   const toggleDock = useCallback(() => dispatchDock({ type: "toggle" }), [dispatchDock]);
   const closeDock = useCallback(() => dispatchDock({ type: "close" }), [dispatchDock]);
   const expandDock = useCallback(() => dispatchDock({ type: "expand" }), [dispatchDock]);
@@ -422,7 +425,7 @@ function Frame(props: FrameProps) {
   return <ShellContext.Provider value={value}><div style={{ "--ag-sidebar-w": `${sidebarWidth}px` } as React.CSSProperties} className={`app-shell app-shell--chat ag-app nx-shell ${props.collapsed ? "is-collapsed" : ""} ${props.mobileNavOpen ? "is-nav-open" : ""}`}>
     <TitleBar page={shownPage} title={current?.name ?? firstWords ?? ""} project={project} collapsed={props.collapsed} onToggleSidebar={props.toggleSidebar} review={review} onShortcuts={() => navigate("shortcuts")} onNewConversation={start} />
     <div className="ag-body" inert={inSettings} aria-hidden={inSettings || undefined}>
-      <Sidebar preferenceScope={scope.tenant_id && scope.workspace_id ? `${scope.tenant_id}:${scope.workspace_id}` : ""} page={page} conversations={conversations} reload={reload} navigate={navigate} footer={account} />
+      <Sidebar preferenceScope={scope.tenant_id && scope.workspace_id ? `${scope.tenant_id}:${scope.workspace_id}` : ""} page={shownPage} conversations={conversations} reload={reload} navigate={navigate} footer={account} />
       <PanelResize className="ag-sidebar-resize" label={t("layout.sidebar")} value={sidebarWidth} min={200} max={360} initial={240} onChange={resizeSidebar} />
       {props.mobileNavOpen && <button className="ag-scrim" aria-label={t("shell.closeNav")} onClick={props.closeNav} />}
       <main className="ag-main">

@@ -70,7 +70,7 @@ The window follows the layout of modern AI code editors, so what matters is in f
 | **Sidebar** | *New Conversation*, *Automations* (scheduled teammates), *Customizations* (channels, MCP, skills); **Projects** (a folder you opened, with its conversations); **Conversations**; *Settings* and your account at the foot. |
 | **Conversation** | Messages, the team's live progress, approval cards, and the message box: attach (`+` or `@`), Model, Effort, permissions, dictation (browsers that support it), send. |
 | **Right panel** | *Review* (lines added and removed), *Files* (diff, download, accept), an interactive *Terminal*, *Browser*, *Canvas* (the agent graph and the run log). Drag its edge to resize, or expand it to full width. |
-| **Settings** | A panel over the work: General, Application, Appearance, Shortcuts, Notifications and Models. |
+| **Settings** | A centered dialog over the current screen: General, Application, Appearance, Shortcuts, Notifications and Models. The content scrolls inside it; × or Escape closes it while preserving the current screen and chat draft. |
 
 | Keys | Action |
 |---|---|

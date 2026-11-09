@@ -43,7 +43,9 @@ function applyApplicationSettings(): void {
   if (settings.preventSleep && powerBlocker === null) powerBlocker = powerSaveBlocker.start("prevent-display-sleep");
   if (!settings.preventSleep && powerBlocker !== null) { powerSaveBlocker.stop(powerBlocker); powerBlocker = null; }
   if (settings.keepInMenuBar !== false && !tray) {
-    const icon = nativeImage.createFromPath(join(__dirname, "..", "build", "icon.png")).resize({ width: 18, height: 18 });
+    const image = nativeImage.createFromPath(join(__dirname, "..", "build", isMac ? "trayTemplate.png" : "icon.png"));
+    const icon = isMac ? image : image.resize({ width: 18, height: 18 });
+    if (isMac) icon.setTemplateImage(true);
     tray = new Tray(icon); tray.setToolTip("Alba Agent");
     tray.setContextMenu(Menu.buildFromTemplate([{ label: "Open Alba Agent", click: showMainWindow }, { type: "separator" }, { label: "Quit Alba Agent", click: () => app.quit() }]));
     tray.on("click", showMainWindow);

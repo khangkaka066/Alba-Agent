@@ -33,6 +33,7 @@
       "dist/**/*",
       "build/mark.svg",
       "build/icon.png",
+      "build/trayTemplate*.png",
       "package.json"
     ],
     "asar": true,

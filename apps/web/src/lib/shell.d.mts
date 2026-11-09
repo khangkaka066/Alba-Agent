@@ -1,5 +1,5 @@
 export const PROJECTS_KEY: string;
-export type DockTab = "review" | "files" | "terminal" | "browser" | "canvas";
+export type DockTab = "artifacts" | "agents" | "tasks" | "review" | "files" | "terminal" | "browser" | "canvas";
 export const DOCK_TABS: DockTab[];
 export type DockState = { open: boolean; tab: DockTab; expanded: boolean };
 export type DockAction = { type: "toggle" } | { type: "close" } | { type: "expand" } | { type: "show"; tab: DockTab };

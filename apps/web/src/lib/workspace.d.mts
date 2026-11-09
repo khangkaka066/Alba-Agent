@@ -6,8 +6,10 @@ export type DiffOp = { type: "same" | "add" | "del"; text: string; oldNo: number
 export type SplitRow = { left: DiffOp | null; right: DiffOp | null };
 export type RuntimeEvent = { id: string; run_id: string; type: string; node_id: string | null; occurred_at: string; payload: Record<string, unknown> };
 export type RunApproval = { approval_id: string; run_id?: string; node_id?: string; action?: string; rationale?: string; kind?: string };
+export type ActivityEntry = { id: string; node: string; type: string; text: string; detail: string; output: string; tool: string; phase: string; at: string };
 export type RunState = {
-  status: "idle" | "running" | "paused" | "completed" | "failed"; completed: string[]; active: string[];
+  activity: ActivityEntry[];
+  status: "idle" | "running" | "paused" | "completed" | "failed" | "cancelling" | "cancelled"; completed: string[]; active: string[];
   terminal: Array<{ id: string; stream: string; text: string }>; thoughts: Array<{ id: string; node: string; text: string; textKey?: string; code?: string }>;
   tools: Array<{ id: string; node: string; name: string }>; approvals: RunApproval[]; resolved: string[]; frame: string; error: string;
 };
@@ -21,6 +23,7 @@ export function diffStats(ops: DiffOp[]): { added: number; removed: number };
 export function splitRows(ops: DiffOp[]): SplitRow[];
 export function teamSummary(spec: unknown): TeamSummary;
 export function initialRunState(): RunState;
+export function runAnswer(outputs: unknown): string;
 export function reduceRunEvent(state: RunState, event: RuntimeEvent): RunState;
 export function isFinished(status: string): boolean;
 export function stepLabel(state: RunState, steps: number, t?: Translate): string;

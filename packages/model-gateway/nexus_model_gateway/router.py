@@ -137,7 +137,7 @@ class GatewayStore(Protocol):
 
 
 async def resolve_credential(store: Any, tenant_id: UUID, workspace_id: UUID, provider: Provider,
-                             credential_id: UUID | None) -> ResolvedCredential | None:
+                             credential_id: UUID | None, model: str | None = None) -> ResolvedCredential | None:
     """Resolve through the richest method a store offers, so older stores that return plain keys keep working."""
     if credential_id:
         rich = getattr(store, "resolve_credential", None)
@@ -148,6 +148,9 @@ async def resolve_credential(store: Any, tenant_id: UUID, workspace_id: UUID, pr
             key, base = await details(tenant_id, workspace_id, credential_id, provider)
             return ResolvedCredential(key, base)
         return ResolvedCredential(await store.get_credential(tenant_id, workspace_id, credential_id, provider))
+    rich_model = getattr(store, "resolve_model_credential", None)
+    if rich_model is not None and model is not None:
+        return await rich_model(tenant_id, workspace_id, provider, model)  # type: ignore[no-any-return]
     rich_default = getattr(store, "resolve_default_credential", None)
     if rich_default is not None:
         return await rich_default(tenant_id, workspace_id, provider)  # type: ignore[no-any-return]
@@ -189,7 +192,7 @@ class LiteLLMRouter:
         return f"{prefix}/{model}"
 
     async def complete(self, request: GatewayRequest) -> GatewayResult:
-        credential = await resolve_credential(self._store, request.tenant_id, request.workspace_id, request.provider, request.credential_id)
+        credential = await resolve_credential(self._store, request.tenant_id, request.workspace_id, request.provider, request.credential_id, request.model)
         resolved_api_key = credential.api_key if credential else None
         rate, billing_mode = price_for(self._rates, request.provider, request.model, credential)
         model_name = self._model_name(request.provider, request.model, credential.wire if credential else "native")

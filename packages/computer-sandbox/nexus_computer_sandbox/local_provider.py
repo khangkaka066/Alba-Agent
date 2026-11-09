@@ -24,6 +24,7 @@ from time import monotonic
 from .docker_supervisor import OutputSink, SandboxExecution
 from .execution_policy import Decision, ExecutionPolicy, Verdict, approved_commands
 from .supervisor import ComputerHandle, DockerSandboxProvider
+from .shell_state import CAPTURE, command_script, read_shell_state
 
 SANDBOX_EXEC = "/usr/bin/sandbox-exec"
 MAX_FILE_BYTES = 1 << 30  # one file cannot grow past 1 GiB; macOS does not enforce a memory or process-count cap that holds
@@ -56,6 +57,7 @@ def seatbelt_profile(run_directory: Path, scratch_directory: Path, computers_roo
     lines = [
         "(version 1)", "(allow default)",
         "(deny file-write*)",
+        '(deny mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd.xpc"))',
         f"(allow file-write* (subpath {_quoted(run_directory)}))",
         '(allow file-write* (literal "/dev/null") (literal "/dev/tty") (literal "/dev/dtracehelper"))',
         # Other computers' contents and listings are off limits, this one's own are not. Only the data is denied, not the metadata: a
@@ -72,7 +74,7 @@ def seatbelt_profile(run_directory: Path, scratch_directory: Path, computers_roo
     lines += [f"(deny file-read-data (subpath {_quoted(home / name)}))" for name in HOME_SECRETS]
     lines += [f"(deny file-read-data (literal {_quoted(home / name)}))" for name in HOME_SECRET_FILES]
     if not network:
-        lines.append("(deny network*)")
+        lines += ["(deny network*)", '(allow network-bind (local ip "localhost:*"))', '(allow network-inbound (local ip "localhost:*"))']
     return "\n".join(lines) + "\n"
 
 
@@ -97,7 +99,7 @@ def _environment(scratch_directory: Path, interpreter_directory: Path, tool_dire
     return {
         "PATH": os.pathsep.join([str(interpreter_directory), *map(str, tool_directories), *SYSTEM_PATH]),
         "HOME": str(scratch_directory), "TMPDIR": str(scratch_directory),
-        "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1",
+        "TERM": "dumb", "PAGER": "cat", "GIT_PAGER": "cat", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1",
     }
 
 
@@ -128,7 +130,8 @@ class LocalSandboxProvider(DockerSandboxProvider):
         return f"local-{handle.id.hex}"
 
     async def destroy(self, handle: ComputerHandle) -> None:
-        # Nothing runs between commands; the run directory is removed by the run's retirement, as for Docker. Scratch goes with the computer.
+        if handle.id in self._managers:
+            await self._manager(handle).call("dispose")
         shutil.rmtree(self._scratch(handle), ignore_errors=True)
 
     def evaluate_command(self, command: str) -> Verdict:
@@ -136,9 +139,64 @@ class LocalSandboxProvider(DockerSandboxProvider):
         return self._policy.evaluate(command)
 
     async def _blocked(self, command: str, reason: str, started: float, handle: ComputerHandle) -> SandboxExecution:
-        return SandboxExecution(EXIT_BLOCKED, "", f"Blocked by the execution policy: {reason}\n", await self.files(handle), monotonic() - started)
+        from .error_digest import digest_error
+        message = f"Blocked by the execution policy: {reason}\n"
+        digest = digest_error(message, EXIT_BLOCKED)
+        return SandboxExecution(EXIT_BLOCKED, "", message, await self.files(handle), monotonic() - started, error_digest=digest.as_dict() if digest else None)
 
-    async def shell(self, handle: ComputerHandle, command: str, timeout_seconds: int, sink: OutputSink) -> SandboxExecution:
+    def _control(self, handle: ComputerHandle) -> Path:
+        directory = self._scratch(handle) / "terminal"
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory
+
+    async def _spawn(self, handle: ComputerHandle, command: str, slave: int, identifier: str) -> asyncio.subprocess.Process:
+        verdict = self.evaluate_command(command)
+        if verdict.decision is Decision.DENY or (verdict.decision is Decision.ASK and command not in approved_commands.get()):
+            raise PermissionError("Command requires approval or is blocked by policy")
+        run_directory = self._directory(handle).resolve()
+        scratch = self._scratch(handle).resolve()
+        profile = seatbelt_profile(run_directory, scratch, self._root, self._home, network=verdict.needs_network and verdict.decision is Decision.ASK)
+        control = self._control(handle)
+        defaults = _environment(scratch, self._interpreter_directory, self._tool_directories)
+        defaults.update({"PIP_TARGET": str(scratch / "python-packages"), "PYTHONPATH": str(scratch / "python-packages"), "NPM_CONFIG_PREFIX": str(scratch / "npm")})
+        cwd, env = read_shell_state(control / "state.json", str(run_directory), defaults)
+        if not Path(cwd).resolve().is_relative_to(run_directory):
+            raise ValueError("Shell working directory escaped the computer")
+        # Loader hooks may not run before sandbox-exec has installed the OS policy.
+        env = {key: value for key, value in env.items() if not key.startswith(("DYLD_", "LD_")) and key not in {"ENV", "BASH_ENV"}}
+        (control / "capture.py").write_text(CAPTURE)
+        python = str(self._interpreter_directory / "python3")
+        state = control / (f"{identifier}.state.json" if command.startswith("# NEXUS_BACKGROUND") else "state.json")
+        script = command_script(command, python, str(control / "capture.py"), str(state), str(run_directory), str(control / f"{identifier}.pid"))
+        script_file = control / f"{identifier}.sh"
+        script_file.write_text(script)
+        return await asyncio.create_subprocess_exec(SANDBOX_EXEC, "-p", profile, "/bin/sh", str(script_file), cwd=cwd, env=env,
+            stdin=slave, stdout=slave, stderr=asyncio.subprocess.PIPE, start_new_session=True, preexec_fn=_limit_file_size)
+
+    async def launch_browser(self, handle: ComputerHandle) -> asyncio.subprocess.Process:
+        candidates = [os.environ.get("NEXUS_CHROMIUM_PATH", ""), "/Applications/Chromium.app/Contents/MacOS/Chromium", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
+        binary = next((path for path in candidates if path and Path(path).is_file()), None)
+        if binary is None:
+            raise RuntimeError("Chromium is unavailable; configure NEXUS_CHROMIUM_PATH")
+        control = self._control(handle)
+        (control / "browser_pipe.py").write_bytes(Path(__file__).with_name("browser_pipe.py").read_bytes())
+        scratch = self._scratch(handle).resolve()
+        short = Path("/tmp") / f"nx-browser-{handle.id.hex}"
+        if short.is_symlink() and short.resolve() != scratch:
+            raise ValueError("Browser temporary directory belongs to another computer")
+        if not short.exists():
+            short.symlink_to(scratch, target_is_directory=True)
+        environment = _environment(scratch, self._interpreter_directory, self._tool_directories)
+        environment["TMPDIR"] = str(short)
+        environment["MAC_CHROMIUM_TMPDIR"] = str(short)
+        profile = seatbelt_profile(self._directory(handle).resolve(), scratch, self._root, self._home, network=False)
+        profile += '(deny process-exec (literal "/bin/launchctl") (regex #"GoogleUpdater|Keystone"))\n'
+        profile += f"(allow network* (local unix-socket (subpath {_quoted(scratch)})))\n"
+        profile += f"(allow network* (remote unix-socket (subpath {_quoted(scratch)})))\n"
+        return await asyncio.create_subprocess_exec(SANDBOX_EXEC, "-p", profile, str(self._interpreter_directory / "python3"), "-I", str(control / "browser_pipe.py"), binary, str(self._scratch(handle) / "browser"),
+            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=environment, limit=8 * 1024 * 1024, start_new_session=True)
+
+    async def terminal(self, handle: ComputerHandle, command: str, timeout_seconds: int, sink: OutputSink, background: bool = False) -> SandboxExecution:
         if handle.external_id is None or not command.strip() or not 1 <= timeout_seconds <= 3600:
             raise ValueError("Computer, command, and timeout must be valid")
         started = monotonic()
@@ -146,45 +204,8 @@ class LocalSandboxProvider(DockerSandboxProvider):
         if verdict.decision is Decision.DENY:
             return await self._blocked(command, verdict.reason, started, handle)
         if verdict.decision is Decision.ASK and command not in approved_commands.get():
-            # Nobody approved it (a benchmark, a service key, a caller without a guard): a refusal, never a wait.
             return await self._blocked(command, f"{verdict.reason} (needs approval)", started, handle)
-        run_directory = self._directory(handle).resolve()
-        scratch = self._scratch(handle).resolve()
-        profile = seatbelt_profile(run_directory, scratch, self._root, self._home, network=verdict.needs_network and verdict.decision is Decision.ASK)
-        process = await asyncio.create_subprocess_exec(
-            SANDBOX_EXEC, "-p", profile, "/bin/sh", "-c", command,
-            cwd=run_directory, env=_environment(scratch, self._interpreter_directory, self._tool_directories),
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True, preexec_fn=_limit_file_size,
-        )
-        chunks: dict[str, list[str]] = {"stdout": [], "stderr": []}
+        return await super().terminal(handle, command, timeout_seconds, sink, background)
 
-        async def forward(reader: asyncio.StreamReader | None, stream: str) -> None:
-            if reader is None:
-                raise RuntimeError("Computer output stream is unavailable")
-            while data := await reader.read(4096):
-                decoded = data.decode(errors="replace")
-                chunks[stream].append(decoded)
-                await sink(stream, decoded)
-
-        def kill_tree() -> None:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)  # the session leader's group: the shell and everything it started
-            except ProcessLookupError:
-                pass
-
-        tasks = [asyncio.create_task(forward(process.stdout, "stdout")), asyncio.create_task(forward(process.stderr, "stderr"))]
-        timed_out = False
-        try:
-            await asyncio.wait_for(process.wait(), timeout_seconds)
-        except asyncio.TimeoutError:
-            timed_out = True
-            kill_tree()
-            await process.wait()
-        except BaseException:
-            kill_tree()
-            await process.wait()
-            await asyncio.gather(*tasks, return_exceptions=True)
-            raise
-        await asyncio.gather(*tasks)
-        # A shell killed on timeout reports 137, as `timeout --signal=KILL` does in the Docker provider.
-        return SandboxExecution(137 if timed_out else process.returncode or 0, "".join(chunks["stdout"]), "".join(chunks["stderr"]), await self.files(handle), monotonic() - started)
+    async def shell(self, handle: ComputerHandle, command: str, timeout_seconds: int, sink: OutputSink) -> SandboxExecution:
+        return await self.terminal(handle, command, timeout_seconds, sink)

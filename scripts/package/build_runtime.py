@@ -287,7 +287,7 @@ for app in "Google Chrome" "Chromium" "Microsoft Edge" "Brave Browser"; do
   binary="/Applications/$app.app/Contents/MacOS/$app"
   if [ -x "$binary" ]; then
     # The command already runs inside a sandbox, so the browser's own sandbox cannot start; its profile goes to the command's temp folder.
-    exec "$binary" --headless=new --no-sandbox --disable-gpu --disable-crash-reporter --no-first-run \\
+    exec "$binary" --headless=new --no-sandbox --disable-gpu --use-mock-keychain --disable-crash-reporter --no-first-run \\
       --user-data-dir="${TMPDIR:-/tmp}/headless-browser-profile" "$@"
   fi
 done

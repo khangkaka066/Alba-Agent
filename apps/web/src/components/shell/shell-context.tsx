@@ -3,11 +3,13 @@
 import { createContext, useContext } from "react";
 import type { DockState, DockTab } from "@/lib/shell.mjs";
 import type { ReviewState } from "@/components/workspace/use-review";
+import type { Conversation } from "@/components/workspace/use-conversations";
 
-export type NavPage = "studio" | "general" | "settings" | "integrations" | "teammates" | "intelligence";
+export type NavPage = "studio" | "general" | "application" | "appearance" | "shortcuts" | "notifications" | "settings" | "integrations" | "teammates" | "intelligence";
 
 /** What the parts of the shell need from each other: the right dock, navigation and the shortcut hints. */
 export type ShellValue = {
+  conversations: Conversation[];
   dock: DockState;
   showDock: (tab: DockTab) => void;
   toggleDock: () => void;

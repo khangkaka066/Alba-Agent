@@ -171,6 +171,15 @@ def _schema_document(name: str, fields: Mapping[str, str]) -> dict[str, Any]:
     }
 
 
+def _with_web_sandbox_tools(spec: WorkflowSpec, context: ArchitectWorkspaceContext, prompt: str) -> WorkflowSpec:
+    if not any(term in prompt.casefold() for term in ("html", "website", "webgl", "frontend", "browser", "trình duyệt", "three.js")):
+        return spec
+    available = {tool.id for tool in context.mcp_tools} | set(context.builtin_tool_ids)
+    web_tools = tuple(tool for tool in ("browser_automation", "start_background_process", "get_process_logs") if tool in available)
+    nodes = tuple(node.model_copy(update={"tool_ids": tuple(dict.fromkeys((*node.tool_ids, *web_tools)))}) if isinstance(node, NexusGenSandboxNodeSpec) else node for node in spec.nodes)
+    return spec.model_copy(update={"nodes": nodes})
+
+
 class MetaArchitectService:
     """Generate graphs through model-proposed structure and deterministic validation."""
 
@@ -331,7 +340,7 @@ class MetaArchitectService:
         sandboxes = [node for node in spec.nodes if isinstance(node, NexusGenSandboxNodeSpec)]
         agents = [
             {"id": f"{node.id}_{part}", "role": f"{node.label} · {part}", "model": node.coder_model if part == "coder" else node.reviewer_model,
-             "tools": [], "knowledge_capsules": []}
+             "tools": list(node.tool_ids), "knowledge_capsules": []}
             for node in sandboxes for part in ("coder", "reviewer")
         ]
         summary = {
@@ -355,10 +364,10 @@ class MetaArchitectService:
         model = preferred_model if preferred_model in models else context.fallback_model
         repair_model = context.frontier_model(model)
         title = " ".join(prompt.split())[:70]
-        spec = self._validator(build_solo_workflow(
+        spec = self._validator(_with_web_sandbox_tools(build_solo_workflow(
             workflow_id=workflow_id, tenant_id=context.tenant_id, workspace_id=context.workspace_id, version=version,
             name=f"Code task: {title}", model=model, repair_model=repair_model,
-        ))
+        ), context, prompt))
         agents = [
             {"id": f"{node.id}_{part}", "role": f"{node.label} · {part}", "model": node.coder_model if part == "coder" else node.reviewer_model,
              "tools": [], "knowledge_capsules": []}
@@ -366,7 +375,7 @@ class MetaArchitectService:
         ]
         summary = {
             "summary": "One coder and reviewer work in a sandbox until the checks pass; a repair attempt on the strongest model runs only if they do not.",
-            "design_reasoning": [assessment.reason], "agents": agents, "tools": [], "knowledge_capsules": [],
+            "design_reasoning": [assessment.reason], "agents": agents, "tools": sorted({tool for node in spec.nodes if isinstance(node, NexusGenSandboxNodeSpec) for tool in node.tool_ids}), "knowledge_capsules": [],
             "agent_count": 2, "level": "solo", "level_reason": assessment.reason,
         }
         return spec, summary
@@ -402,10 +411,10 @@ class MetaArchitectService:
             blueprint, studio_rigor, model=default_model, director_model=director_model,
             tools=tools, objectives=objectives, requirement=prompt,
         )
-        spec = self._validator(WorkflowSpec(
+        spec = self._validator(_with_web_sandbox_tools(WorkflowSpec(
             id=workflow_id, tenant_id=context.tenant_id, workspace_id=context.workspace_id, name=draft.name,
             version=version, nodes=tuple(graph.nodes), edges=tuple(graph.edges), layout=graph.layout, modes=graph.modes,
-        ))
+        ), context, prompt))
         agents: list[dict[str, Any]] = [
             {"id": agent.id, "role": agent.role, "tier": agent.tier, "model": agent.model, "tools": list(agent.tool_ids), "knowledge_capsules": []}
             for node in spec.nodes if isinstance(node, CrewNodeSpec) for agent in node.agents
@@ -447,8 +456,14 @@ class MetaArchitectService:
         kb_by_id = {kb.id: kb for kb in context.knowledge_bases}
         stage_count = 0
         risky_prompt = bool(re.search(r"\b(email|e-mail|send|delete|destructive|payment|purchase|external|publish|customer)\b", prompt, re.I))
-        requested_media = "video" if re.search(r"\b(video|clip|mp4|phim)\b", prompt, re.I) else "audio" if re.search(r"\b(audio|voice|speech|mp3|giọng)\b", prompt, re.I) else "image" if re.search(r"\b(image|photo|picture|ảnh|hình)\b", prompt, re.I) else None
-        production_requested = requested_media is not None and bool(re.search(r"\b(create|generate|produce|make|render|tạo|làm|sản xuất)\b", prompt, re.I))
+        # Exclusions such as "không tạo ảnh/video" must not add a mandatory media task.
+        positive_request = re.sub(
+            r"\b(?:do\s+not|don['’]t|never|without|no|not|không|đừng)\b[^.!?;\n]*?"
+            r"(?=[.!?;\n]|,\s*(?:but\s+|nhưng\s+)?(?:create|generate|produce|make|render|tạo|làm|sản xuất)\b|$)",
+            "", prompt, flags=re.I,
+        )
+        requested_media = "video" if re.search(r"\b(video|clip|mp4|phim)\b", positive_request, re.I) else "audio" if re.search(r"\b(audio|voice|speech|mp3|giọng)\b", positive_request, re.I) else "image" if re.search(r"\b(image|photo|picture|ảnh|hình)\b", positive_request, re.I) else None
+        production_requested = requested_media is not None and bool(re.search(r"\b(create|generate|produce|make|render|tạo|làm|sản xuất)\b", positive_request, re.I))
         final_crew_index = max((index for index, item in enumerate(draft.stages) if item.kind == "crew"), default=-1)
 
         for stage_index, stage in enumerate(draft.stages):
@@ -571,14 +586,16 @@ class MetaArchitectService:
                 )
                 nodes.append(CrewNodeSpec(id=node_id, label=stage.label, agents=tuple(agents), tasks=tuple(tasks), consensus_config=consensus_config))
             elif stage.kind == "sandbox":
-                sandbox_text = f"{stage.label} {stage.purpose} {stage.coder_instructions}".lower()
+                sandbox_text = f"{stage.label} {stage.purpose} {stage.coder_instructions} {prompt}".lower()
                 sandbox_skill_rules = dict(context.skill_keywords)
                 sandbox_skills = [slug for slug, terms in sandbox_skill_rules.items() if slug in context.skill_slugs and any(term.lower() in sandbox_text for term in terms)][:3]
-                sandbox_tools = tuple(tool_id for tool_id in ("sandbox_shell", "document_parser", "chart_generator") if tool_id in builtin_tool_ids and any(term in sandbox_text for term in {
+                inferred_tools = tuple(tool_id for tool_id in ("sandbox_shell", "document_parser", "chart_generator") if tool_id in builtin_tool_ids and any(term in sandbox_text for term in {
                     "sandbox_shell": ("shell", "python", "code", "command"),
                     "document_parser": ("csv", "document", "file", "excel"),
                     "chart_generator": ("chart", "plot", "visualization"),
                 }[tool_id]))
+                web_tools = ("browser_automation", "start_background_process", "get_process_logs") if any(term in sandbox_text for term in ("html", "website", "webgl", "frontend", "browser", "trình duyệt", "three.js")) else ()
+                sandbox_tools = tuple(dict.fromkeys(tool for tool in (*stage.tool_ids, *inferred_tools, *web_tools) if tool in tool_ids))
                 nodes.append(NexusGenSandboxNodeSpec(
                     id=node_id, label=stage.label, coder_model=stage.model if stage.model in available_models else default_model,
                     reviewer_model=stage.model if stage.model in available_models else default_model,

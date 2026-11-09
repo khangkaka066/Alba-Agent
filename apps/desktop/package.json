@@ -2,8 +2,8 @@
   "name": "@nexus/desktop",
   "version": "1.0.0",
   "private": true,
-  "description": "NexusAgent desktop app: one installer that runs the whole stack on your machine (no Docker), or a window onto a remote HTTPS server.",
-  "author": "NexusAgent",
+  "description": "Alba Agent desktop app: one installer that runs the whole stack on your machine (no Docker), or a window onto a remote HTTPS server.",
+  "author": "Alba Agent",
   "license": "MIT",
   "main": "dist/main.js",
   "scripts": {
@@ -22,15 +22,17 @@
     "verify:mac": "python3 ../../scripts/package/verify_runtime.py mac-arm64"
   },
   "build": {
-    "appId": "ai.nexusagent.desktop",
-    "productName": "NexusAgent",
-    "copyright": "NexusAgent",
+    "appId": "ai.albaagent.desktop",
+    "productName": "Alba Agent",
+    "copyright": "Alba Agent",
     "directories": {
       "output": "release",
       "buildResources": "build"
     },
     "files": [
       "dist/**/*",
+      "build/mark.svg",
+      "build/icon.png",
       "package.json"
     ],
     "asar": true,
@@ -51,7 +53,7 @@
       ]
     },
     "dmg": {
-      "title": "NexusAgent"
+      "title": "Alba Agent"
     },
     "win": {
       "icon": "build/icon.png",
@@ -70,7 +72,7 @@
       ],
       "category": "Development"
     },
-    "artifactName": "NexusAgent-${version}-${os}-${arch}.${ext}"
+    "artifactName": "Alba Agent-${version}-${os}-${arch}.${ext}"
   },
   "devDependencies": {
     "@types/node": "^22.18.6",

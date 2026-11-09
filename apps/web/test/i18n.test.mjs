@@ -17,7 +17,8 @@ test("Vietnamese and English define exactly the same keys with the same placehol
 test("every translation is filled in and English is not a copy of the Vietnamese text", () => {
   for (const [key, text] of Object.entries(MESSAGES.en)) assert.ok(text.trim(), key);
   const same = Object.keys(MESSAGES.vi).filter((key) => MESSAGES.vi[key] === MESSAGES.en[key] && /[A-Za-zÀ-ỹ]{4,}/.test(MESSAGES.vi[key]));
-  assert.deepEqual(same.filter((key) => !["settings.s2.title", "failure.agent"].includes(key)), []);
+  // Effort is the control name explicitly requested for both interface languages.
+  assert.deepEqual(same.filter((key) => !["settings.s2.title", "failure.agent", "model.effort"].includes(key)), []);
 });
 
 test("source code only asks for keys that exist", () => {

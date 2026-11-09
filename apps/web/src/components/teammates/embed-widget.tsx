@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { NexusAgentLogo } from "@/components/brand/nexus-agent-logo";
+import { NexusLogo } from "@/components/brand/nexus-agent-logo";
 
 type RuntimeEvent = { type: string; payload: Record<string, unknown> };
 
@@ -44,5 +44,5 @@ export function EmbedWidget({ workflowId }: { workflowId: string }) {
     } catch (error) { setStatus(error instanceof Error ? error.message : "Workflow request failed"); }
     finally { setBusy(false); }
   };
-  return <main className="embed-shell"><div className="embed-brand"><NexusAgentLogo size={27} /> <span>NexusAgent</span></div><section className="embed-card"><span className="eyebrow">WORKSPACE WORKFLOW</span><h1>How can we help?</h1><p>Your request will run inside the workspace connected in this browser.</p><textarea rows={4} value={request} onChange={(event) => setRequest(event.target.value)} placeholder="Describe what you need…" /><button className="button button-primary" disabled={busy || !request.trim()} onClick={() => void run()}>{busy ? "Running…" : "Send request ↑"}</button><div className="embed-status"><span className={status === "Completed" ? "live-indicator" : ""} />{status}</div>{answer && <pre className="embed-answer">{answer}</pre>}</section></main>;
+  return <main className="embed-shell"><div className="embed-brand"><NexusLogo size={27} /> <span>Alba Agent</span></div><section className="embed-card"><span className="eyebrow">WORKSPACE WORKFLOW</span><h1>How can we help?</h1><p>Your request will run inside the workspace connected in this browser.</p><textarea rows={4} value={request} onChange={(event) => setRequest(event.target.value)} placeholder="Describe what you need…" /><button className="button button-primary" disabled={busy || !request.trim()} onClick={() => void run()}>{busy ? "Running…" : "Send request ↑"}</button><div className="embed-status"><span className={status === "Completed" ? "live-indicator" : ""} />{status}</div>{answer && <pre className="embed-answer">{answer}</pre>}</section></main>;
 }

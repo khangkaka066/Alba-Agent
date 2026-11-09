@@ -31,7 +31,7 @@ class DockerSandboxPlugin(Plugin):
 
     async def apply(self, ctx: Context, config: Mapping[str, Any]) -> None:
         root = Path(str(config.get("root") or os.environ.get("NEXUS_COMPUTER_ROOT", "/tmp/nexus-computers")))
-        image = str(config.get("image") or os.environ.get("NEXUS_SANDBOX_IMAGE", "python:3.11-slim"))
+        image = str(config.get("image") or os.environ.get("NEXUS_SANDBOX_IMAGE", "nexus-sandbox-python:3.11"))
         ctx.on_dispose(ctx.service(SANDBOX).add_provider(DockerSandboxProvider(root, image=image)))
 
 

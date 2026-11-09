@@ -8,11 +8,11 @@ import struct
 import zlib
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable, cast
+from typing import Any, Callable, Literal, cast
 from uuid import UUID, uuid4
 
 import pytest
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, create_model
 
 from architect.team_generator import ArchitectWorkspaceContext, MetaArchitectService
 from crews.builder import CrewBuilder, _task_description
@@ -316,6 +316,26 @@ def _studio_generator(seen: list[str]) -> Callable[[str, type[BaseModel]], Any]:
     return generate
 
 
+@pytest.mark.parametrize(("prompt", "kind"), [
+    ("Tạo bộ đếm HTML. Không dùng dịch vụ media, không tạo ảnh/video.", None),
+    ("Create a counter. Do not generate images or video.", None),
+    ("Create a counter without audio, images or video.", None),
+    ("Create an image, not a video.", "image"),
+    ("Create a video without audio.", "video"),
+    ("Tạo video bảo tàng.", "video"),
+    ("Do not create an image, but create a video.", "video"),
+    ("Không tạo video, tạo ảnh bảo tàng.", "image"),
+])
+def test_media_deliverables_respect_explicit_exclusions(prompt: str, kind: str | None) -> None:
+    service = MetaArchitectService(_studio_generator([]), FlowCompiler.validate)
+    spec, _ = asyncio.run(service.generate_workflow(prompt, _context(), rigor="minimal"))
+    media_tasks = [task for node in spec.nodes if isinstance(node, CrewNodeSpec)
+                   for task in node.tasks if task.id.endswith("_deliverable")]
+    assert len(media_tasks) == (0 if kind is None else 1)
+    if kind is not None:
+        assert f"kind={kind}" in media_tasks[0].description
+
+
 def test_meta_architect_builds_a_full_studio_for_product_requests_and_keeps_small_requests_minimal() -> None:
     seen: list[str] = []
     service = MetaArchitectService(_studio_generator(seen), FlowCompiler.validate)
@@ -383,8 +403,9 @@ class _Result(BaseModel):
 class _FakeCrewBuilder:
     """Stands in for model-backed crews: each node writes its files according to a per-node behaviour."""
 
-    def __init__(self, directory: Path, behaviours: dict[str, Callable[[int], dict[str, Any]]]) -> None:
+    def __init__(self, directory: Path, behaviours: dict[str, Callable[[int], dict[str, Any]]], output_schema: type[BaseModel] = _Result) -> None:
         self.directory, self.behaviours = directory, behaviours
+        self.output_schema = output_schema
         self.calls: dict[str, int] = {}
         self.inputs: list[dict[str, Any]] = []
         self.preambles: dict[str, dict[str, str]] = {}
@@ -402,7 +423,7 @@ class _FakeCrewBuilder:
                     target = builder.directory / relative
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_text(content)
-                return SimpleNamespace(pydantic=_Result(**result.get("fields", {})), tasks_output=[], token_usage=None)
+                return SimpleNamespace(pydantic=builder.output_schema(**result.get("fields", {})), tasks_output=[], token_usage=None)
 
         return SimpleNamespace(crew=Crew())
 
@@ -431,6 +452,50 @@ def _run(spec: WorkflowSpec, builder: _FakeCrewBuilder, run_id: UUID) -> tuple[A
     compiler = FlowCompiler(cast(Any, _MemoryCheckpoints()), cast(Any, emitter), cast(Any, None), cast(Any, builder))
     state = asyncio.run(compiler.compile(spec, run_id, {"task": "Make it"}).run())
     return state, emitter
+
+
+@pytest.mark.parametrize("exists", [True, False])
+def test_crew_exports_real_computer_files_before_contract_validation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, exists: bool) -> None:
+    monkeypatch.setenv("NEXUS_ARTIFACTS_DIR", str(tmp_path))
+    run_id = uuid4()
+    node = _crew_node("build")
+    node["expected_artifact_paths"] = ["demo/index.html"]
+    spec = _workflow([{"id": "start", "kind": "start"}, node], [{"source": "start", "target": "build"}])
+    directory = artifact_directory(TENANT, WORKSPACE, run_id)
+    builder = _FakeCrewBuilder(directory, {"build": lambda _: {}})
+    calls: list[tuple[UUID, UUID, UUID, str]] = []
+
+    async def read_file(tenant: UUID, workspace: UUID, run: UUID, path: str) -> bytes:
+        calls.append((tenant, workspace, run, path))
+        if not exists:
+            raise FileNotFoundError(path)
+        return b"<!doctype html><html><body><h1>Counter</h1></body></html>"
+
+    compiler = FlowCompiler(cast(Any, _MemoryCheckpoints()), cast(Any, _Emitter(run_id)), cast(Any, None),
+                            cast(Any, builder), sandbox_file_reader=read_file)
+    if exists:
+        state = asyncio.run(compiler.compile(spec, run_id).run())
+        assert state.status == "completed"
+        assert (directory / "demo/index.html").read_bytes().startswith(b"<!doctype html>")
+        assert state.node_outputs["build"]["artifact_contract"]["passed"] is True
+    else:
+        with pytest.raises(ValueError, match="did not deliver"):
+            asyncio.run(compiler.compile(spec, run_id).run())
+    assert calls == [(TENANT, WORKSPACE, run_id, "demo/index.html")]
+
+
+def test_crew_progress_forwards_real_agent_notes_with_node_and_role(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "unit-test-no-network")
+    notes: list[tuple[str, str, str]] = []
+    builder = CrewBuilder({"S": _Result}, on_progress=lambda node, role, text: notes.append((node, role, text)))
+    node = CrewNodeSpec.model_validate(_crew_node("build"))
+    built = builder.build(node)
+    callback = getattr(built.crew.agents[0], "step_callback", None)
+    assert callable(callback)
+    callback(SimpleNamespace(action=SimpleNamespace(thought="I will check the file before starting the server.")))
+    assert notes == [(node.id, node.agents[0].role, "I will check the file before starting the server.")]
+    callback(SimpleNamespace(return_values={"output": '{"result":385}'}, thought="Final answer follows"))
+    assert notes[-1] == (node.id, node.agents[0].role, "385")
 
 
 def test_quality_gate_sends_missing_artifacts_back_to_the_responsible_department(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -475,3 +540,39 @@ def test_qa_crew_can_fail_the_gate_and_name_the_department(tmp_path: Path, monke
     })
     state, _ = _run(_gate_workflow(), builder, run_id)
     assert state.status == "completed" and builder.calls["build"] == 2 and state.node_outputs["gate"]["rework_loops"] == 1
+
+
+@pytest.mark.parametrize("rigor", ["minimal", "standard", "solo"])
+def test_web_sandbox_tasks_receive_only_registered_isolated_browser_tools(rigor: Literal["minimal", "standard", "solo"]) -> None:
+    from nexus_core_schema.models import NexusGenSandboxNodeSpec
+    context = _context().model_copy(update={"builtin_tool_ids": ("sandbox_shell", "browser_automation", "start_background_process", "get_process_logs")})
+    async def generate(prompt: str, schema: Any) -> dict[str, Any]:
+        if schema.__name__ == "_StudioDraft":
+            return {"name":"Web studio","summary":"Build the page","direction":"Responsive HTML","objectives":{},"design_reasoning":[]}
+        return {"name":"Web page","summary":"Build and verify HTML","stages":[{"kind":"sandbox","label":"Write page","purpose":"Create index.html and check in browser","tool_ids":["sandbox_shell","unregistered_tool"]}]}
+    service=MetaArchitectService(generate,FlowCompiler.validate)
+    spec,_=asyncio.run(service.generate_workflow("Create an HTML website and verify it in the browser",context,rigor=rigor))
+    nodes=[node for node in spec.nodes if isinstance(node,NexusGenSandboxNodeSpec)]
+    assert nodes and all({"browser_automation","start_background_process","get_process_logs"}.issubset(node.tool_ids) for node in nodes)
+    assert all("unregistered_tool" not in node.tool_ids for node in nodes)
+
+
+@pytest.mark.parametrize("fields", [("artifact_filename",), ("report_filename",), ("artifact_filename", "report_filename")])
+@pytest.mark.parametrize("exists", [True, False])
+def test_crew_checks_only_declared_file_fields_and_still_rejects_missing_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fields: tuple[str, ...], exists: bool) -> None:
+    monkeypatch.setenv("NEXUS_ARTIFACTS_DIR", str(tmp_path))
+    run_id = uuid4()
+    values = {field: "artifacts/index.html" if field == "artifact_filename" else "qa.md" for field in fields}
+    definitions: dict[str, Any] = {field: (str, ...) for field in fields}
+    schema = create_model("FileResult", **definitions)
+    spec = _workflow([{"id": "start", "kind": "start"}, _crew_node("qa")], [{"source": "start", "target": "qa"}])
+    builder = _FakeCrewBuilder(artifact_directory(TENANT, WORKSPACE, run_id), {
+        "qa": lambda _: {"fields": values, "files": {path: "Real file content" for path in values.values()} if exists else {}},
+    }, schema)
+    if exists:
+        state, _ = _run(spec, builder, run_id)
+        assert state.status == "completed"
+        assert all(state.node_outputs["qa"][field] == path for field, path in values.items())
+    else:
+        with pytest.raises(ValueError, match="required artifacts"):
+            _run(spec, builder, run_id)

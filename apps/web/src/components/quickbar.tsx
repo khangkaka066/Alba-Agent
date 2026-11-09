@@ -24,7 +24,7 @@ export function QuickBar() {
     const prompt = text.trim();
     if (!prompt || state === "sending") return;
     const token = window.localStorage.getItem("nexus_access_token") ?? "";
-    if (!token) { setState("error"); setMessage("Open NexusAgent and connect a workspace first."); return; }
+    if (!token) { setState("error"); setMessage("Open Alba Agent and connect a workspace first."); return; }
     setState("sending"); setMessage("");
     try {
       await apiRequest("/api/v1/architect/generate-workflow", token, { method: "POST", body: JSON.stringify({ user_requirement_prompt: prompt, auto_run: true }) });

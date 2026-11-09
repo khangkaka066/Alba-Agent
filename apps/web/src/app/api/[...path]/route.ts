@@ -13,16 +13,18 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     if (value) headers.set(key, value);
   }
   const hasBody = !["GET", "HEAD"].includes(request.method);
-  const response = await fetch(target, {
+  const streamingUpload = request.method === "POST" && path.join("/") === "v1/uploads";
+  const init: RequestInit & { duplex?: "half" } = {
     method: request.method,
     headers,
-    body: hasBody ? await request.arrayBuffer() : undefined,
+    body: hasBody ? streamingUpload ? request.body : await request.arrayBuffer() : undefined,
     cache: "no-store",
-    // Node's fetch requires duplex only when a streaming request body is used;
-    // request.arrayBuffer() gives this proxy a replayable, bounded body.
-  });
+    signal: request.signal,
+    ...(streamingUpload ? { duplex: "half" } : {}),
+  };
+  const response = await fetch(target, init);
   const responseHeaders = new Headers();
-  for (const key of ["content-type", "cache-control", "last-event-id", "x-accel-buffering"]) {
+  for (const key of ["content-type", "content-disposition", "x-content-type-options", "cache-control", "last-event-id", "x-accel-buffering"]) {
     const value = response.headers.get(key);
     if (value) responseHeaders.set(key, value);
   }

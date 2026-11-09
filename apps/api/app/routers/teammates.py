@@ -237,49 +237,53 @@ async def voice_stream(websocket: WebSocket, bot_id: UUID) -> None:
                 await websocket.send_json({"type": "error", "text": "Speak before ending the voice turn"})
                 continue
 
-            stt_key = os.environ.get("NEXUS_STT_API_KEY") or os.environ.get("NEXUS_OPENAI_API_KEY")
-            if not stt_key:
-                await websocket.send_json({"type": "error", "text": "Voice transcription needs NEXUS_STT_API_KEY or NEXUS_OPENAI_API_KEY"})
-                continue
-            stt_base = os.environ.get("NEXUS_STT_API_BASE", "https://api.openai.com/v1").rstrip("/")
-            content_type = str(command.get("content_type", "audio/webm"))
-            suffix = "wav" if "wav" in content_type else "webm"
-            async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=10.0)) as client:
-                response = await client.post(
-                    f"{stt_base}/audio/transcriptions",
-                    headers={"Authorization": f"Bearer {stt_key}"},
-                    data={"model": os.environ.get("NEXUS_STT_MODEL", "whisper-1")},
-                    files={"file": (f"utterance.{suffix}", audio, content_type)},
-                )
-                response.raise_for_status()
-                transcript = response.json().get("text")
-            if not isinstance(transcript, str) or not transcript.strip():
-                await websocket.send_json({"type": "error", "text": "Speech transcription returned no words"})
-                continue
-            await websocket.send_json({"type": "transcript", "text": transcript})
-            thread_id = UUID(str(command["thread_id"])) if command.get("thread_id") else uuid4()
-            answer = await services.bot_runner(tenant_id, workspace_id, user_id).chat(bot_id, thread_id, transcript)
-            tts_key = os.environ.get("NEXUS_TTS_API_KEY") or os.environ.get("NEXUS_OPENAI_API_KEY")
-            await websocket.send_json({"type": "response", "text": answer, "audio_expected": bool(tts_key)})
-            if tts_key:
-                tts_base = os.environ.get("NEXUS_TTS_API_BASE", "https://api.openai.com/v1").rstrip("/")
+            try:
+                stt_key = os.environ.get("NEXUS_STT_API_KEY") or os.environ.get("NEXUS_OPENAI_API_KEY")
+                if not stt_key:
+                    await websocket.send_json({"type": "error", "text": "Voice transcription needs NEXUS_STT_API_KEY or NEXUS_OPENAI_API_KEY"})
+                    continue
+                stt_base = os.environ.get("NEXUS_STT_API_BASE", "https://api.openai.com/v1").rstrip("/")
+                content_type = str(command.get("content_type", "audio/webm"))
+                suffix = "wav" if "wav" in content_type else "webm"
                 async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=10.0)) as client:
-                    async with client.stream(
-                        "POST", f"{tts_base}/audio/speech",
-                        headers={"Authorization": f"Bearer {tts_key}"},
-                        json={"model": os.environ.get("NEXUS_TTS_MODEL", "tts-1"), "voice": os.environ.get("NEXUS_TTS_VOICE", "alloy"), "input": answer, "response_format": "mp3"},
-                    ) as response:
-                        response.raise_for_status()
-                        sequence = 0
-                        async for part in response.aiter_bytes(48 * 1024):
-                            if part:
-                                await websocket.send_json({
-                                    "type": "audio_chunk", "sequence": sequence,
-                                    "content_type": "audio/mpeg",
-                                    "audio_base64": base64.b64encode(part).decode("ascii"),
-                                })
-                                sequence += 1
-                await websocket.send_json({"type": "audio_complete"})
+                    response = await client.post(
+                        f"{stt_base}/audio/transcriptions",
+                        headers={"Authorization": f"Bearer {stt_key}"},
+                        data={"model": os.environ.get("NEXUS_STT_MODEL", "whisper-1")},
+                        files={"file": (f"utterance.{suffix}", audio, content_type)},
+                    )
+                    response.raise_for_status()
+                    transcript = response.json().get("text")
+                if not isinstance(transcript, str) or not transcript.strip():
+                    await websocket.send_json({"type": "error", "text": "Speech transcription returned no words"})
+                    continue
+                await websocket.send_json({"type": "transcript", "text": transcript})
+                thread_id = UUID(str(command["thread_id"])) if command.get("thread_id") else uuid4()
+                answer = await services.bot_runner(tenant_id, workspace_id, user_id).chat(bot_id, thread_id, transcript)
+                tts_key = os.environ.get("NEXUS_TTS_API_KEY") or os.environ.get("NEXUS_OPENAI_API_KEY")
+                await websocket.send_json({"type": "response", "text": answer, "audio_expected": bool(tts_key)})
+                if tts_key:
+                    tts_base = os.environ.get("NEXUS_TTS_API_BASE", "https://api.openai.com/v1").rstrip("/")
+                    async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=10.0)) as client:
+                        async with client.stream(
+                            "POST", f"{tts_base}/audio/speech",
+                            headers={"Authorization": f"Bearer {tts_key}"},
+                            json={"model": os.environ.get("NEXUS_TTS_MODEL", "tts-1"), "voice": os.environ.get("NEXUS_TTS_VOICE", "alloy"), "input": answer, "response_format": "mp3"},
+                        ) as response:
+                            response.raise_for_status()
+                            sequence = 0
+                            async for part in response.aiter_bytes(48 * 1024):
+                                if part:
+                                    await websocket.send_json({
+                                        "type": "audio_chunk", "sequence": sequence,
+                                        "content_type": "audio/mpeg",
+                                        "audio_base64": base64.b64encode(part).decode("ascii"),
+                                    })
+                                    sequence += 1
+                    await websocket.send_json({"type": "audio_complete"})
+            except (httpx.HTTPError, ValueError, RuntimeError, LookupError) as error:
+                await websocket.send_json({"type": "error", "text": f"Voice turn failed: {type(error).__name__}"})
+                continue
     except WebSocketDisconnect:
         return
     except (httpx.HTTPError, ValueError, RuntimeError, LookupError) as error:
@@ -347,6 +351,16 @@ async def delete_routine(routine_id: UUID, request: Request, context: BUILD) -> 
             raise not_found("Routine is not visible in this workspace")
         await session.delete(row)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/api/v1/routines/{routine_id}/runs")
+async def list_routine_runs(routine_id: UUID, request: Request, context: READ) -> list[dict[str, Any]]:
+    async with scoped_session(get_services(request).engine, context.tenant_id, context.workspace_id) as session:
+        if await session.get(BotRoutine, routine_id) is None:
+            raise not_found("Routine is not visible in this workspace")
+        rows = (await session.scalars(select(RoutineRun).where(RoutineRun.routine_id == routine_id).order_by(RoutineRun.created_at.desc()).limit(50))).all()
+        return [{"id": str(row.id), "status": row.status, "scheduled_for": row.scheduled_for,
+                 "created_at": row.created_at, "result": str(row.checkpoint.get("result", ""))[:4000]} for row in rows]
 
 
 @router.post("/api/v1/routines/{routine_id}/runs", response_model=RoutineRunResponse, status_code=status.HTTP_202_ACCEPTED)

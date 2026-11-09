@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildTree, classifyArtifact, diffStats, fileStatuses, flattenWorkspaceFiles, initialRunState, isFinished, lineDiff, liveActivity, reduceRunEvent, splitRows, stepLabel, teamSummary } from "../src/lib/workspace.mjs";
+import { buildTree, classifyArtifact, diffStats, fileStatuses, flattenWorkspaceFiles, initialRunState, isFinished, lineDiff, liveActivity, reduceRunEvent, runAnswer, splitRows, stepLabel, teamSummary } from "../src/lib/workspace.mjs";
 
 test("artifacts open in the right viewer", () => {
   assert.deepEqual(classifyArtifact("tour.mp4"), { kind: "video", text: false });
@@ -83,4 +83,38 @@ test("a mounted folder is flattened for the sandbox with a path manifest", () =>
   assert.deepEqual([out.map["service.py"], out.map["service_2.py"]], ["src/auth/service.py", "tests/service.py"]);
   const roomy = flattenWorkspaceFiles([{ path: "a/x.py", content: "1" }]);
   assert.equal(JSON.parse(roomy.files["workspace_manifest.json"]).files["x.py"], "a/x.py");
+});
+
+test("activity uses real events and updates a tool call instead of duplicating its start and finish", () => {
+  let state = initialRunState();
+  const event = (id, type, payload) => ({ id, type, node_id: "build", occurred_at: "2026-11-08T01:00:00Z", payload });
+  state = reduceRunEvent(state, event("note", "CREW_AGENT_THOUGHT", { content: "I will inspect the file." }));
+  state = reduceRunEvent(state, event("start", "TOOL_INVOKED", { call_id: "call-1", tool: "Read file", detail: "demo/index.html", phase: "started" }));
+  state = reduceRunEvent(state, event("done", "TOOL_INVOKED", { call_id: "call-1", tool: "Read file", detail: "demo/index.html", phase: "completed" }));
+  assert.equal(state.activity.length, 2);
+  assert.equal(state.activity[0].text, "I will inspect the file.");
+  assert.equal(state.activity[1].phase, "completed");
+  assert.equal(state.activity[1].detail, "demo/index.html");
+  assert.equal(initialRunState().activity.length, 0);
+});
+
+
+test("completed results use the actual answer, never intermediate thoughts or trigger input", () => {
+  assert.equal(runAnswer({ start: { request: "hi" }, greeting: { response: "Chào bạn!" } }), "Chào bạn!");
+  assert.equal(runAnswer({ step: { thought: "I need to greet the user", analysis: "internal plan" } }), "");
+  assert.equal(runAnswer({ a: { summary: "Working" }, b: { result: { answer: "385" } } }), "385");
+  assert.equal(runAnswer(null), "");
+});
+
+test('stopping waits for acknowledgement and cannot be undone by an in-flight completion event', () => {
+  const event = (status) => ({ id: status, type: 'FLOW_STATE_CHANGED', payload: { status }, run_id: 'r1' });
+  let state = { ...initialRunState(), status: 'running', active: ['worker'], approvals: [{ approval_id: 'a' }] };
+  state = reduceRunEvent(state, event('cancelling'));
+  assert.equal(isFinished(state.status), false);
+  state = reduceRunEvent(state, { id: 'done', type: 'RUN_COMPLETED', payload: {}, run_id: 'r1' });
+  assert.equal(state.status, 'cancelling');
+  state = reduceRunEvent(state, event('cancelled'));
+  assert.equal(isFinished(state.status), true);
+  assert.deepEqual([state.active, state.approvals], [[], []]);
+  assert.equal(reduceRunEvent(state, event('running')).status, 'cancelled');
 });

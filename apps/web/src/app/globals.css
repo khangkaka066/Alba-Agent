@@ -555,7 +555,7 @@ html[data-theme="light"] .flow-node { background: #fff; }
 .skill-row__copy small,.skill-open,.tool-capability-list p,.tool-capability-list a,.tool-capability-list .text-button { font-size: 11px; }
 @media (max-width: 760px) { .breadcrumbs { font-size: 11px; }.connection-pill { font-size: 11px; } }
 
-/* NexusAgent editorial workspace — approved warm canvas direction */
+/* Alba Agent editorial workspace — approved warm canvas direction */
 html[data-theme="light"] {
   --surface-canvas: #f7f6f1;
   --surface-panel: #ffffff;

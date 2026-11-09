@@ -9,9 +9,10 @@ import { groupConversations, loadProjects } from "@/lib/shell.mjs";
 import type { Conversation } from "@/components/workspace/use-conversations";
 import { useWorkspace } from "@/components/workspace/workspace-context";
 import { Icon } from "./icons";
+import { NexusLogo } from "@/components/brand/nexus-agent-logo";
 import type { NavPage } from "./shell-context";
 
-type Props = { page: NavPage; conversations: Conversation[]; reload: () => Promise<void>; navigate: (page: NavPage) => void; footer: ReactNode; onOpenSettings: () => void };
+type Props = { onWorkspace: (create: boolean) => void; page: NavPage; conversations: Conversation[]; reload: () => Promise<void>; navigate: (page: NavPage) => void; footer: ReactNode };
 
 function Row({ item, current, onOpen, onDelete, confirming, setConfirming }: { item: Conversation; current: boolean; onOpen: () => void; onDelete: () => void; confirming: boolean; setConfirming: (value: boolean) => void }) {
   const { t } = useLocale();
@@ -28,8 +29,8 @@ function Row({ item, current, onOpen, onDelete, confirming, setConfirming }: { i
   </li>;
 }
 
-/** Left column: start a conversation, the places around it, projects with their conversations, then the rest, and Settings at the foot. */
-export function Sidebar({ page, conversations, reload, navigate, footer, onOpenSettings }: Props) {
+/** Left column: start a conversation, the places around it, projects with their conversations, then the profile menu at the foot. */
+export function Sidebar({ page, conversations, reload, navigate, footer, onWorkspace }: Props) {
   const { t } = useLocale();
   const workspace = useWorkspace();
   const [query, setQuery] = useState("");
@@ -49,7 +50,8 @@ export function Sidebar({ page, conversations, reload, navigate, footer, onOpenS
   const shown = groups.projects.some((group) => group.name === folderName) || !folderName || query.trim() ? groups.projects : [{ name: folderName, tasks: [] }, ...groups.projects];
 
   const open = (item: Conversation) => {
-    if (item.run.id !== workspace.runId) workspace.openRun(item.run.workflow_id, item.run.id, item.name);
+    if (item.run.workflow_id) { if (item.run.id !== workspace.runId) workspace.openRun(item.run.workflow_id, item.run.id, item.name); }
+    else if (item.run.conversation_id && item.run.conversation_id !== workspace.conversationId) workspace.openConversation(item.run.conversation_id);
     navigate("studio");
   };
   const remove = async (item: Conversation) => {
@@ -57,16 +59,21 @@ export function Sidebar({ page, conversations, reload, navigate, footer, onOpenS
     try { await workspace.deleteTask(item.run.conversation_id); setAsking(null); setProblem(""); await reload(); }
     catch (reason) { setProblem(readError(reason)); }
   };
-  const row = (item: Conversation) => <Row key={item.run.id} item={item} current={item.run.id === workspace.runId && page === "studio"} onOpen={() => open(item)} onDelete={() => void remove(item)} confirming={asking === item.run.id} setConfirming={(value) => setAsking(value ? item.run.id : null)} />;
+  const row = (item: Conversation) => <Row key={item.run.id} item={item} current={(item.run.workflow_id ? item.run.id === workspace.runId : item.run.conversation_id === workspace.conversationId) && page === "studio"} onOpen={() => open(item)} onDelete={() => void remove(item)} confirming={asking === item.run.id} setConfirming={(value) => setAsking(value ? item.run.id : null)} />;
   const start = () => { workspace.newTask(); navigate("studio"); window.setTimeout(() => window.dispatchEvent(new Event("nexus:focus-composer")), 0); };
 
   return <aside className="ag-sidebar" aria-label={t("shell.sidebar")}>
     <div className="ag-sidebar__scroll">
+      <details className="ag-workspace-switcher" onKeyDown={(event) => { if (event.key === "Escape") { event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}>
+        <summary><NexusLogo size={23} /><span><strong>Alba Agent</strong></span><Icon name="chevronDown" size={13} /></summary>
+        <div className="ag-workspace-menu">
+          <button type="button" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); onWorkspace(false); }}><Icon name="folder" size={14} />{t("studio.switchWorkspace")}</button>
+          <button type="button" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); onWorkspace(true); }}><Icon name="plus" size={14} />{t("studio.newWorkspace")}</button>
+          <button type="button" disabled={!canPickFolder} title={!canPickFolder ? t("studio.desktopFolder") : undefined} onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); void workspace.openFolder(); }}><Icon name="folderPlus" size={14} />{t("home.openFolder")}</button>
+        </div>
+      </details>
       <button type="button" className="ag-newbtn" onClick={start}><Icon name="plus" size={15} /><span>{t("shell.newConversation")}</span></button>
-      <nav className="ag-nav" aria-label={t("shell.screens")}>
-        <button type="button" className={`ag-nav__item ${page === "teammates" ? "is-active" : ""}`} aria-current={page === "teammates" ? "page" : undefined} onClick={() => navigate("teammates")}><Icon name="bolt" size={15} /><span>{t("shell.automations")}</span></button>
-        <button type="button" className={`ag-nav__item ${page === "integrations" ? "is-active" : ""}`} aria-current={page === "integrations" ? "page" : undefined} onClick={() => navigate("integrations")}><Icon name="customize" size={15} /><span>{t("shell.customizations")}</span></button>
-      </nav>
+
 
       <section className="ag-section" aria-label={t("shell.projects")}>
         <header className="ag-section__head">
@@ -89,6 +96,11 @@ export function Sidebar({ page, conversations, reload, navigate, footer, onOpenS
         </ul>
       </section>
 
+      <nav className="ag-nav" aria-label={t("shell.screens")}>
+        <button type="button" className={`ag-nav__item ${page === "teammates" ? "is-active" : ""}`} aria-current={page === "teammates" ? "page" : undefined} onClick={() => navigate("teammates")}><Icon name="bolt" size={15} /><span>{t("interface.scheduledTasks")}</span></button>
+        <button type="button" className={`ag-nav__item ${page === "integrations" ? "is-active" : ""}`} aria-current={page === "integrations" ? "page" : undefined} onClick={() => navigate("integrations")}><Icon name="customize" size={15} /><span>{t("interface.customizations")}</span></button>
+      </nav>
+
       <section className="ag-section" aria-label={t("shell.conversations")}>
         <header className="ag-section__head">
           <h3>{t("shell.conversations")}</h3>
@@ -101,7 +113,6 @@ export function Sidebar({ page, conversations, reload, navigate, footer, onOpenS
       </section>
     </div>
     <div className="ag-sidebar__foot">
-      <button type="button" className={`ag-nav__item ${["general", "settings", "intelligence"].includes(page) ? "is-active" : ""}`} onClick={onOpenSettings}><Icon name="settings" size={15} /><span>{t("page.settings")}</span></button>
       {footer}
     </div>
   </aside>;

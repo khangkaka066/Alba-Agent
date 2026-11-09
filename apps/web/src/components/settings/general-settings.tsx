@@ -1,29 +1,22 @@
 "use client";
-
-import { LanguageSwitch } from "@/components/language-switch";
-import { useLocale } from "@/components/locale-provider";
-import { ShortcutSettings } from "@/components/providers/shortcut-settings";
-import type { Bindings } from "@/lib/shortcuts.mjs";
-
-/** General settings: how the app looks and reads, and the keyboard shortcuts. */
-export function GeneralSettings({ theme, onTheme, bindings, onBindings, mac }: { theme: "dark" | "light"; onTheme: (value: "dark" | "light") => void; bindings: Bindings; onBindings: (next: Bindings) => void; mac: boolean }) {
-  const { t } = useLocale();
-  return <div className="page-body settings-page">
-    <h1 className="settings-heading">{t("settings.nav.general")}</h1>
-    <h2 className="settings-group-title">{t("general.appearance")}</h2>
-    <div className="settings-card">
-      <div className="settings-row"><div><strong>{t("general.theme")}</strong><p>{t("general.themeBody")}</p></div>
-        <div className="language-switch" role="group" aria-label={t("general.theme")}>
-          {(["dark", "light"] as const).map((value) => <button key={value} type="button" className={theme === value ? "is-active" : ""} aria-pressed={theme === value} onClick={() => onTheme(value)}>{t(`general.theme.${value}`)}</button>)}
-        </div></div>
-      <div className="settings-row"><div><strong>{t("general.language")}</strong><p>{t("general.languageBody")}</p></div><LanguageSwitch /></div>
-    </div>
-    <h2 className="settings-group-title">{t("perm.title")}</h2>
-    <div className="settings-card">
-      <div className="settings-row"><div><strong>{t("perm.auto")}</strong><p>{t("perm.body")}</p></div></div>
-      <div className="settings-row"><div><ul className="settings-list"><li>{t("perm.allow")}</li><li>{t("perm.ask")}</li><li>{t("perm.deny")}</li></ul><p>{t("perm.keys")}</p></div></div>
-    </div>
-    <h2 className="settings-group-title">{t("shortcut.title")}</h2>
-    <div className="settings-card settings-card--block"><ShortcutSettings bindings={bindings} onChange={onBindings} mac={mac} /></div>
-  </div>;
-}
+import {useEffect,useState} from 'react';
+import {useLocale} from '@/components/locale-provider';
+import {usePreferences} from './preferences-provider';
+import {SettingsHeader,SettingsGroup,SettingsRow,Segmented,SettingSwitch,SettingsDetail} from './controls';
+import {useWorkspace} from '@/components/workspace/workspace-context';
+import {useShell} from '@/components/shell/shell-context';
+import {apiRequest,readError} from '@/lib/api';
+import {getDesktop,type DesktopApplicationSettings} from '@/lib/desktop';
+type Policy={permission_preset:'auto'|'strict';allowed_domains:string[];denied_domains:string[]};
+type Tool={id:string;name:string;description:string;enabled:boolean};
+export function GeneralSettings(){const {t}=useLocale();const {preferences,update}=usePreferences();const {token}=useWorkspace();const shell=useShell();const [policy,setPolicy]=useState<Policy|null>(null);const [tools,setTools]=useState<Tool[]>([]);const [detail,setDetail]=useState<'tools'|'network'|null>(null);const [allowed,setAllowed]=useState('');const [denied,setDenied]=useState('');const [error,setError]=useState('');const [busy,setBusy]=useState(false);const [desktop,setDesktop]=useState<DesktopApplicationSettings|null>(null);const [historyCleared,setHistoryCleared]=useState(false);
+useEffect(()=>{if(!token)return;let stopped=false;void Promise.all([apiRequest<Policy>('/api/v1/settings/execution',token),apiRequest<Tool[]>('/api/v1/tools/builtin',token)]).then(([policy,tools])=>{if(!stopped){setPolicy(policy);setAllowed(policy.allowed_domains.join('\n'));setDenied(policy.denied_domains.join('\n'));setTools(tools)}}).catch(reason=>{if(!stopped)setError(readError(reason))});const bridge=getDesktop();if(bridge?.getSettings)void bridge.getSettings().then(setDesktop).catch(()=>undefined);return()=>{stopped=true}},[token]);
+const save=async(next:Policy)=>{setBusy(true);setError('');try{const value=await apiRequest<Policy>('/api/v1/settings/execution',token,{method:'PUT',body:JSON.stringify(next)});setPolicy(value);setDetail(null)}catch(reason){setError(readError(reason))}finally{setBusy(false)}};
+const toggleTool=async(tool:Tool,enabled:boolean)=>{setBusy(true);setError('');try{await apiRequest(`/api/v1/tools/builtin/${tool.id}/enabled`,token,{method:'PUT',body:JSON.stringify({enabled})});setTools(items=>items.map(item=>item.id===tool.id?{...item,enabled}:item))}catch(reason){setError(readError(reason))}finally{setBusy(false)}};
+return <div className="nx-settings-page"><SettingsHeader title={t('settings.nav.general')} description={t('settings.general.description')}/>{error&&<p className="nx-settings-error" role="alert">{error}</p>}
+<SettingsGroup title={t('settings.permissions')} description={t('settings.permissions.description')}><SettingsRow title={t('settings.permissionPreset')} description={t('settings.permissionPreset.description')}><select aria-label={t('settings.permissionPreset')} value={policy?.permission_preset??'auto'} disabled={!policy||busy} onChange={event=>{if(policy)void save({...policy,permission_preset:event.target.value as Policy['permission_preset']})}}><option value="auto">{t('settings.preset.auto')}</option><option value="strict">{t('settings.preset.strict')}</option></select></SettingsRow><SettingsRow title={t('settings.toolPermissions')} description={t('settings.toolPermissions.description')} note={tools.length?t('settings.toolCount',{enabled:tools.filter(tool=>tool.enabled).length,total:tools.length}):undefined}><button type="button" disabled={!policy} onClick={()=>setDetail('tools')}>{t('settings.open')}</button></SettingsRow><SettingsRow title={t('settings.networkRules')} description={t('settings.networkRules.description')}><button type="button" disabled={!policy} onClick={()=>setDetail('network')}>{t('settings.open')}</button></SettingsRow></SettingsGroup>
+<SettingsGroup title={t('settings.agentBehavior')}><SettingsRow title={t('settings.planReview')} description={t('settings.planReview.description')} note={t('settings.planReview.note')}><select aria-label={t('settings.planReview')} value={preferences.planReview} onChange={event=>update({planReview:event.target.value as 'ask'|'always'})}><option value="always">{t('settings.alwaysProceed')}</option><option value="ask">{t('settings.askReview')}</option></select></SettingsRow></SettingsGroup>
+<SettingsGroup title={t('settings.execution')}><SettingsRow title={t('settings.queuedMessages')} description={t('settings.queuedMessages.description')} note={preferences.messageDelivery==='immediate'?t('settings.immediate.note'):undefined}><Segmented value={preferences.messageDelivery} onChange={messageDelivery=>update({messageDelivery})} label={t('settings.queuedMessages')} options={[{value:'queue',label:t('settings.queue')},{value:'immediate',label:t('settings.immediate')}]}/></SettingsRow></SettingsGroup>
+<SettingsGroup title={t('settings.browser')} description={t('settings.browser.description')}><SettingsRow title={t('settings.openLinks')} description={t('settings.openLinks.description')}><Segmented value={preferences.linkTarget} onChange={linkTarget=>update({linkTarget})} label={t('settings.openLinks')} options={[{value:'external',label:t('settings.browser.external')},{value:'builtin',label:t('settings.browser.builtin')}]}/></SettingsRow><SettingsRow title={t('settings.downloadLocation')} description={t('settings.downloadLocation.description')} note={desktop?.downloadDirectory??t('settings.browserDownloads')}><button type="button" disabled={!desktop} onClick={()=>void getDesktop()?.chooseDownloadDirectory().then(value=>{if(value)setDesktop(value)}).catch(reason=>setError(readError(reason)))}>{t('settings.change')}</button></SettingsRow><SettingsRow title={t('settings.browsingHistory')} description={t('settings.browsingHistory.description')}><button type="button" onClick={()=>{localStorage.removeItem('nexus_browser_history');window.dispatchEvent(new Event('nexus:clear-browser-history'));setHistoryCleared(true)}}>{t(historyCleared?'settings.cleared':'settings.clear')}</button></SettingsRow></SettingsGroup>
+{detail&&<SettingsDetail title={t(detail==='tools'?'settings.toolPermissions':'settings.networkRules')} onClose={()=>setDetail(null)}>{error&&<p className="nx-settings-error" role="alert">{error}</p>}{detail==='tools'?<><p>{t('settings.tools.note')}</p><div className="nx-settings-tool-list">{tools.map(tool=><SettingsRow key={tool.id} title={tool.name} description={tool.description}><SettingSwitch label={tool.name} checked={tool.enabled} disabled={busy} onChange={enabled=>void toggleTool(tool,enabled)}/></SettingsRow>)}</div><button type="button" onClick={()=>{setDetail(null);shell.navigate('integrations')}}>{t('settings.manageConnections')}</button></>:<form onSubmit={event=>{event.preventDefault();if(policy)void save({...policy,allowed_domains:allowed.split('\n').map(x=>x.trim()).filter(Boolean),denied_domains:denied.split('\n').map(x=>x.trim()).filter(Boolean)})}}><p>{t('settings.network.note')}</p><label className="field"><span>{t('settings.allowedDomains')}</span><textarea rows={5} value={allowed} onChange={event=>setAllowed(event.target.value)}/></label><label className="field"><span>{t('settings.deniedDomains')}</span><textarea rows={5} value={denied} onChange={event=>setDenied(event.target.value)}/></label><footer><button type="button" onClick={()=>setDetail(null)}>{t('common.cancel')}</button><button type="submit" disabled={busy}>{t('common.save')}</button></footer></form>}</SettingsDetail>}
+</div>}

@@ -19,8 +19,12 @@ from sqlalchemy import text
 from app.auth.local import ensure_local_workspace, local_mode_enabled
 from app.auth.router import router as auth_router
 from app.billing.router import router as billing_router
-from app.routers import analytics, approvals, architect, artifacts, conversations, evolution, knowledge, learning_transfer, providers, sandboxes, self_healing, skills_tools, subscriptions, teammates, templates, time_travel, workflows
+from app.routers import analytics, approvals, architect, artifacts, conversations, evolution, knowledge, learning_transfer, providers, sandboxes, sandbox_preview, self_healing, skills_tools, subscriptions, teammates, templates, time_travel, uploads, workflows
 from app.services import AppServices, create_default_services
+from app.routers.execution_settings import router as execution_settings_router
+from app.routers.account_login import router as account_login_router
+from app.google_account import GoogleAccounts, GoogleLogins
+from app.account_models import AccountModels
 
 
 LOCAL_ORIGIN_PATTERN = r"^http://(localhost|127\.0\.0\.1)(:\d{1,5})?$"
@@ -29,6 +33,9 @@ LOCAL_ORIGIN_PATTERN = r"^http://(localhost|127\.0\.0\.1)(:\d{1,5})?$"
 def create_app(services: AppServices | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+        application.state.google_logins = GoogleLogins()
+        application.state.google_accounts = GoogleAccounts()
+        application.state.account_models = AccountModels()
         owns_services = services is None
         if services is None:
             from app.workers.jobs import CeleryDispatcher
@@ -45,12 +52,14 @@ def create_app(services: AppServices | None = None) -> FastAPI:
         try:
             yield
         finally:
+            await application.state.google_logins.close()
+            await application.state.google_accounts.close()
             await application.state.services.dispatcher.shutdown()
             if owns_services:
                 await application.state.services.shutdown()
 
     application = FastAPI(
-        title=os.environ.get("NEXUS_BRAND_NAME", "NexusAgent Studio"),
+        title=os.environ.get("NEXUS_BRAND_NAME", "Alba Agent"),
         version="1.0.0", lifespan=lifespan,
     )
     cors_origins = [
@@ -79,16 +88,20 @@ def create_app(services: AppServices | None = None) -> FastAPI:
     application.include_router(teammates.router)
     application.include_router(approvals.router)
     application.include_router(sandboxes.router)
+    application.include_router(sandbox_preview.router)
     application.include_router(knowledge.router)
     application.include_router(analytics.router)
     application.include_router(learning_transfer.router)
     application.include_router(architect.router)
     application.include_router(conversations.router)
     application.include_router(artifacts.router)
+    application.include_router(uploads.router)
     application.include_router(self_healing.router)
     application.include_router(evolution.router)
     application.include_router(time_travel.router)
     application.include_router(providers.router)
+    application.include_router(execution_settings_router)
+    application.include_router(account_login_router)
     application.include_router(subscriptions.router)
     application.include_router(skills_tools.router)
 

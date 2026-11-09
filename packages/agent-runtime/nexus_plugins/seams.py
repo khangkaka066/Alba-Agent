@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from nexusgen_bridge.sandbox_team import NexusGenSandboxRunner
 from checkpoints.store import CheckpointStore
+from nexus_computer_sandbox.interactive import InteractiveComputers
 from nexus_computer_sandbox import ComputerSandboxSupervisor
 from qdrant_client import AsyncQdrantClient
 from redis.asyncio import Redis
@@ -21,3 +22,5 @@ SANDBOX_RUNNER: ServiceKey[NexusGenSandboxRunner] = ServiceKey("sandbox-runner")
 LLM: ServiceKey[LlmService] = ServiceKey("llm")
 TOOLS: ServiceKey[ToolRegistryService] = ServiceKey("tools")
 CHECKPOINTS: ServiceKey[CheckpointStore] = ServiceKey("checkpoints")
+
+INTERACTIVE_COMPUTERS: ServiceKey[InteractiveComputers] = ServiceKey("interactive-computers")

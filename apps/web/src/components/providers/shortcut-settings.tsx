@@ -8,6 +8,7 @@ export function ShortcutSettings({ bindings, onChange, mac }: { bindings: Bindin
   const { t } = useLocale();
   const [recording, setRecording] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [query, setQuery] = useState("");
   const labelOf = (id: string) => t(`shortcut.${id}`);
   const customised = ACTIONS.some((action) => bindings[action.id] !== DEFAULT_BINDINGS[action.id]);
 
@@ -24,14 +25,14 @@ export function ShortcutSettings({ bindings, onChange, mac }: { bindings: Bindin
     setRecording(null); setMessage("");
   };
 
-  return <section className="shortcut-settings" aria-label={t("shortcut.title")}>
-    <div className="provider-section-heading"><div><span className="eyebrow">{t("shortcut.eyebrow")}</span><h2>{t("shortcut.title")}</h2></div>
-      <button className="button button-quiet" disabled={!customised} onClick={() => { onChange({ ...DEFAULT_BINDINGS }); setRecording(null); setMessage(""); }}>{t("shortcut.resetAll")}</button></div>
-    <p className="provider-caption">{t("shortcut.caption")}</p>
+  return <section className="shortcut-settings nx-settings-page" aria-label={t("shortcut.title")}>
+    <header className="nx-settings-heading"><h1>{t("settings.nav.shortcuts")}</h1><p>{t("settings.shortcuts.description")}</p></header>
+    <label className="nx-shortcut-search"><input type="search" aria-label={t("settings.searchShortcuts")} placeholder={t("settings.searchShortcuts")} value={query} onChange={event=>setQuery(event.target.value)} /></label>
+    <button type="button" className="nx-settings-advanced" disabled={!customised} onClick={() => { onChange({ ...DEFAULT_BINDINGS }); setRecording(null); setMessage(""); }}>{t("shortcut.resetAll")}</button>
     {message && <div className="provider-alert provider-alert--error" role="alert">{message}</div>}
     {["general", "navigation"].map((group) => <div className="shortcut-group" key={group}>
       <h3>{t(`shortcut.group.${group}`)}</h3>
-      {ACTIONS.filter((action) => action.group === group).map((action) => {
+      {ACTIONS.filter((action) => action.group === group && labelOf(action.id).toLowerCase().includes(query.toLowerCase())).map((action) => {
         const isRecording = recording === action.id;
         const changed = bindings[action.id] !== action.default;
         return <div className="shortcut-row" key={action.id}>
@@ -40,8 +41,9 @@ export function ShortcutSettings({ bindings, onChange, mac }: { bindings: Bindin
             <button className={`shortcut-chip ${isRecording ? "is-recording" : ""}`} data-shortcut-capture={isRecording ? "1" : undefined} aria-label={t("shortcut.change", { action: labelOf(action.id) })} autoFocus={isRecording}
               onClick={() => { setRecording(action.id); setMessage(""); }} onBlur={() => { if (isRecording) { setRecording(null); setMessage(""); } }}
               onKeyDown={isRecording ? (event) => capture(event, action.id) : undefined}>
-              {isRecording ? t("shortcut.press") : formatCombo(bindings[action.id], mac)}
+              {isRecording ? t("shortcut.press") : formatCombo(bindings[action.id], mac) || t("settings.unassigned")}
             </button>
+            <button type="button" className="ag-iconbtn" aria-label={t("settings.removeShortcut", { name: labelOf(action.id) })} onClick={() => onChange({ ...bindings, [action.id]: "" })}>×</button>
             {changed && <button className="button button-quiet shortcut-reset" onClick={() => onChange({ ...bindings, [action.id]: action.default })}>{t("shortcut.reset")}</button>}
           </span>
         </div>;

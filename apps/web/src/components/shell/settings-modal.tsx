@@ -1,36 +1,15 @@
 "use client";
-
-import { useEffect, useRef, type ReactNode } from "react";
-import { useLocale } from "@/components/locale-provider";
-import { Icon, type IconName } from "./icons";
-import type { NavPage } from "./shell-context";
-
-const SECTIONS: Array<{ page: NavPage; icon: IconName; label: string }> = [
-  { page: "general", icon: "settings", label: "settings.nav.general" },
-  { page: "settings", icon: "canvas", label: "settings.nav.models" },
-  { page: "intelligence", icon: "review", label: "page.intelligence" },
-];
-
-/** Settings as a centred panel over the work, with its own navigation on the left, like Antigravity. Escape or a click outside closes it. */
-export function SettingsModal({ page, navigate, onClose, onShortcuts, footer, children }: { page: NavPage; navigate: (page: NavPage) => void; onClose: () => void; onShortcuts: () => void; footer: ReactNode; children: ReactNode }) {
-  const { t } = useLocale();
-  const panel = useRef<HTMLElement>(null);
-  useEffect(() => { panel.current?.focus(); }, []);
-  return <div className="ag-modal" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section className="ag-settings" role="dialog" aria-modal="true" aria-label={t("page.settings")} tabIndex={-1} ref={panel}
-      onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}>
-      <nav className="ag-settings__nav" aria-label={t("page.settings")}>
-        <h2>{t("page.settings")}</h2>
-        {SECTIONS.map((section) => <button key={section.page} type="button" className={`ag-nav__item ${page === section.page ? "is-active" : ""}`} aria-current={page === section.page ? "page" : undefined} onClick={() => navigate(section.page)}><Icon name={section.icon} size={15} /><span>{t(section.label)}</span></button>)}
-        <button type="button" className="ag-nav__item" onClick={onShortcuts}><Icon name="terminal" size={15} /><span>{t("shell.shortcutsTitle")}</span></button>
-        <button type="button" className="ag-nav__item" onClick={() => navigate("integrations")}><Icon name="customize" size={15} /><span>{t("shell.customizations")}</span></button>
-        <span className="ag-spacer" />
-        <div className="ag-settings__foot">{footer}</div>
-      </nav>
-      <div className="ag-settings__body">
-        <button type="button" className="ag-iconbtn ag-settings__close" aria-label={t("common.close")} onClick={onClose}><Icon name="close" size={16} /></button>
-        {children}
-      </div>
-    </section>
-  </div>;
-}
+import {useEffect,useRef,useState,type ReactNode} from 'react';
+import {useLocale} from '@/components/locale-provider';
+import {Icon} from './icons';
+import type {NavPage} from './shell-context';
+import {useProjects} from '@/components/workspace/project-selector';
+import {useWorkspace} from '@/components/workspace/workspace-context';
+const sections:Array<{page:NavPage;key:string}>=[{page:'general',key:'settings.nav.general'},{page:'application',key:'settings.nav.application'},{page:'appearance',key:'settings.nav.appearance'},{page:'shortcuts',key:'settings.nav.shortcuts'},{page:'notifications',key:'settings.nav.notifications'},{page:'settings',key:'settings.nav.models'}];
+export function SettingsModal({page,navigate,onClose,footer,children}:{page:NavPage;navigate:(page:NavPage)=>void;onClose:()=>void;onShortcuts?:()=>void;footer:ReactNode;children:ReactNode}){const {t}=useLocale();const panel=useRef<HTMLElement>(null);const {projects,desktop}=useProjects();const workspace=useWorkspace();const previousFocus=useRef<Element|null>(null);const [error,setError]=useState('');
+useEffect(()=>{previousFocus.current=document.activeElement;panel.current?.focus();return()=>{if(previousFocus.current instanceof HTMLElement&&previousFocus.current.isConnected)previousFocus.current.focus()}},[]);
+const choose=async(root:string|null)=>{try{await workspace.selectProject(root);onClose()}catch(reason){setError(reason instanceof Error?reason.message:t('error.network'))}};
+return <div className="ag-modal nx-settings-overlay" role="presentation"><section className="ag-settings nx-settings-layout" role="dialog" aria-modal="true" aria-label={t('page.settings')} tabIndex={-1} ref={panel} onKeyDown={event=>{if((event.target as HTMLElement).closest('dialog[open]'))return;if(event.key==='Escape'){event.preventDefault();event.stopPropagation();onClose()}else if(event.key==='Tab'){const nodes=[...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex="0"]')].filter(node=>node.getClientRects().length);const first=nodes[0],last=nodes.at(-1);if(event.shiftKey&&(document.activeElement===first||document.activeElement===panel.current)){event.preventDefault();last?.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}}}}>
+<nav className="ag-settings__nav nx-settings-navigation" aria-label={t('page.settings')}><h2>{t('page.settings')}</h2>{sections.map(section=><button type="button" className={`nx-settings-nav-item ${page===section.page?'is-active':''}`} aria-current={page===section.page?'page':undefined} key={section.page} onClick={()=>navigate(section.page)}>{t(section.key)}</button>)}
+<div className="nx-settings-projects"><h3>{t('shell.projects')}</h3>{projects.map(project=><button type="button" className="nx-settings-nav-item" key={project.root} title={project.root} onClick={()=>void choose(project.root)}>{project.name}</button>)}{desktop&&!projects.length&&<button type="button" className="nx-settings-nav-item" onClick={()=>void workspace.openFolder().then(onClose).catch(reason=>setError(String(reason)))}>{t('project.computer')}</button>}<h3>{t('project.notInProject')}</h3><button type="button" className="nx-settings-nav-item" onClick={onClose}>{t('shell.conversations')}</button></div><span className="ag-spacer"/><div className="ag-settings__foot">{footer}</div></nav>
+<div className="ag-settings__body nx-settings-content"><button type="button" className="ag-iconbtn ag-settings__close" aria-label={t('common.close')} onClick={onClose}><Icon name="close" size={17}/></button>{error&&<p role="alert" className="nx-settings-error">{error}</p>}{children}</div></section></div>}

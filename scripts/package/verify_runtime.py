@@ -3,7 +3,7 @@
 
     python3 scripts/package/verify_runtime.py mac-arm64          # static audit + smoke run from a relocated copy
     python3 scripts/package/verify_runtime.py mac-arm64 --audit  # static audit only
-    python3 scripts/package/verify_runtime.py mac-arm64 --runtime /Applications/NexusAgent.app/Contents/Resources/runtime
+    python3 scripts/package/verify_runtime.py mac-arm64 --runtime '/Applications/Alba Agent.app/Contents/Resources/runtime'
 
 Static audit, for every Mach-O file in apps/desktop/runtime/<platform>/:
   - it contains code for the platform's CPU;

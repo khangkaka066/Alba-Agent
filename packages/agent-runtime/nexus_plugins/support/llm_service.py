@@ -127,7 +127,7 @@ class LlmService:
     async def nexusai_client(self, tenant_id: UUID, workspace_id: UUID, model: str) -> LLM | None:
         """The client NexusAI agents use, built from the workspace's default credential or the managed platform key."""
         provider_name, model_name = split_model(model)
-        resolved = await self.store().resolve_default_credential(tenant_id, workspace_id, cast(Provider, provider_name))
+        resolved = await self.store().resolve_model_credential(tenant_id, workspace_id, cast(Provider, provider_name), model_name)
         options: dict[str, Any] = {}
         api_key: str | None
         api_base: str | None
@@ -154,7 +154,7 @@ class LlmService:
         from autogen_ext.models.openai import OpenAIChatCompletionClient
 
         provider_name, model_name = split_model(model)
-        default = await self.store().resolve_default_credential(tenant_id, workspace_id, cast(Provider, provider_name))
+        default = await self.store().resolve_model_credential(tenant_id, workspace_id, cast(Provider, provider_name), model_name)
         if default is None and not await has_managed_model_credit(self.engine, tenant_id, workspace_id):
             raise ValueError("Managed model credit or a workspace provider key is required")
         key = default.api_key if default else os.environ.get("NEXUS_GEN_API_KEY") or os.environ.get(f"NEXUS_{provider_name.upper()}_API_KEY") or os.environ.get("NEXUS_OPENAI_API_KEY")

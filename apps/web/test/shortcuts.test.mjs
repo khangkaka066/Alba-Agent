@@ -26,15 +26,15 @@ test("combos read naturally on each platform", () => {
 test("saved overrides apply, while invalid or colliding ones fall back to the defaults", () => {
   assert.deepEqual(resolveBindings(null), DEFAULT_BINDINGS);
   assert.equal(resolveBindings({ palette: "Mod+P" }).palette, "Mod+P");
-  assert.equal(resolveBindings({ palette: "K" }).palette, "Mod+K");
+  assert.equal(resolveBindings({ palette: "K" }).palette, "Mod+Shift+P");
   const clash = resolveBindings({ palette: "Mod+1" });
-  assert.equal(clash["nav-studio"], "Mod+1", "the action that owns a default keeps it over a colliding override");
-  assert.equal(clash.palette, "Mod+K");
+  assert.equal(clash["mode-mission"], "Mod+1", "the action that owns a default keeps it over a colliding override");
+  assert.equal(clash.palette, "Mod+Shift+P");
   assert.equal(new Set(Object.values(clash)).size, ACTIONS.length, "no two actions share a combo");
 });
 
 test("conflicts name the action that already owns the combo", () => {
-  assert.equal(findConflict(DEFAULT_BINDINGS, "palette", "Mod+1"), "nav-studio");
+  assert.equal(findConflict(DEFAULT_BINDINGS, "palette", "Mod+1"), "mode-mission");
   assert.equal(findConflict(DEFAULT_BINDINGS, "palette", "Mod+K"), null);
 });
 
@@ -49,7 +49,15 @@ test("only changes are stored, and a bad store never breaks the app", () => {
 });
 
 test("pressing a bound combo finds its action", () => {
-  assert.equal(actionFor(DEFAULT_BINDINGS, key("2", { metaKey: true })), "nav-integrations");
+  assert.equal(actionFor(DEFAULT_BINDINGS, key("2", { metaKey: true })), "mode-editor");
   assert.equal(actionFor(DEFAULT_BINDINGS, key("x", { metaKey: true })), null);
   assert.equal(actionFor({ ...DEFAULT_BINDINGS, run: "Mod+R" }, key("r", { ctrlKey: true })), "run");
+});
+
+
+test("workspace modes have distinct shortcuts and integrations remain reachable", () => {
+  assert.equal(actionFor(DEFAULT_BINDINGS, key("1", { ctrlKey: true })), "mode-mission");
+  assert.equal(actionFor(DEFAULT_BINDINGS, key("3", { metaKey: true })), "mode-canvas");
+  assert.equal(actionFor(DEFAULT_BINDINGS, key("e", { metaKey: true })), "toggle-workbench");
+  assert.equal(actionFor(DEFAULT_BINDINGS, key("2", { metaKey: true, shiftKey: true })), "nav-integrations");
 });

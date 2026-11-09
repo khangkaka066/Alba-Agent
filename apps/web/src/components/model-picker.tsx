@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocale } from "@/components/locale-provider";
 import { useModels } from "@/components/model-context";
-import { loadRecent, modelLabel, parseModelId, pickerView, rememberRecent } from "@/lib/models.mjs";
+import { loadRecent, modelChoices, modelLabel, parseModelId, pickerView, preferredModelVariant, rememberRecent } from "@/lib/models.mjs";
 
 /**
  * Dropdown that shows the active model and switches it. It always opens: connected models first, then well-known models
@@ -11,7 +11,8 @@ import { loadRecent, modelLabel, parseModelId, pickerView, rememberRecent } from
  */
 export function ModelPicker({ compact = false, disabled = false, onOpenSettings }: { compact?: boolean; disabled?: boolean; onOpenSettings: () => void }) {
   const { t } = useLocale();
-  const { models, suggested, reachable, selected, loading, choose, refresh } = useModels();
+  const { models: variants, suggested, reachable, selected, loading, choose, refresh } = useModels();
+  const models = modelChoices(variants, selected);
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState("");
   const [problem, setProblem] = useState("");
@@ -36,29 +37,43 @@ export function ModelPicker({ compact = false, disabled = false, onOpenSettings 
 
   const view = pickerView(models, recent, query);
   const lockedProviders = new Set(suggested.filter((item) => !item.connected).map((item) => item.provider)).size;
-  const pick = (id: string) => { choose(id); rememberRecent(window.localStorage, id); setOpen(false); setCustom(""); setProblem(""); setQuery(""); setShowCustom(false); };
+  const pick = (id: string, preserveEffort = true) => { const concrete = preserveEffort ? preferredModelVariant(variants, id, selected) : id; choose(concrete); rememberRecent(window.localStorage, concrete); setOpen(false); setCustom(""); setProblem(""); setQuery(""); setShowCustom(false); };
   const submitCustom = () => {
     const parsed = parseModelId(custom);
     if (!parsed) { setProblem(t("model.customInvalid")); return; }
     if (!reachable.includes(parsed.provider)) { setProblem(t("model.customNoProvider", { provider: parsed.provider })); return; }
-    pick(parsed.id);
+    pick(parsed.id, false);
   };
   const missing = selected === null;
+  const selectedLabel = models.find((model) => model.id === selected)?.model ?? modelLabel(selected);
   return <div className={`model-picker ${compact ? "model-picker--compact" : ""}`} ref={root}>
     <button type="button" className={`model-trigger ${missing ? "model-trigger--missing" : ""} ${compact ? "model-trigger--compact" : ""}`} disabled={disabled} aria-haspopup="dialog" aria-expanded={open}
-      title={missing ? t("pill.titleAdd") : t("model.current", { model: modelLabel(selected) })} onClick={() => {
+      title={missing ? t("pill.titleAdd") : t("model.current", { model: selectedLabel })} onClick={() => {
         // Open towards the side with more room, and never taller than that room, so the custom-id box is always reachable.
         const rect = root.current?.getBoundingClientRect();
         if (rect) { const above = rect.top - 12, below = window.innerHeight - rect.bottom - 12; const up = compact && above > below; setPlace({ up, room: Math.max(220, Math.min(560, up ? above : below)) }); }
         setRecent(loadRecent(window.localStorage)); setExpanded(selected ? models.find((item) => item.id === selected)?.group ?? null : null);
         setOpen((value) => !value); setProblem(""); setQuery("");
       }}>
-      <span className="model-trigger__dot" /><span className="model-trigger__name">{missing ? t("pill.add") : modelLabel(selected)}</span>
+      <span className="model-trigger__dot" /><span className="model-trigger__name">{missing ? t("pill.add") : selectedLabel}</span>
       <svg className="model-trigger__chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
     </button>
     {open && <div className={`model-menu ${place.up ? "model-menu--up" : ""}`} style={{ maxHeight: place.room }} role="dialog" aria-label={t("model.choose")}>
-      <input className="model-menu__search" autoFocus value={query} spellCheck={false} placeholder={t("model.search")} aria-label={t("model.search")} onChange={(event) => setQuery(event.target.value)} />
-      <div role="listbox" aria-label={t("model.choose")}>
+      <input className="model-menu__search" autoFocus value={query} spellCheck={false} placeholder={t("model.search")} aria-label={t("model.search")} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => {
+        if (event.key === "ArrowDown") {
+          const first = root.current?.querySelector<HTMLButtonElement>('[role="option"]');
+          if (first) { event.preventDefault(); first.focus(); }
+        }
+      }} />
+      <div role="listbox" aria-label={t("model.choose")} onKeyDown={(event) => {
+        if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+        const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="option"]'));
+        if (!options.length) return;
+        event.preventDefault();
+        const current = options.indexOf(document.activeElement as HTMLButtonElement);
+        const next = event.key === "Home" ? 0 : event.key === "End" ? options.length - 1 : event.key === "ArrowDown" ? (current + 1) % options.length : (current - 1 + options.length) % options.length;
+        options[next].focus();
+      }}>
         {(() => {
           const item = (model: (typeof models)[number], label = model.model) => <button type="button" role="option" aria-selected={model.id === selected} key={model.id} className={`model-menu__item ${model.id === selected ? "is-selected" : ""}`} onClick={() => pick(model.id)}>
             <span>{label}</span>{model.unverified && <span className="model-menu__badge model-menu__badge--warn" title={t("model.unverified")}>{t("model.unverified")}</span>}{model.id === selected && <span aria-hidden="true">✓</span>}</button>;
@@ -67,9 +82,9 @@ export function ModelPicker({ compact = false, disabled = false, onOpenSettings 
             {view.recent.length > 0 && <div className="model-menu__group" role="group" aria-label={t("model.recent")}><h4>{t("model.recent")}</h4>{view.recent.map((model) => item(model, `${model.group} · ${model.model}`))}</div>}
             <div className="model-menu__group" role="group" aria-label={t("model.providers")}><h4>{t("model.providers")}</h4>
               {view.providers.map((group) => <div key={group.name}>
-                <button type="button" className="model-menu__provider" aria-expanded={expanded === group.name} onClick={() => setExpanded(expanded === group.name ? null : group.name)}>
-                  <span>{group.name}{group.local && <span className="model-menu__badge">{t("model.local")}</span>}</span><span className="model-menu__count">{group.models.length}</span></button>
-                {expanded === group.name && group.models.map((model) => item(model))}
+                {view.providers.length > 1 && <button type="button" className="model-menu__provider" aria-expanded={expanded === group.name} onClick={() => setExpanded(expanded === group.name ? null : group.name)}>
+                  <span>{group.name}{group.local && <span className="model-menu__badge">{t("model.local")}</span>}</span><span className="model-menu__count">{group.models.length}</span></button>}
+                {(view.providers.length === 1 || expanded === group.name) && group.models.map((model) => item(model))}
               </div>)}
             </div>
           </>;

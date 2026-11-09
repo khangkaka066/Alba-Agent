@@ -47,6 +47,9 @@ function Overview({ review, close }: { review: ReviewState; close: () => void })
   const files = workspace.artifacts;
   return <>
     <div className="ag-menu__label">{t("dock.overview")}</div>
+    <Item icon="file" label={t("interface.tab.artifacts")} onClick={show("artifacts")} />
+    <Item icon="canvas" label={t("interface.tab.agents")} onClick={show("agents")} />
+    <Item icon="log" label={t("interface.tab.tasks")} onClick={show("tasks")} />
     <Item icon="review" label={t("dock.review")} onClick={show("review")} detail={review.ready && files.length > 0 ? <><span className="ag-add">+{review.totals.added}</span> <span className="ag-del">−{review.totals.removed}</span></> : undefined} />
     <Item icon="file" label={t("dock.files")} onClick={show("files")} />
     <Item icon="terminal" label={t("dock.terminal")} onClick={show("terminal")} />
@@ -91,11 +94,12 @@ export function TitleBar({ page, title, project, collapsed, onToggleSidebar, rev
       <button type="button" className="ag-iconbtn" aria-label={t("shell.search")} title={`${t("shell.search")} ${shell.hint("palette")}`} onClick={shell.openPalette}><Icon name="search" size={16} /></button>
     </div>
     <nav className="ag-crumbs" aria-label={t("shell.breadcrumb")}>
-      <span className="ag-crumbs__root">{project ?? "NexusAgent"}</span>
+      <span className="ag-crumbs__root">{project ?? "Alba Agent"}</span>
       <span className="ag-crumbs__sep" aria-hidden="true">/</span>
-      <h1 className="ag-crumbs__title" title={heading}>{heading}</h1>
+      <span className="ag-crumbs__title" title={heading}>{heading}</span>
     </nav>
     <div className="ag-titlebar__tools">
+      {page === "studio" && <button type="button" className={`nx-canvas-toggle ${workspace.mode === "canvas" ? "is-active" : ""}`} aria-pressed={workspace.mode === "canvas"} title={`${t("interface.canvas")} · ${shell.hint("toggle-canvas")}`} onClick={() => workspace.setMode(workspace.mode === "canvas" ? "mission" : "canvas")}><Icon name={workspace.mode === "canvas" ? "chat" : "canvas"} size={15} /><span>{t(workspace.mode === "canvas" ? "interface.conversation" : "interface.canvas")}</span></button>}
       <Menu label={t("shell.more")} icon="more">{(close) => <>
         <Item icon="plus" label={t("shell.newConversation")} onClick={() => { close(); onNewConversation(); }} />
         <Item icon="copy" label={t("shell.copyConversation")} onClick={() => void copyConversation(close)} />

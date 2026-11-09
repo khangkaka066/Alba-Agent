@@ -124,7 +124,23 @@ export function teamSummary(spec) {
   return { agents, crews, sandboxes, steps, tiers, label, rigor: spec?.modes?.rigor ?? null };
 }
 
-export const initialRunState = () => ({ status: "idle", completed: [], active: [], terminal: [], thoughts: [], tools: [], approvals: [], resolved: [], frame: "", error: "" });
+export const initialRunState = () => ({ status: "idle", completed: [], active: [], activity: [], terminal: [], thoughts: [], tools: [], approvals: [], resolved: [], frame: "", error: "" });
+
+/** Final structured output is the answer; a worker's intermediate thoughts are never a result. */
+export function runAnswer(outputs) {
+  if (!outputs || typeof outputs !== "object") return "";
+  const text = (value, depth = 0) => {
+    if (depth > 3 || value == null) return "";
+    if (typeof value === "string" || typeof value === "number") return String(value).trim();
+    if (typeof value !== "object" || Array.isArray(value)) return "";
+    for (const key of ["answer", "response", "message", "result", "content", "text", "summary"]) {
+      const answer = text(value[key], depth + 1);
+      if (answer) return answer;
+    }
+    return "";
+  };
+  return Object.values(outputs).map((output) => text(output)).filter(Boolean).at(-1) ?? "";
+}
 
 const keep = (list, item, limit) => [...list, item].slice(-limit);
 
@@ -132,9 +148,17 @@ const keep = (list, item, limit) => [...list, item].slice(-limit);
 export function reduceRunEvent(state, event) {
   const p = event.payload ?? {};
   const node = String(p.node_id ?? event.node_id ?? "");
+  if (["CREW_AGENT_THOUGHT", "TOOL_INVOKED", "NEXUSGEN_CODE_GENERATED"].includes(event.type)) {
+    const row = { id: String(p.call_id ?? event.id), node, type: event.type, text: String(p.content ?? p.summary ?? p.message ?? ""), detail: String(p.detail ?? ""), output: String(p.output ?? ""), tool: String(p.tool ?? p.name ?? ""), phase: String(p.phase ?? ""), at: event.occurred_at };
+    const rows = state.activity ?? [];
+    const index = rows.findIndex((item) => item.id === row.id);
+    state = { ...state, activity: index < 0 ? keep(rows, row, 100) : rows.map((item, at) => at === index ? { ...item, ...row } : item) };
+  }
   switch (event.type) {
     case "FLOW_STATE_CHANGED": {
-      if (p.status === "running") return { ...state, status: state.status === "paused" ? "running" : "running", active: [...new Set([...state.active, node])] };
+      if (p.status === "cancelling") return { ...state, status: "cancelling" };
+      if (p.status === "cancelled") return { ...state, status: "cancelled", active: [], approvals: [] };
+      if (p.status === "running") return ["cancelling", "cancelled"].includes(state.status) ? state : { ...state, status: "running", active: [...new Set([...state.active, node])] };
       if (p.status === "completed") return { ...state, active: state.active.filter((id) => id !== node), completed: [...new Set([...state.completed, node])] };
       return state;
     }
@@ -145,13 +169,13 @@ export function reduceRunEvent(state, event) {
     case "SANDBOX_SCREEN_FRAME": return { ...state, frame: typeof p.data_base64 === "string" ? `data:${String(p.mime_type ?? "image/png")};base64,${p.data_base64}` : state.frame };
     case "APPROVAL_REQUIRED": return { ...state, status: "paused", approvals: typeof p.approval_id === "string" && !state.approvals.some((a) => a.approval_id === p.approval_id) ? [...state.approvals, { approval_id: p.approval_id, run_id: event.run_id, node_id: node || undefined, action: String(p.action ?? "Review action"), rationale: typeof p.rationale === "string" ? p.rationale : undefined, kind: typeof p.kind === "string" ? p.kind : undefined }] : state.approvals };
     case "APPROVAL_RESOLVED": return { ...state, status: "running", resolved: typeof p.approval_id === "string" ? [...state.resolved, p.approval_id] : state.resolved, approvals: state.approvals.filter((a) => a.approval_id !== p.approval_id) };
-    case "RUN_COMPLETED": return { ...state, status: "completed", active: [] };
-    case "RUN_FAILED": return { ...state, status: "failed", active: [], error: String(p.message ?? p.error_type ?? "runtime error") };
+    case "RUN_COMPLETED": return ["cancelling", "cancelled"].includes(state.status) ? state : { ...state, status: "completed", active: [] };
+    case "RUN_FAILED": return ["cancelling", "cancelled"].includes(state.status) ? state : { ...state, status: "failed", active: [], error: String(p.message ?? p.error_type ?? "runtime error") };
     default: return state;
   }
 }
 
-export const isFinished = (status) => status === "completed" || status === "failed";
+export const isFinished = (status) => ["completed", "failed", "cancelled"].includes(status);
 
 /** "Step 3/6" style progress from completed nodes and the spec's step count. */
 export function stepLabel(state, steps, t = vi) {

@@ -89,10 +89,10 @@ def test_builtin_tools_local_document_sql_report_chart_and_security(tmp_path: Pa
     async def run() -> None:
         context = ToolContext(str(uuid4()), str(uuid4()), str(uuid4()), tmp_path)
         registry = BuiltinToolRegistry(context)
-        assert len(registry.descriptors()) == 12
+        assert len(registry.descriptors()) == 19
         assert {tool.id for tool in registry.descriptors()} == {tool.id for tool in TOOLS}
-        assert len(registry.nexusai_tools()) == 12
-        assert len(registry.nexusgen_tools()) == 12
+        assert len(registry.nexusai_tools()) == 19
+        assert len(registry.nexusgen_tools()) == 19
 
         sample = tmp_path / "sample.csv"
         sample.write_text("month,revenue\nJan,12\nFeb,19\n", encoding="utf-8")
@@ -239,3 +239,51 @@ def test_every_seed_skill_requires_only_tools_that_exist() -> None:
         assert isinstance(skill, SkillSpec)
         missing = set(skill.required_tools) - known
         assert not missing, f"{slug} requires unknown tools {sorted(missing)}"
+
+
+def test_browser_model_observations_keep_text_and_leave_frames_on_the_screen_stream(tmp_path: Path) -> None:
+    original: dict[str, object] = {"frame_png_base64": "encoded-frame" * 1000, "width": 1280, "text": "1"}
+
+    async def browser(action: str, arguments: dict[str, str]) -> dict[str, object]:
+        return original
+
+    registry = BuiltinToolRegistry(ToolContext("tenant", "workspace", "run", tmp_path, browser=browser))
+    observation = asyncio.run(registry.run("browser_automation", {"action": "screenshot"}))
+    assert observation == {"width": 1280, "text": "1", "frame_available": True}
+    assert "frame_png_base64" in original
+
+
+def test_tool_activity_pairs_real_execution_and_redacts_secret_assignments(tmp_path: Path) -> None:
+    events: list[dict[str, object]] = []
+
+    async def activity(payload: dict[str, object]) -> None:
+        events.append(payload)
+
+    async def shell(command: str, timeout: int) -> dict[str, int]:
+        if command == "fail":
+            raise RuntimeError("execution failed")
+        return {"exit_code": 0}
+
+    registry = BuiltinToolRegistry(ToolContext("tenant", "workspace", "run", tmp_path, shell=shell, activity_sink=activity))
+    assert asyncio.run(registry.run("sandbox_shell", {"command": "export API_KEY=private-value"})) == {"exit_code": 0}
+    assert [row["phase"] for row in events] == ["started", "completed"]
+    assert events[0]["call_id"] == events[1]["call_id"]
+    assert "private-value" not in str(events)
+    with pytest.raises(RuntimeError, match="execution failed"):
+        asyncio.run(registry.run("sandbox_shell", {"command": "fail"}))
+    assert [row["phase"] for row in events[-2:]] == ["started", "failed"]
+
+
+@pytest.mark.parametrize("nested", [True, False])
+def test_browser_navigation_preserves_url_and_never_accepts_model_privileges(tmp_path: Path, nested: bool) -> None:
+    observed: list[tuple[str, dict[str, str]]] = []
+
+    async def browser(action: str, arguments: dict[str, str]) -> dict[str, str]:
+        observed.append((action, arguments))
+        return {"text": "Alba Agent"}
+
+    registry = BuiltinToolRegistry(ToolContext("tenant", "workspace", "run", tmp_path, browser=browser))
+    arguments = {"url": "http://127.0.0.1:8765/index.html", "approved": True, "human": True, "timeout_seconds": 999}
+    payload = {"action": "navigate", **({"arguments": arguments} if nested else arguments)}
+    asyncio.run(registry.run("browser_automation", payload))
+    assert observed == [("navigate", {"url": "http://127.0.0.1:8765/index.html"})]

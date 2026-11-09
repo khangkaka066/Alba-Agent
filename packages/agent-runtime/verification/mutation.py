@@ -93,6 +93,19 @@ def pick_sites(total: int, limit: int) -> list[int]:
     return sorted({int(index * total / limit) for index in range(limit)})
 
 
+def html_mutations(source: str) -> list[str]:
+    """Break independent web requirements; self-tests must detect real artifact regressions."""
+    patterns = (
+        (r"(<body\b[^>]*>).*?(</body\s*>)", r"\1\2"),
+        (r"<title\b[^>]*>.*?</title\s*>", ""),
+        (r"<meta\b(?=[^>]*\bname\s*=\s*['\"]?viewport\b)[^>]*>", ""),
+        (r"<script\b[^>]*>.*?</script\s*>", ""),
+        (r"<style\b[^>]*>.*?</style\s*>", ""),
+    )
+    variants = [re.sub(pattern, replacement, source, flags=re.I | re.S) for pattern, replacement in patterns]
+    return list(dict.fromkeys(value for value in variants if value != source))
+
+
 def run_tests(directory: str, test_files: list[str], timeout: int) -> tuple[int, bool]:
     """Run test files in `directory`; return `(tests_ran, all_passed)`. A timeout counts as failure."""
     modules = [name[:-3] for name in test_files]
@@ -128,17 +141,25 @@ def gate(
                 os.remove(target)
         _, baseline_passed = run_tests(scratch, test_files, timeout)
         result["discriminates"] = not baseline_passed
+        # Restore the complete implementation before mutating one file. Leaving
+        # another source deleted would count import failures as killed mutants.
+        for name in source_files:
+            shutil.copy(os.path.join(workspace, name), os.path.join(scratch, name))
         for name in source_files:
             with open(os.path.join(workspace, name), encoding="utf-8") as handle:
                 original = handle.read()
-            try:
-                total = count_sites(original)
-            except SyntaxError:
-                continue
-            for site in pick_sites(total, mutants_per_file):
+            if name.lower().endswith((".html", ".htm")):
+                variants = html_mutations(original)[:mutants_per_file]
+            else:
+                try:
+                    total = count_sites(original)
+                except SyntaxError:
+                    continue
+                variants = [mutate(original, site) for site in pick_sites(total, mutants_per_file)]
+            for replacement in variants:
                 shutil.copy(os.path.join(workspace, name), os.path.join(scratch, name))
                 with open(os.path.join(scratch, name), "w", encoding="utf-8") as handle:
-                    handle.write(mutate(original, site))
+                    handle.write(replacement)
                 _, mutant_passed = run_tests(scratch, test_files, timeout)
                 result["mutants"] = int(result["mutants"]) + 1  # type: ignore[call-overload]
                 if not mutant_passed:

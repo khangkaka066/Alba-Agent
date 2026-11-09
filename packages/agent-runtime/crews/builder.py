@@ -7,7 +7,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Mapping
+from typing import Any, Callable, Literal, Mapping
 
 os.environ["OTEL_SDK_DISABLED"] = "true"
 os.environ["CREWAI_DISABLE_TELEMETRY"] = "true"
@@ -109,6 +109,7 @@ class CrewBuilder:
         manager_llm: Any | None = None,
         skill_loader: SkillLoader | None = None,
         custom_skill_instructions: Mapping[str, str | SkillSpec] | None = None,
+        on_progress: Callable[[str, str, str], None] | None = None,
     ) -> None:
         if not output_schemas:
             raise ValueError("At least one approved output schema is required")
@@ -117,6 +118,7 @@ class CrewBuilder:
         self._manager_llm = manager_llm
         self._skill_loader = skill_loader or SkillLoader()
         self._custom_skills = dict(custom_skill_instructions or {})
+        self._on_progress = on_progress
         self._dynamic_schemas: dict[str, type[BaseModel]] = {}
 
     def schema_for_task(self, task: TaskSpec) -> type[BaseModel]:
@@ -198,6 +200,27 @@ class CrewBuilder:
             raise ValueError("Hierarchical crews require a manager agent or an approved manager model")
         agents: dict[str, Agent] = {}
         manager: Agent | None = None
+        def progress_for(role: str) -> Callable[[Any], None]:
+            def callback(step: Any) -> None:
+                action = getattr(step, "action", step)
+                note = getattr(action, "thought", "")
+                final = getattr(action, "return_values", {})
+                if isinstance(final, dict) and isinstance(final.get("output"), str):
+                    answer = final["output"]
+                    try:
+                        parsed = json.loads(answer)
+                    except json.JSONDecodeError:
+                        note = answer
+                    else:
+                        if isinstance(parsed, dict):
+                            value = next((parsed[key] for key in ("summary", "answer", "result") if isinstance(parsed.get(key), (str, int, float))), None)
+                            if value is not None:
+                                note = str(value)
+                        elif isinstance(parsed, (str, int, float)):
+                            note = str(parsed)
+                if self._on_progress is not None and isinstance(note, str) and note.strip():
+                    self._on_progress(spec.id, role, note.strip()[:1200])
+            return callback
         for agent_spec in spec.agents:
             if agent_spec.id == spec.manager_agent_id:
                 manager = Agent(
@@ -220,6 +243,8 @@ class CrewBuilder:
             task_text = " ".join(task.description for task in spec.tasks if task.agent_id == agent_spec.id)
             assigned_skills: list[str] = []
             effective_tools = list(agent_spec.tool_ids)
+            if "sandbox_shell" in effective_tools:
+                effective_tools.extend(tool_id for tool_id in ("view_file_numbered", "surgical_file_edit", "fast_workspace_search", "start_background_process", "get_process_logs", "stop_process", "list_running_processes") if tool_id in self._tools and tool_id not in effective_tools)
             for slug in agent_spec.skill_ids:
                 skill = self._custom_skills.get(slug, self._skill_loader._skills.get(slug))
                 if isinstance(skill, SkillSpec):
@@ -240,11 +265,13 @@ class CrewBuilder:
                 goal=agent_spec.goal,
                 backstory=(agent_spec.backstory or agent_spec.role)
                 + ("\n\nAssigned skill instructions:\n" + "\n\n".join(assigned_skills) if assigned_skills else "")
+                + "\n\nKeep progress notes user-facing and brief: explain the next action and what it checks. Do not include private reasoning or secrets."
                 + ("\n\nGuardrails:\n" + "\n".join(f"- {rule}" for rule in agent_spec.guardrails) if agent_spec.guardrails else ""),
                 llm=resolved_models.get(agent_spec.model, agent_spec.model),
                 tools=[self._tools[tool_id] for tool_id in effective_tools],
                 max_iter=agent_spec.max_iterations,
                 allow_delegation=False,
+                step_callback=progress_for(agent_spec.role),
                 verbose=False,
             )
         tasks: dict[str, Task] = {}

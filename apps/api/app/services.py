@@ -26,6 +26,8 @@ from app.models import AgentSkill, AuditLog, KnowledgeBase, KnowledgeCapsule, Le
 from app.models.connection import create_runtime_engine
 from app.models.gateway_store import SqlGatewayStore
 from app.models.scope import scoped_session
+from app.handoff import stage_computer_inputs
+from app.execution_settings import load_execution_settings
 from nexusgen_bridge.sandbox_team import NexusGenSandboxRunner
 from bots.gateway import GatewayBotResponder
 from bots.runner import BotRunner
@@ -35,6 +37,8 @@ from checkpoints.store import CheckpointStore
 from crews.builder import CrewBuilder
 from flows.compiler import CompiledWorkflow, FlowCompiler
 from flows.state import WorkflowState
+from nexus_computer_sandbox.interactive import InteractiveComputers
+from nexus_computer_sandbox.file_tools import ComputerFileTools
 from nexus_computer_sandbox import ComputerAccess, ComputerSandboxSupervisor, DockerSandboxProvider
 from nexus_core_schema.models import CrewNodeSpec, KnowledgeCapsuleSpec, PersistentBotSpec, PropagationScope, SensitivityLevel, RAGNodeSpec, RuntimeEventType, TaskSpec, WorkflowSpec
 from nexus_core_schema.artifacts import artifact_directory
@@ -106,12 +110,23 @@ class AppServices:
     tools: ToolRegistryService = field(default_factory=ToolRegistryService)
     checkpoint_store: CheckpointStore | None = None
     kernel: Kernel | None = None
+    _interactive_service: InteractiveComputers | None = None
 
     def __post_init__(self) -> None:
         if self.llm_service is None:
             self.llm_service = LlmService(self.engine, load_model_rates())
         if self.checkpoint_store is None:
             self.checkpoint_store = CheckpointStore(self.engine, self.redis)
+
+    @property
+    def interactive(self) -> InteractiveComputers:
+        if self.kernel is not None:
+            return self.kernel.root.service(seams.INTERACTIVE_COMPUTERS)
+        if self._interactive_service is None:
+            self._interactive_service = InteractiveComputers(self.sandbox)
+            self.sandbox._on_command = self._interactive_service.watch
+            self.sandbox._on_retire = self._interactive_service.stop
+        return self._interactive_service
 
     @property
     def llm(self) -> LlmService:
@@ -140,6 +155,8 @@ class AppServices:
         if self.kernel is not None:
             await self.kernel.close()
             return
+        if self._interactive_service is not None:
+            await self._interactive_service.close()
         await self.redis.aclose()
         await self.qdrant.close()
         await self.engine.dispose()
@@ -183,27 +200,82 @@ class AppServices:
                 results.extend({"document_id": str(hit.document_id), "filename": hit.filename, "text": hit.text, "score": hit.score} for hit in hits)
             return sorted(results, key=lambda result: result["score"], reverse=True)[:12]
 
+        access = ComputerAccess(tenant_id, workspace_id, run_id=run_id)
+        staged_computers: set[UUID] = set()
+        computer_lock = asyncio.Lock()
+        async def assigned_computer() -> UUID:
+            async with computer_lock:
+                async with scoped_session(self.engine, tenant_id, workspace_id) as session:
+                    row = await session.scalar(select(SandboxComputer).where(SandboxComputer.run_id == run_id, SandboxComputer.status == "running"))
+                computer_id = row.id if row is not None else (await self.sandbox.create(access)).id
+                if computer_id not in staged_computers:
+                    async def upload_input(path: str, content: bytes) -> None:
+                        await self.sandbox.upload(access, computer_id, path, content)
+                    await stage_computer_inputs(artifact_root, upload_input)
+                    staged_computers.add(computer_id)
+                return computer_id
+
+        async def computer_guard(scope: ComputerAccess, kind: str, description: str) -> None:
+            await self.approvals(tenant_id, workspace_id, UUID(int=0)).computer_guard(scope, kind, description)
+
         async def shell(command: str, timeout: int) -> Any:
             emitter = RuntimeEventEmitter(self.redis, tenant_id, workspace_id, run_id)
             async def sink(stream: str, content: str) -> None:
                 await emitter.emit(RuntimeEventType.SANDBOX_TERMINAL_OUTPUT, {"stream": stream, "content": content})
-            async with scoped_session(self.engine, tenant_id, workspace_id) as session:
-                computer = await session.scalar(select(SandboxComputer).where(
-                    SandboxComputer.run_id == run_id, SandboxComputer.status == "running",
-                ))
-            if computer is None:
-                raise RuntimeError("No isolated computer is assigned to this run")
-            result = await self.sandbox.execute_shell(
-                ComputerAccess(tenant_id, workspace_id, run_id=run_id),
-                computer.id, command, timeout, sink,
-            )
-            return {"exit_code": result.exit_code, "stdout": result.stdout, "stderr": result.stderr}
+            result = await self.interactive.execute(access, await assigned_computer(), command, timeout, sink, guard=computer_guard)
+            return {"exit_code": result.exit_code, "stdout": result.stdout[-8000:], "stderr": result.stderr[-2000:], "error_digest": result.error_digest, "snapshot_id": result.snapshot_id}
+
+        async def computer_tool(action: str, arguments: dict[str, Any]) -> Any:
+            computer_id = await assigned_computer()
+            files = ComputerFileTools(self.sandbox, computer_guard)
+            if action == "view_file_numbered":
+                return await files.view_file_numbered(access, computer_id, str(arguments.get("path", "")), int(arguments.get("start_line", 1)), int(arguments.get("end_line", 200)))
+            if action == "surgical_file_edit":
+                result = await files.surgical_file_edit(access, computer_id, str(arguments.get("path", "")), str(arguments.get("old_text", "")), str(arguments.get("new_text", "")))
+                await self.interactive.emit(access, "SANDBOX_FILE_DIFF", {"computer_id": str(computer_id), **result})
+                return result
+            if action == "fast_workspace_search":
+                return await files.fast_workspace_search(access, computer_id, str(arguments.get("pattern", "")), str(arguments.get("path_glob", "*")))
+            if action == "start_background_process":
+                async def sink(stream: str, content: str) -> None:
+                    await RuntimeEventEmitter(self.redis, tenant_id, workspace_id, run_id).emit(RuntimeEventType.SANDBOX_TERMINAL_OUTPUT, {"computer_id": str(computer_id), "stream": stream, "content": content})
+                launched = await self.interactive.execute(access, computer_id, str(arguments.get("command", "")), min(3600, max(1, int(arguments.get("timeout_seconds", 3600)))), sink, True, computer_guard)
+                return {"process_id": launched.process_id, "snapshot_id": launched.snapshot_id, "message": launched.stdout}
+            if action == "list_running_processes":
+                return await self.interactive.status(access, computer_id)
+            process_id = str(arguments.get("process_id", arguments.get("pid", "")))
+            if process_id.isdigit():
+                status = await self.interactive.status(access, computer_id)
+                process_id = next((str(job["id"]) for job in status.get("processes", []) if str(job["pid"]) == process_id), "")
+                if not process_id:
+                    raise LookupError("PID does not belong to this computer")
+            if action == "get_process_logs":
+                return await self.interactive.logs(access, computer_id, process_id)
+            if action == "stop_process":
+                return await self.interactive.control(access, computer_id, "stop", process_id)
+            raise ValueError("Unsupported computer tool")
+
+        async def browser(action: str, arguments: dict[str, str]) -> Any:
+            computer_id = await assigned_computer()
+            approved = False
+            if action in {"click", "fill"}:
+                await computer_guard(access, "external_action", f"Browser {action}: {arguments.get('selector', '')}")
+                approved = True
+            return await self.interactive.browser(access, computer_id, action, {**{key: value for key, value in arguments.items() if key not in {"human", "approved", "action", "timeout_seconds"}}, "approved": approved})
 
         async def boundary_guard(kind: str, description: str) -> None:
             if kind != "external_action":
                 raise PermissionError("This tool requested an unsupported approval boundary")
             coordinator = self.approvals(tenant_id, workspace_id, UUID(int=0))
             await coordinator.computer_guard(ComputerAccess(tenant_id, workspace_id, run_id=run_id), kind, description)
+
+        async def authorize_tool(tool_id: str, payload: dict[str, Any]) -> None:
+            import hashlib
+            policy = await load_execution_settings(self.redis, tenant_id, workspace_id)
+            policy.check_tool(tool_id, payload)
+            if policy.permission_preset == "strict":
+                digest = hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:16]
+                await boundary_guard("external_action", f"Tool {tool_id} · request {digest}")
 
         async def media(kind: str, payload: dict[str, Any]) -> Any:
             preferred = ("shopaikey", "openai", "google_gemini") if kind in {"image", "video"} else ("shopaikey", "openai", "elevenlabs")
@@ -243,16 +315,32 @@ class AppServices:
             return {"run_id": str(delegated_id), "workflow_id": workflow_id, "status": "queued"}
 
         credentials = {name: os.environ[key] for name, key in (("serper", "NEXUS_SERPER_API_KEY"), ("tavily", "NEXUS_TAVILY_API_KEY")) if os.environ.get(key)}
+        progress_emitter = RuntimeEventEmitter(self.redis, tenant_id, workspace_id, run_id)
+        owner_loop = asyncio.get_running_loop()
+
+        async def tool_activity(payload: dict[str, Any]) -> None:
+            if payload.get("phase") == "started":
+                await self.checkpoints.assert_running(tenant_id, workspace_id, run_id)
+            await progress_emitter.emit(RuntimeEventType.TOOL_INVOKED, payload)
+
+        def agent_progress(node_id: str, role: str, content: str) -> None:
+            async def publish() -> None:
+                try:
+                    await progress_emitter.emit(RuntimeEventType.CREW_AGENT_THOUGHT, {"content": content, "agent": role}, node_id)
+                except Exception:
+                    logging.getLogger("nexus.progress").warning("Agent progress could not be published")
+            asyncio.run_coroutine_threadsafe(publish(), owner_loop)
+
         registry = BuiltinToolRegistry(ToolContext(
             str(tenant_id), str(workspace_id), str(run_id), artifact_root, enabled,
-            rag_query=rag_query, shell=shell, media=media, workflow_delegate=workflow_delegate,
-            search_credentials=credentials, boundary_guard=boundary_guard,
+            rag_query=rag_query, shell=shell, browser=browser, computer=computer_tool, media=media, workflow_delegate=workflow_delegate,
+            search_credentials=credentials, boundary_guard=boundary_guard, activity_sink=tool_activity, authorize_tool=authorize_tool,
         ))
         self.tools.remember_run(tenant_id, workspace_id, run_id, registry)
         tool_map = {tool.tool_id: tool for tool in registry.nexusai_tools()}
         tool_map.update(self.workspace_tools.get((tenant_id, workspace_id), {}))
         tool_map.update(extra_tools or {})
-        return CrewBuilder(self.output_schemas, tool_map, skill_loader=SkillLoader(), custom_skill_instructions=custom_skills)
+        return CrewBuilder(self.output_schemas, tool_map, skill_loader=SkillLoader(), custom_skill_instructions=custom_skills, on_progress=agent_progress)
 
     async def tenant_model_client(self, tenant_id: UUID, workspace_id: UUID, model: str) -> LLM | None:
         return await self.llm.nexusai_client(tenant_id, workspace_id, model)
@@ -618,7 +706,16 @@ class AppServices:
         from app import evolution
 
         try:
-            await self.sandbox.retire_run(tenant_id, workspace_id, run_id)  # a run that ended must not keep a container
+            # Keep a live preview available after the last agent step; explicit termination and the
+            # existing orphan reaper still bound its lifetime. Empty computers can be reclaimed now.
+            async with scoped_session(self.engine, tenant_id, workspace_id) as session:
+                computer = await session.scalar(select(SandboxComputer).where(SandboxComputer.run_id == run_id, SandboxComputer.status == "running"))
+            keep_preview = False
+            if computer is not None and computer.provider in {"docker", "local"}:
+                status = await self.interactive.status(ComputerAccess(tenant_id, workspace_id, run_id=run_id), computer.id)
+                keep_preview = any(job["running"] and job["background"] for job in status.get("processes", []))
+            if not keep_preview:
+                await self.sandbox.retire_run(tenant_id, workspace_id, run_id)
         except Exception:
             logging.getLogger("nexus.sandbox").exception("Run computer could not be removed", extra={"run_id": str(run_id)})
 

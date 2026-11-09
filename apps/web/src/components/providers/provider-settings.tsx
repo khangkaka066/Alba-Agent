@@ -33,7 +33,7 @@ function modelReference(preset: Preset, model: Model): string {
   return `${provider}/${model.id}`;
 }
 
-/** Nexus Harness: any third-party OpenAI-compatible provider, connected with its URL and API key. */
+/** Alba Harness: any third-party OpenAI-compatible provider, connected with its URL and API key. */
 function HarnessCard({ token, saved, onChanged }: { token: string; saved?: Credential; onChanged: () => Promise<void> }) {
   const { t } = useLocale();
   const [url, setUrl] = useState("");
@@ -100,7 +100,7 @@ export function ProviderSettings({ token, onNavigate }: { token: string; onNavig
 
   useEffect(() => {
     void apiRequest<{ categories: Record<Category, Preset[]> }>("/api/v1/settings/provider-presets", "")
-      .then((catalog) => setPresets(Object.values(catalog.categories).flat()))
+      .then((catalog) => setPresets(Object.values(catalog.categories).flat().filter(preset=>preset.id!=="github_copilot")))
       .catch((reason: unknown) => setError(readError(reason)));
   }, []);
   useEffect(() => {
@@ -168,7 +168,7 @@ export function ProviderSettings({ token, onNavigate }: { token: string; onNavig
     <header className="provider-page-header"><div><h1>{t("settings.title")}</h1><p>{t("settings.subtitle")}</p></div></header>
     {error && <div className="provider-alert provider-alert--error" role="alert">{error}</div>}
     {notice && <div className="provider-alert" role="status">{notice}</div>}
-    <section className="settings-section"><header><span className="step-badge">1</span><div><h2>{t("settings.s1.title")}</h2><p>{t("settings.s1.body")}</p></div></header>
+    <section className="settings-section"><header><span className="step-badge">1</span><div><h2>{t("accounts.title")}</h2><p>{t("accounts.description")}</p></div></header>
       <SubscriptionHub token={token} credentials={credentials} onChanged={() => token ? reload(token) : Promise.resolve()} hideHeading /></section>
     <section className="settings-section settings-section--recommended"><header><span className="step-badge">2</span><div><h2>{t("settings.s2.title")}</h2><p>{t("settings.s2.body")}</p></div></header>
       <HarnessCard token={token} saved={shop} onChanged={() => token ? reload(token) : Promise.resolve()} /></section>

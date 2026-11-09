@@ -16,7 +16,7 @@ class WorkflowState(BaseModel):
     workflow_id: UUID
     tenant_id: UUID
     workspace_id: UUID
-    status: Literal["queued", "running", "paused", "completed", "failed"] = "queued"
+    status: Literal["queued", "running", "paused", "completed", "failed", "cancelled"] = "queued"
     sequence: int = Field(default=0, ge=0)
     input_data: dict[str, Any] = Field(default_factory=dict)
     node_outputs: dict[str, Any] = Field(default_factory=dict)

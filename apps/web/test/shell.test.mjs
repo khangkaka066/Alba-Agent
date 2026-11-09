@@ -6,15 +6,15 @@ const memory = (initial = {}) => { const data = { ...initial }; return { getItem
 const task = (id) => ({ run: { id }, name: id });
 
 test("conversations group under the folder they were started in; the rest stay loose, newest first", () => {
-  const groups = groupConversations([task("a"), task("b"), task("c"), task("d")], { a: "NexusAgent", c: "Lab_AI", d: "NexusAgent" });
-  assert.deepEqual(groups.projects.map((project) => [project.name, project.tasks.map((item) => item.run.id)]), [["NexusAgent", ["a", "d"]], ["Lab_AI", ["c"]]]);
+  const groups = groupConversations([task("a"), task("b"), task("c"), task("d")], { a: "Alba Agent", c: "Lab_AI", d: "Alba Agent" });
+  assert.deepEqual(groups.projects.map((project) => [project.name, project.tasks.map((item) => item.run.id)]), [["Alba Agent", ["a", "d"]], ["Lab_AI", ["c"]]]);
   assert.deepEqual(groups.loose.map((item) => item.run.id), ["b"]);
 });
 
 test("remembered projects survive a reload and ignore a damaged entry", () => {
   const storage = memory();
-  rememberProject(storage, "run-1", "NexusAgent");
-  assert.deepEqual(loadProjects(storage), { "run-1": "NexusAgent" });
+  rememberProject(storage, "run-1", "Alba Agent");
+  assert.deepEqual(loadProjects(storage), { "run-1": "Alba Agent" });
   assert.deepEqual(loadProjects(memory({ [PROJECTS_KEY]: "{not json" })), {});
   assert.deepEqual(loadProjects(memory({ [PROJECTS_KEY]: JSON.stringify({ a: "x", b: 3, c: "" }) })), { a: "x" });
   rememberProject(storage, "", "x"); rememberProject(storage, "run-2", "");

@@ -17,9 +17,11 @@ import sqlite3
 import urllib.parse
 import zipfile
 import zlib
+from functools import partial
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Iterable, cast
+from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -34,11 +36,14 @@ class ToolContext:
     rag_query: Callable[[str], Awaitable[Any]] | None = None
     shell: Callable[[str, int], Awaitable[Any]] | None = None
     browser: Callable[[str, dict[str, str]], Awaitable[Any]] | None = None
+    computer: Callable[[str, dict[str, Any]], Awaitable[Any]] | None = None
     media: Callable[[str, dict[str, Any]], Awaitable[Any]] | None = None
     workflow_delegate: Callable[[str, dict[str, Any]], Awaitable[Any]] | None = None
     database_urls: dict[str, str] = field(default_factory=dict)
     search_credentials: dict[str, str] = field(default_factory=dict)
     boundary_guard: Callable[[str, str], Awaitable[None]] | None = None
+    activity_sink: Callable[[dict[str, Any]], Awaitable[None]] | None = None
+    authorize_tool: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None
 
 
 class ToolInput(BaseModel):
@@ -63,7 +68,14 @@ TOOLS = (
     ToolDescriptor("safe_sql", "Safe SQL Query", "Run bounded read-only analytics against configured SQLite/PostgreSQL sources.", "data"),
     ToolDescriptor("http_webhook", "HTTP Webhook Client", "Call an authorized external HTTP endpoint with a bounded request.", "integrations"),
     ToolDescriptor("sandbox_shell", "Sandbox Shell & Files", "Execute a command inside the assigned isolated computer.", "computer"),
-    ToolDescriptor("browser_automation", "Browser Automation", "Navigate and interact through the configured isolated browser hook.", "computer"),
+    ToolDescriptor("view_file_numbered", "View File with Line Numbers", "Read a bounded, numbered range from the computer workspace.", "computer"),
+    ToolDescriptor("surgical_file_edit", "Exact File Edit", "Replace one exact block, check supported syntax, snapshot and publish a diff.", "computer"),
+    ToolDescriptor("fast_workspace_search", "Workspace Code Search", "Search literal text in workspace files filtered by path glob.", "computer"),
+    ToolDescriptor("start_background_process", "Start Background Process", "Start a supervised server or watcher and discover its preview ports.", "computer"),
+    ToolDescriptor("get_process_logs", "Read Process Log", "Read the bounded journal of a process in this computer.", "computer"),
+    ToolDescriptor("stop_process", "Stop Process", "Stop one supervised process without ending the workflow.", "computer"),
+    ToolDescriptor("list_running_processes", "List Processes", "Inspect the current computer's processes, ports and working directory.", "computer"),
+    ToolDescriptor("browser_automation", "Browser Automation", 'Use the isolated browser. Payload: {"action":"navigate","arguments":{"url":"http://127.0.0.1:8765/index.html"}}. Actions: navigate(url), click(selector), fill(selector,value), extract(selector), screenshot. Returns page text for extract; screenshots stay on the screen stream.', "computer"),
     ToolDescriptor("media_generation", "Media Generation", "Request image, audio, or video generation from the configured provider gateway.", "media"),
     ToolDescriptor("knowledge_rag", "Knowledge Base RAG", "Search the current tenant's knowledge bases with citations.", "knowledge"),
     ToolDescriptor("peer_workflow", "Peer Workflow Delegation", "Invoke a published workflow in the current workspace.", "orchestration"),
@@ -191,6 +203,14 @@ class BuiltinToolRegistry:
             "knowledge_rag": self._rag, "peer_workflow": self._delegate,
         }
 
+        for operation in ("view_file_numbered", "surgical_file_edit", "fast_workspace_search", "start_background_process", "get_process_logs", "stop_process", "list_running_processes"):
+            self._handlers[operation] = partial(self._computer, operation)
+
+    async def _computer(self, operation: str, payload: dict[str, Any]) -> Any:
+        if self.context.computer is None:
+            raise RuntimeError("Interactive computer tools are not configured for this run")
+        return await self.context.computer(operation, payload)
+
     def descriptors(self) -> tuple[ToolDescriptor, ...]:
         return TOOLS
 
@@ -199,7 +219,36 @@ class BuiltinToolRegistry:
             raise LookupError("Unknown built-in tool")
         if self.context.enabled_ids is not None and tool_id not in self.context.enabled_ids:
             raise PermissionError("This built-in tool is disabled in the workspace")
-        return await self._handlers[tool_id](payload)
+        if self.context.authorize_tool is not None:
+            await self.context.authorize_tool(tool_id, payload)
+        descriptor = next(item for item in TOOLS if item.id == tool_id)
+        arguments = payload.get("arguments", payload)
+        detail = ""
+        if isinstance(arguments, dict):
+            detail = " · ".join(str(arguments[key])[:180] for key in ("action", "path", "selector", "query", "url", "filename") if arguments.get(key))
+        if tool_id in {"sandbox_shell", "start_background_process"}:
+            detail = str(payload.get("command", "")).splitlines()[0][:180] if payload.get("command") else ""
+        detail = re.sub(r"(?i)(?:sk-[\w-]+|(?:api[_-]?key|token|password)\s*[=:]\s*[^\s;,]+)", "[redacted]", detail)
+        event = {"call_id": str(uuid4()), "tool": descriptor.name, "detail": detail}
+        if self.context.activity_sink is not None:
+            await self.context.activity_sink({**event, "phase": "started"})
+        try:
+            result = await self._handlers[tool_id](payload)
+        except Exception:
+            if self.context.activity_sink is not None:
+                await self.context.activity_sink({**event, "phase": "failed"})
+            raise
+        if self.context.activity_sink is not None:
+            parts = []
+            if isinstance(result, dict):
+                for key in ("stdout", "stderr", "summary", "result"):
+                    value = result.get(key)
+                    if isinstance(value, (str, int, float)) and str(value).strip():
+                        parts.append(str(value))
+            output = "\n".join(parts)[:4000]
+            output = re.sub(r"(?i)(?:sk-[\w-]+|(?:api[_-]?key|token|password)\s*[=:]\s*[^\s;,]+)", "[redacted]", output)
+            await self.context.activity_sink({**event, "phase": "completed", "output": output})
+        return result
 
     async def _web_search(self, p: dict[str, Any]) -> dict[str, Any]:
         query = str(p.get("query", "")).strip()
@@ -456,13 +505,19 @@ class BuiltinToolRegistry:
         if self.context.shell is None: raise RuntimeError("No isolated computer is assigned to this run")
         command = str(p.get("command", ""))
         if not command or len(command) > 4000: raise ValueError("Command is required and must be under 4000 characters")
+        if p.get("background"):
+            return await self._computer("start_background_process", p)
         return await self.context.shell(command, min(max(int(p.get("timeout", 30)), 1), 300))
 
     async def _browser(self, p: dict[str, Any]) -> Any:
         if self.context.browser is None: raise RuntimeError("Browser automation is not configured")
-        action = str(p.get("action", "navigate")); args = p.get("arguments", {})
+        action = str(p.get("action", "navigate")); args = p.get("arguments", p)
         if action not in {"navigate", "click", "fill", "screenshot", "extract"} or not isinstance(args, dict): raise ValueError("Unsupported browser action")
-        return await self.context.browser(action, {str(k): str(v) for k,v in args.items()})
+        result = await self.context.browser(action, {str(k): str(v) for k,v in args.items() if str(k) not in {"human", "approved", "action", "timeout_seconds"}})
+        if isinstance(result, dict) and "frame_png_base64" in result:
+            # Screen frames travel on the UI stream, not as base64 text in every model observation.
+            return {**{key: value for key, value in result.items() if key != "frame_png_base64"}, "frame_available": True}
+        return result
 
     async def _media(self, p: dict[str, Any]) -> Any:
         if self.context.media is None: raise RuntimeError("No media generation provider is configured")
@@ -532,9 +587,13 @@ class BuiltinToolRegistry:
             return invoke
         result = []
         requested = set(tool_ids) if tool_ids is not None else {item.id for item in TOOLS}
+        if "sandbox_shell" in requested:
+            requested.update({"view_file_numbered", "surgical_file_edit", "fast_workspace_search", "start_background_process", "get_process_logs", "stop_process", "list_running_processes"})
         unknown = requested - {item.id for item in TOOLS}
         if unknown:
             raise LookupError(f"Unknown built-in tool IDs: {sorted(unknown)}")
+        if self.context.enabled_ids is not None:
+            requested &= self.context.enabled_ids
         for descriptor in TOOLS:
             if descriptor.id not in requested:
                 continue

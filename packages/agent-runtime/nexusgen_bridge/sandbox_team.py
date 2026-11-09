@@ -398,8 +398,10 @@ class NexusGenSandboxRunner:
 
             result: dict[str, object] = {
                 "exit_code": last_execution.exit_code,
-                "stdout": compact_log(last_execution.stdout),
-                "stderr": compact_log(last_execution.stderr),
+                "stdout": compact_log(last_execution.stdout)[-4000:],
+                "stderr": (last_execution.error_digest or {}).get("root_cause_line", compact_log(last_execution.stderr)[-2000:]),
+                "error_digest": last_execution.error_digest,
+                "snapshot_id": last_execution.snapshot_id,
                 "artifacts": last_execution.artifacts,
                 "attempts_history": attempts_history,
             }
@@ -418,6 +420,13 @@ class NexusGenSandboxRunner:
                 "Write Python to solve the task. Call execute_python for each attempt. "
                 "Read the execution result and repair failures. Never claim completion without a zero exit code. "
                 "When the result has a verification block, a trusted probe judged your work: keep repairing until its status is verified. "
+                "The deliverable list limits published artifacts, not working test files: keep test_*.py in the workspace root and publish only the requested deliverables. "
+                + (
+                    "For web UI checks, serve files with start_background_process and use browser_automation on its loopback URL. "
+                    "Use the configured isolated browser; do not launch host Chrome, use a host browser profile, or install another browser stack. "
+                    if "browser_automation" in spec.tool_ids else ""
+                )
+                +
                 "To repair existing files, you can output SEARCH/REPLACE diff blocks to execute_python instead of rewriting full files:\n"
                 "<<<<<<< SEARCH: filename.py\nold lines\n=======\nnew lines\n>>>>>>> REPLACE\n"
                 "You can batch multiple SEARCH/REPLACE blocks for different files in a single turn.\n"

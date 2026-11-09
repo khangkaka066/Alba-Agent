@@ -141,6 +141,9 @@ TEST_NAME = re.compile(r"^(test_[A-Za-z0-9_]*|[A-Za-z0-9_]*_test)\\.py$")
 names = sorted(name for name in os.listdir(".") if name.endswith(".py") and os.path.isfile(name))
 tests = [name for name in names if TEST_NAME.match(name)]
 sources = [name for name in names if name not in tests and not name.startswith("attempt_")]
+for directory, _, files in os.walk("artifacts"):
+    sources.extend(os.path.join(directory, name) for name in sorted(files) if name.lower().endswith((".html", ".htm")) and not os.path.islink(os.path.join(directory, name)))
+sources.extend(name for name in os.listdir(".") if name.lower().endswith((".html", ".htm")) and os.path.isfile(name) and not os.path.islink(name))
 outcome = gate(os.getcwd(), sources, tests, BASELINE) if tests and sources else {"ran": 0, "passed": False, "discriminates": False, "mutants": 0, "killed": 0}
 outcome["undefined"] = scan_undefined(os.getcwd())
 print()
@@ -154,7 +157,7 @@ def build_self_test_probe(staged: dict[str, bytes]) -> tuple[str, str]:
     The mutation module is concatenated in so the container runs one self-contained script written by the supervisor.
     """
     nonce = uuid4().hex
-    baseline = {name: base64.b64encode(content).decode("ascii") for name, content in staged.items() if name.endswith(".py")}
+    baseline = {name: base64.b64encode(content).decode("ascii") for name, content in staged.items() if name.lower().endswith((".py", ".html", ".htm"))}
     driver = _SELF_TEST_DRIVER.replace("__NONCE__", repr(nonce)).replace("__BASELINE__", repr(json.dumps(baseline, sort_keys=True)))
     # mutation.py opens with `from __future__`, which must stay the first statement of the script.
     return (Path(__file__).with_name("mutation.py").read_text(encoding="utf-8") + "\n" + _NAMES_SOURCE + "\n" + driver), nonce

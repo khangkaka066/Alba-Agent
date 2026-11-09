@@ -1,4 +1,4 @@
-"""Sandbox containers are returned when a node ends, bounded in number, and swept when orphaned."""
+"""Node leases preserve task sessions; explicit retirement and orphan sweeps reclaim computers."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ def test_container_is_released_after_a_node_even_when_it_fails(monkeypatch: pyte
     runner._run_node = failing  # type: ignore[assignment]
     with pytest.raises(RuntimeError, match="model unavailable"):
         asyncio.run(runner.run("task", SimpleNamespace(), emitter()))  # type: ignore[arg-type]
-    assert supervisor.events == ["release", "retire"]
+    assert supervisor.events == ["release"]
     assert supervisor._run_users == {}
 
 
@@ -77,7 +77,8 @@ def test_overlapping_nodes_of_one_run_keep_the_container_until_the_last_finishes
         await asyncio.gather(first, second)
 
     asyncio.run(scenario())
-    assert supervisor.events.count("retire") == 1  # only the last node out removes the container
+    assert supervisor.events.count("release") == 2
+    assert supervisor.events.count("retire") == 0  # later nodes and live previews reuse the same computer
 
 
 def test_only_the_configured_number_of_nodes_run_at_once(monkeypatch: pytest.MonkeyPatch) -> None:

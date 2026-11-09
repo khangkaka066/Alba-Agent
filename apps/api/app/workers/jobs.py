@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import atexit
 import logging
 import os
+import threading
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from typing import Any, cast
 from urllib.parse import quote
 from uuid import UUID
 
 from celery import Celery  # type: ignore[import-untyped]
+from celery.signals import worker_process_shutdown  # type: ignore[import-untyped]
 from sqlalchemy import select
 
 from app.models import AuditLog, ModelCredential, RunCheckpoint, WorkflowRun
@@ -18,6 +22,7 @@ from app.models.scope import scoped_session
 from app.services import AppServices, TaskDispatcher, create_default_services
 from callbacks.event_bus import RuntimeEventEmitter
 from checkpoints.failure import describe_failure, is_model_not_found, with_model_suggestions
+from checkpoints.store import RunCancelled
 from flows.compiler import public_error
 from flows.state import WorkflowState
 from nexus_core_schema.models import RuntimeEventType
@@ -107,7 +112,19 @@ class WorkerExecutor:
         try:
             compiled = await self.services.compiled_workflow(tenant_id, workspace_id, run_id, input_data)
             state = await compiled.resume_execution() if has_checkpoint else await compiled.run_precreated()
+            await self.services.checkpoints.assert_running(tenant_id, workspace_id, run_id, state)
             await self._monitor_distillation(tenant_id, workspace_id, run_id)
+            await self.services._after_run(tenant_id, workspace_id, run_id)
+            return state.status
+        except RunCancelled as stopped:
+            state = stopped.state or await self.services.checkpoints.load(tenant_id, workspace_id, run_id)
+            state.status = "cancelled"
+            state.active_node_id = None
+            state.pending_approval_id = None
+            await self.services.checkpoints.save(state)
+            await RuntimeEventEmitter(self.services.redis, tenant_id, workspace_id, run_id).emit(
+                RuntimeEventType.FLOW_STATE_CHANGED, {"status": "cancelled", "reason": "user_requested"},
+            )
             await self.services._after_run(tenant_id, workspace_id, run_id)
             return state.status
         except Exception as error:
@@ -164,8 +181,8 @@ class WorkerExecutor:
         return results
 
 
-async def _run_task(operation: str, identifiers: tuple[str, ...], content: str | None = None) -> str | dict[str, int]:
-    services = await create_default_services(_WorkerDispatcher())
+async def _run_task(operation: str, identifiers: tuple[str, ...], content: str | None = None, provided: AppServices | None = None) -> str | dict[str, int]:
+    services = provided or await create_default_services(_WorkerDispatcher())
     executor = WorkerExecutor(services)
     try:
         if operation == "workflow":
@@ -180,11 +197,78 @@ async def _run_task(operation: str, identifiers: tuple[str, ...], content: str |
             return await executor.scan_routines()
         raise ValueError("Unknown worker operation")
     finally:
-        await services.shutdown()
+        if provided is None:
+            await services.shutdown()
+
+
+class _WorkerRuntime:
+    """A Celery process owns one live loop; PTYs and previews keep running between jobs."""
+
+    def __init__(self, factory: Callable[[], Awaitable[AppServices]] | None = None) -> None:
+        self.pid = os.getpid()
+        self.loop = asyncio.new_event_loop()
+        self.thread = threading.Thread(target=self._serve, name="nexus-worker-runtime", daemon=True)
+        self.thread.start()
+        async def boot() -> AppServices:
+            return await factory() if factory is not None else await create_default_services(_WorkerDispatcher())
+        try:
+            self.services = asyncio.run_coroutine_threadsafe(boot(), self.loop).result(timeout=120)
+        except BaseException:
+            self.loop.call_soon_threadsafe(self.loop.stop)
+            self.thread.join(timeout=10)
+            raise
+
+    def _serve(self) -> None:
+        asyncio.set_event_loop(self.loop)
+        try:
+            self.loop.run_forever()
+        finally:
+            remaining = asyncio.all_tasks(self.loop)
+            for task in remaining:
+                task.cancel()
+            self.loop.run_until_complete(asyncio.gather(*remaining, return_exceptions=True))
+            self.loop.run_until_complete(self.loop.shutdown_asyncgens())
+            self.loop.run_until_complete(self.loop.shutdown_default_executor())
+            self.loop.close()
+
+    def run(self, operation: str, identifiers: tuple[str, ...], content: str | None = None) -> str | dict[str, int]:
+        return asyncio.run_coroutine_threadsafe(_run_task(operation, identifiers, content, self.services), self.loop).result()
+
+    def close(self) -> None:
+        if not self.thread.is_alive():
+            return
+        try:
+            asyncio.run_coroutine_threadsafe(self.services.shutdown(), self.loop).result(timeout=20)
+        except Exception:
+            logging.getLogger("nexus.worker").exception("Worker services could not finish shutting down")
+        finally:
+            self.loop.call_soon_threadsafe(self.loop.stop)
+            self.thread.join(timeout=20)
+
+
+_worker_runtime: _WorkerRuntime | None = None
+_worker_runtime_lock = threading.Lock()
+
+
+def _close_worker_runtime(**_kwargs: Any) -> None:
+    global _worker_runtime
+    with _worker_runtime_lock:
+        runtime, _worker_runtime = _worker_runtime, None
+    if runtime is not None and runtime.pid == os.getpid():
+        runtime.close()
+
+
+worker_process_shutdown.connect(_close_worker_runtime, weak=False)
+atexit.register(_close_worker_runtime)
 
 
 def _run_sync(operation: str, identifiers: tuple[str, ...], content: str | None = None) -> str | dict[str, int]:
-    return asyncio.run(_run_task(operation, identifiers, content))
+    global _worker_runtime
+    with _worker_runtime_lock:
+        if _worker_runtime is None or _worker_runtime.pid != os.getpid():
+            _worker_runtime = _WorkerRuntime()
+        runtime = _worker_runtime
+    return runtime.run(operation, identifiers, content)
 
 
 @celery_app.task(name="nexus.run_workflow", acks_late=True)  # type: ignore[misc]

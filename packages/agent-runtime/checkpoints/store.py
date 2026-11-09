@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 from uuid import UUID, uuid4
@@ -18,6 +19,14 @@ Decision = Literal["allowed_once", "always_allowed", "denied"]
 ROLE_RANK = {"viewer": 0, "builder": 1, "admin": 2, "owner": 3}
 
 
+class RunCancelled(asyncio.CancelledError):
+    """A user-requested stop, carrying the last safe state when available."""
+
+    def __init__(self, state: WorkflowState | None = None) -> None:
+        super().__init__("The user stopped this run")
+        self.state = state
+
+
 class CheckpointStore:
     def __init__(self, engine: AsyncEngine, redis: Redis, cache_seconds: int = 86_400) -> None:
         self._engine = engine
@@ -27,6 +36,14 @@ class CheckpointStore:
     @staticmethod
     def cache_key(tenant_id: UUID, workspace_id: UUID, run_id: UUID) -> str:
         return f"run:{tenant_id}:{workspace_id}:{run_id}:checkpoint"
+
+    @staticmethod
+    def cancellation_key(tenant_id: UUID, workspace_id: UUID, run_id: UUID) -> str:
+        return f"run:{tenant_id}:{workspace_id}:{run_id}:cancel-requested"
+
+    async def assert_running(self, tenant_id: UUID, workspace_id: UUID, run_id: UUID, state: WorkflowState | None = None) -> None:
+        if await self._redis.get(self.cancellation_key(tenant_id, workspace_id, run_id)):
+            raise RunCancelled(state)
 
     async def create_run(self, state: WorkflowState) -> None:
         async with scoped_session(self._engine, state.tenant_id, state.workspace_id) as session:
@@ -45,6 +62,8 @@ class CheckpointStore:
             ))
 
     async def save(self, state: WorkflowState) -> WorkflowState:
+        if state.status != "cancelled":
+            await self.assert_running(state.tenant_id, state.workspace_id, state.run_id, state)
         async with scoped_session(self._engine, state.tenant_id, state.workspace_id) as session:
             run = await session.scalar(
                 select(WorkflowRun)
@@ -70,6 +89,8 @@ class CheckpointStore:
 
     @staticmethod
     async def _append_checkpoint(session: AsyncSession, run: WorkflowRun, state: WorkflowState) -> None:
+        if run.status == "cancelled" and state.status != "cancelled":
+            raise RunCancelled(state)
         latest = await session.scalar(
             select(func.max(RunCheckpoint.sequence)).where(RunCheckpoint.run_id == state.run_id)
         )
@@ -79,7 +100,7 @@ class CheckpointStore:
             run.started_at = datetime.now(timezone.utc)
         if state.status == "running" and run.failure is not None:
             run.failure, run.finished_at = None, None  # a retried run starts clean
-        if state.status in ("completed", "failed"):
+        if state.status in ("completed", "failed", "cancelled"):
             run.finished_at = datetime.now(timezone.utc)
         session.add(RunCheckpoint(
             tenant_id=state.tenant_id,
@@ -115,6 +136,7 @@ class CheckpointStore:
         required_role: str,
         timeout_seconds: int,
     ) -> UUID:
+        await self.assert_running(state.tenant_id, state.workspace_id, state.run_id, state)
         if state.pending_approval_id is not None:
             raise ValueError("Workflow already has a pending approval")
         approval_id = uuid4()
@@ -183,6 +205,10 @@ class CheckpointStore:
             )
             if row is None or member is None:
                 raise LookupError("Approval or member is not visible in this workspace")
+            if row.run_id:
+                run = await session.get(WorkflowRun, row.run_id)
+                if run is None or run.status == "cancelled" or await self._redis.get(self.cancellation_key(tenant_id, workspace_id, row.run_id)):
+                    raise ValueError("The run has been stopped")
             if ROLE_RANK[member.role] < ROLE_RANK[row.required_role]:
                 raise PermissionError("Member role cannot decide this approval")
             if row.status != "pending":

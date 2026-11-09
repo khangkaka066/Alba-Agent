@@ -25,7 +25,8 @@ async function send(path: string, token: string, init: RequestInit): Promise<Res
       headers: { ...(init.body instanceof FormData ? {} : { "content-type": "application/json" }), ...(token ? { authorization: `Bearer ${token}` } : {}), ...init.headers },
       cache: "no-store",
     });
-  } catch {
+  } catch (error) {
+    if (init.signal?.aborted) throw error;
     throw unreachable();
   }
 }
@@ -93,7 +94,7 @@ export function downloadFile(name: string, content: string, type: string): void 
   anchor.href = url;
   anchor.download = name;
   anchor.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000); // the download manager reads the blob asynchronously
 }
 
 export function readError(error: unknown): string {

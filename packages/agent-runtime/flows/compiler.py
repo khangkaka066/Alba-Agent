@@ -101,14 +101,19 @@ def mount_upstream(state: WorkflowState, input_files: dict[str, bytes]) -> list[
     folder = artifact_directory(state.tenant_id, state.workspace_id, state.run_id) / ".upstream"
     budget = 1_048_576 - sum(len(content) for content in input_files.values())
     described: list[dict[str, Any]] = []
+    upload_budget = 50_000_000
     for entry in sorted(state.upstream_artifacts, key=lambda item: int(item.get("size_bytes", 0))):
         name = str(entry.get("name", ""))
         path = folder / name
         size = int(entry.get("size_bytes", 0))
-        mounted = bool(name) and name == name.rsplit("/", 1)[-1] and path.is_file() and not path.is_symlink() and size <= budget
+        uploaded = bool(entry.get("source_upload_id"))
+        mounted = bool(name) and name not in {".", ".."} and "/" not in name and "\\" not in name and path.is_file() and not path.is_symlink() and 0 <= size <= (upload_budget if uploaded else budget)
         if mounted:
             input_files[f"upstream/{name}"] = path.read_bytes()
-            budget -= size
+            if uploaded:
+                upload_budget -= size
+            else:
+                budget -= size
         described.append({"name": name, "mounted_path": f"upstream/{name}" if mounted else None, "size_bytes": size,
                           "mime_type": entry.get("mime_type"), "from_task": entry.get("source_run_id")})
     return described
@@ -752,12 +757,14 @@ class FlowCompiler:
                         except ValueError:
                             return None
                         return filename if path.is_file() else None
-                    if not existing_file("artifact_filename") or not existing_file("report_filename"):
-                        if self._required_tool_runner is None or not any(
+                    file_fields = tuple(field for field in ("artifact_filename", "report_filename") if field in output)
+                    if any(not existing_file(field) for field in file_fields):
+                        if len(file_fields) != 2 or self._required_tool_runner is None or not any(
                             "media_generation" in agent.tool_ids and "report_exporter" in agent.tool_ids
                             for agent in node.agents
                         ):
-                            raise ValueError("Crew did not produce its required media and report artifacts")
+                            missing = ", ".join(field for field in file_fields if not existing_file(field))
+                            raise ValueError(f"Crew did not produce required artifacts: {missing}")
                         recovered_artifacts = True
                         instruction = node.tasks[-1].description
                         kind = "video" if "kind=video" in instruction else "audio" if "kind=audio" in instruction else "image"
@@ -782,7 +789,7 @@ class FlowCompiler:
                             if not isinstance(report_result, dict) or not isinstance(report_result.get("artifact"), str):
                                 raise ValueError("Report tool did not return an artifact filename")
                             output["report_filename"] = report_result["artifact"]
-                    for field in ("artifact_filename", "report_filename"):
+                    for field in file_fields:
                         if not existing_file(field):
                             raise ValueError(f"Crew claimed a missing {field} artifact")
                     if recovered_artifacts and "summary" in output:
@@ -793,7 +800,15 @@ class FlowCompiler:
                 declared = node.declared_artifact_paths()
                 claims = [name for name in claimed_files((*task_outputs.values(), output)) if name not in declared]
                 material = claim_material(task_outputs, output) if claims else {}
-                await apply_contract(state, node, output, (*declared, *claims), task_outputs, None, {name: material for name in claims} if material else None)
+                crew_exports: dict[str, bytes] = {}
+                if self._sandbox_file_reader is not None:
+                    for path in (*declared, *claims):
+                        try:
+                            if not artifact_file(artifact_directory(state.tenant_id, state.workspace_id, state.run_id), path).is_file():
+                                crew_exports[path] = await self._sandbox_file_reader(state.tenant_id, state.workspace_id, state.run_id, path)
+                        except (FileNotFoundError, ValueError):
+                            continue
+                await apply_contract(state, node, output, (*declared, *claims), task_outputs, crew_exports, {name: material for name in claims} if material else None)
                 confidence = output.get("evaluation_confidence", output.get("confidence", 0.0))
                 if self._capsule_handler is not None and isinstance(confidence, (int, float)) and confidence >= 0.9:
                     capsule = self._distiller.distill(DistillationCandidate(

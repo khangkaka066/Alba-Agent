@@ -1,4 +1,4 @@
-// Starts everything NexusAgent needs on this machine, with no Docker: Postgres, Redis, Qdrant, the API, the worker and the web server.
+// Starts everything Alba Agent needs on this machine, with no Docker: Postgres, Redis, Qdrant, the API, the worker and the web server.
 // They are the same services docker-compose runs, shipped as binaries inside the app (see scripts/package/build_runtime.py), so the
 // application code and its behaviour are the ones that were measured. This file does not import Electron: the app wraps it, and
 // `stack-cli.ts` runs it headless for smoke tests.
@@ -185,7 +185,7 @@ export class Stack {
     const allowedUser = allowedUserEnv(user);
     return {
       ...this.baseEnvironment(), ...allowedUser,
-      NEXUS_BRAND_NAME: "NexusAgent Studio",
+      NEXUS_BRAND_NAME: "Alba Agent",
       NEXUS_CORS_ORIGINS: `http://127.0.0.1:${layout.webPort},http://localhost:${layout.webPort}`,
       NEXUS_DB_HOST: "127.0.0.1", NEXUS_DB_PORT: String(ports.postgres), NEXUS_DB_NAME: "nexus", NEXUS_DB_USER: "nexus_runtime", NEXUS_DB_PASSWORD: secrets.runtimePassword,
       NEXUS_MIGRATION_DATABASE_URL: databaseUrl, NEXUS_SETUP_DATABASE_URL: databaseUrl,
@@ -195,6 +195,7 @@ export class Stack {
       NEXUS_SANDBOX_URL: `${this.apiUrl}/api/v1/sandboxes`, NEXUS_SANDBOX_PROVIDER: "local", NEXUS_SANDBOX_TOOLS_PATH: layout.tools.join(delimiter),
       NEXUS_COMPUTER_ROOT: this.dir("computers"), NEXUS_ARTIFACTS_DIR: this.dir("artifacts"), NEXUS_SUBSCRIPTIONS_DIR: this.dir("subscriptions"),
       NEXUS_LOCAL_MODE: "true", NEXUS_RELOAD: "false",
+      NEXUS_ACCOUNT_TOOLS_DIR: join(this.options.runtime, "account-tools"), NEXUS_ACCOUNT_CLI_DIR: this.dir("account-clis"), NEXUS_ACCOUNT_API_BASE: this.apiUrl,
       NEXUS_PLUGIN_PATCHES: join(layout.backend, "packages", "agent-runtime", "nexus_plugins", "local-mode.yaml"),
       PYTHONPATH: [join(layout.backend, "apps", "api"), ...packages.map((name) => join(layout.backend, "packages", name))].join(delimiter),
       PYTHONDONTWRITEBYTECODE: "1", PYTHONNOUSERSITE: "1", PYTHONUNBUFFERED: "1",
@@ -270,7 +271,7 @@ export class Stack {
       // Processes just stopped above need a moment to release their sockets.
       const deadline = Date.now() + 10_000;
       while ((await portInUse(port)) && Date.now() < deadline) await new Promise((done) => setTimeout(done, 200));
-      if (await portInUse(port)) throw new Error(`Port ${port} is already in use by another program. Close it and start NexusAgent again.`);
+      if (await portInUse(port)) throw new Error(`Port ${port} is already in use by another program. Close it and start Alba Agent again.`);
     }
     this.secrets = loadOrCreateSecrets(options.data);
     this.ports = { api: layout.apiPort, web: layout.webPort, postgres: await freePort(), redis: await freePort(), qdrant: await freePort(), qdrantGrpc: await freePort() };
@@ -292,7 +293,7 @@ export class Stack {
     this.status("Starting Redis and Qdrant…");
     const redisDir = this.dir("redis");
     const redisConfig = join(redisDir, "redis.conf");
-    writeFileSync(redisConfig, `bind 127.0.0.1\nport ${this.ports.redis}\nrequirepass ${this.secrets.redisPassword}\nappendonly yes\ndir ${redisDir.replace(/\\/g, "/")}\nsave ""\n`, { mode: 0o600 });
+    writeFileSync(redisConfig, `bind 127.0.0.1\nport ${this.ports.redis}\nrequirepass ${this.secrets.redisPassword}\nappendonly yes\ndir ${JSON.stringify(redisDir.replace(/\\/g, "/"))}\nsave ""\n`, { mode: 0o600 });
     this.spawnService("redis", layout.redis, [redisConfig], base);
     this.spawnService("qdrant", layout.qdrant, [], { ...base, QDRANT__SERVICE__HOST: "127.0.0.1", QDRANT__SERVICE__HTTP_PORT: String(this.ports.qdrant), QDRANT__SERVICE__GRPC_PORT: String(this.ports.qdrantGrpc), QDRANT__STORAGE__STORAGE_PATH: this.dir("qdrant"), QDRANT__STORAGE__SNAPSHOTS_PATH: this.dir("qdrant-snapshots"), QDRANT__TELEMETRY_DISABLED: "true" }, options.data);
     await Promise.all([waitFor(() => tcpOpen(this.ports.redis), "Redis", 30, () => this.failure()), waitFor(() => httpOk(`http://127.0.0.1:${this.ports.qdrant}/readyz`), "Qdrant", 60, () => this.failure())]);
@@ -302,7 +303,7 @@ export class Stack {
     await this.runToEnd("bootstrap", layout.python, [join(layout.backend, "bootstrap_database.py")], { ...environment, NEXUS_RUNTIME_DB_PASSWORD: this.secrets.runtimePassword }, layout.backend);
     await this.runToEnd("migrate", layout.python, ["-m", "alembic", "-c", "apps/api/alembic.ini", "upgrade", "head"], { ...environment, NEXUS_DATABASE_URL: environment.NEXUS_MIGRATION_DATABASE_URL }, layout.backend);
 
-    this.status("Starting NexusAgent…");
+    this.status("Starting Alba Agent…");
     const { NEXUS_MIGRATION_DATABASE_URL: _migration, NEXUS_SETUP_DATABASE_URL: _setup, ...workerEnvironment } = environment;
     this.spawnService("api", layout.python, ["-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", String(layout.apiPort), "--proxy-headers"], environment, layout.backend);
     this.spawnService("worker", layout.python, ["-m", "celery", "-A", "app.workers.jobs:celery_app", "worker", "--loglevel=INFO", "--pool=threads", `--concurrency=${environment.NEXUS_WORKER_CONCURRENCY ?? "2"}`], workerEnvironment, layout.backend);

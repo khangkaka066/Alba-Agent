@@ -2,10 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { TeammateWorkspace } from "@/components/teammates/teammate-workspace";
+import { ScheduledTasks } from "@/components/teammates/scheduled-tasks";
+import { Icon } from "@/components/shell/icons";
 import { LearningTransferRadar } from "@/components/learning-transfer-radar";
 import { FinOpsDistillationPanel } from "@/components/finops-distillation-panel";
 import { CustomizePage } from "@/components/integrations/customize-page";
-import { ModelProvider } from "@/components/model-context";
+import { modelLabel } from "@/lib/models.mjs";
+import { ModelProvider, useModels } from "@/components/model-context";
+import { AppearanceSettings } from "@/components/settings/appearance-settings";
+import { ApplicationSettings } from "@/components/settings/application-settings";
+import { NotificationSettings } from "@/components/settings/notification-settings";
+import { usePreferences } from "@/components/settings/preferences-provider";
 import { GeneralSettings } from "@/components/settings/general-settings";
 import { useLocale } from "@/components/locale-provider";
 import { ShortcutSettings } from "@/components/providers/shortcut-settings";
@@ -18,6 +25,7 @@ import { getDesktop } from "@/lib/desktop";
 import { actionFor, formatCombo, loadBindings, saveBindings, type Bindings } from "@/lib/shortcuts.mjs";
 import { INITIAL_DOCK, dockAfter, loadProjects, type DockTab } from "@/lib/shell.mjs";
 import { Sidebar } from "@/components/shell/sidebar";
+import { PanelResize, usePanelSize } from "@/components/shell/panel-resize";
 import { SettingsModal } from "@/components/shell/settings-modal";
 import { ShellContext, type NavPage, type ShellValue } from "@/components/shell/shell-context";
 import { TitleBar } from "@/components/shell/title-bar";
@@ -29,8 +37,8 @@ export type { NavPage } from "@/components/shell/shell-context";
 
 const emptyScope = { tenant_id: "", workspace_id: "" };
 
-function AccountDialog({ token, scope, onToken, onScope, onClose }: { token: string; scope: WorkspaceScope; onToken: (value: string) => void; onScope: (value: WorkspaceScope) => void; onClose: () => void }) {
-  const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [error, setError] = useState(""); const [busy, setBusy] = useState(false); const [registering, setRegistering] = useState(false);
+function AccountDialog({ token, scope, onToken, onScope, onClose, initialRegister = false }: { token: string; scope: WorkspaceScope; onToken: (value: string) => void; onScope: (value: WorkspaceScope) => void; onClose: () => void; initialRegister?: boolean }) {
+  const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [error, setError] = useState(""); const [busy, setBusy] = useState(false); const [registering, setRegistering] = useState(initialRegister);
   const [publicSignup, setPublicSignup] = useState<boolean | null>(null);
   const [registration, setRegistration] = useState({ tenant_name: "My organization", workspace_name: "My workspace", display_name: "Workspace owner", setup_token: "" });
   useEffect(() => {
@@ -60,14 +68,14 @@ function AccountDialog({ token, scope, onToken, onScope, onClose }: { token: str
 }
 
 function Dialog({ title, children, onClose, onSubmit }: { title: string; children: React.ReactNode; onClose: () => void; onSubmit?: () => void }) {
-  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="modal-card" role="dialog" aria-modal="true" aria-label={title} onKeyDown={(event) => { if (onSubmit && event.key === "Enter" && event.target instanceof HTMLInputElement) { event.preventDefault(); onSubmit(); } }}><header className="modal-head"><div><span className="eyebrow">NEXUSAGENT</span><h2>{title}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close dialog">×</button></header>{children}</section></div>;
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="modal-card" role="dialog" aria-modal="true" aria-label={title} onKeyDown={(event) => { if (onSubmit && event.key === "Enter" && event.target instanceof HTMLInputElement) { event.preventDefault(); onSubmit(); } }}><header className="modal-head"><div><span className="eyebrow">Alba Agent</span><h2>{title}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close dialog">×</button></header>{children}</section></div>;
 }
 
 function IntegrationDialog({ kind, token, onClose }: { kind: "api-key" | "widget"; token: string; onClose: () => void }) {
   const [key, setKey] = useState(""); const [error, setError] = useState(""); const [busy, setBusy] = useState(false); const [copied, setCopied] = useState(false);
   const [origin, setOrigin] = useState("https://studio.example.com");
   useEffect(() => { setOrigin(window.location.origin); }, []);
-  const code = kind === "widget" ? `<iframe\n  src="${origin}/embed/workflow-id"\n  title="NexusAgent Studio workflow"\n  width="100%"\n  height="640"\n></iframe>` : "";
+  const code = kind === "widget" ? `<iframe\n  src="${origin}/embed/workflow-id"\n  title="Alba Agent workflow"\n  width="100%"\n  height="640"\n></iframe>` : "";
   const generate = async () => {
     setBusy(true); setError("");
     try { const result = await apiRequest<{ key: string }>("/api/v1/auth/keys", token, { method: "POST", body: JSON.stringify({ scopes: ["read", "write", "run"] }) }); setKey(result.key); }
@@ -82,6 +90,10 @@ function IntegrationDialog({ kind, token, onClose }: { kind: "api-key" | "widget
 const pagePaths: Record<NavPage, string> = {
   studio: "/studio",
   general: "/settings",
+  application: "/settings/application",
+  appearance: "/settings/appearance",
+  shortcuts: "/settings/shortcuts",
+  notifications: "/settings/notifications",
   integrations: "/settings/integrations",
   settings: "/settings/providers",
   teammates: "/teammates",
@@ -89,11 +101,11 @@ const pagePaths: Record<NavPage, string> = {
 };
 
 
-// The rail starts with New chat, Automations and Customize above the task list, with Settings pinned at the bottom.
+// The rail starts with New chat, Automations and Customize; the profile footer owns settings.
 // Integrations (channels, MCP, skills) open from Customize.
 const NAV_TARGETS: Record<string, NavPage> = { "nav-studio": "studio", "nav-integrations": "integrations", "nav-settings": "general" };
 // Settings is a panel with its own navigation: General, Models and Intelligence (learning metrics).
-const SETTINGS_FAMILY: NavPage[] = ["general", "settings", "intelligence"]; // shown as a panel over the work; Teammates (Automations) is a full page
+const SETTINGS_FAMILY: NavPage[] = ["general", "application", "appearance", "shortcuts", "notifications", "settings", "intelligence"]; // shown as a panel over the work; Teammates (Automations) is a full page
 
 type NavIcon = "studio" | "newSession" | "customize" | "general" | "models" | "teammates" | "intelligence" | "back" | "shortcuts" | "logout";
 
@@ -146,15 +158,22 @@ function EvolutionHost({ token, onOpened }: { token: string; onOpened: () => voi
 
 function TeammatesHost({ token, scope, onConnect }: { token: string; scope: WorkspaceScope; onConnect: () => void }) {
   const workspace = useWorkspace();
-  return <TeammateWorkspace token={token} scope={scope} incomingApprovals={workspace.run.approvals} onApprovalResolved={workspace.dismissApproval} onConnect={onConnect} />;
+  const { t } = useLocale();
+  const [manage, setManage] = useState(false);
+  return manage ? <div className="nx-agent-settings"><button type="button" className="button button-quiet" onClick={() => setManage(false)}><Icon name="back" size={14} />{t("interface.scheduledTasks")}</button><TeammateWorkspace token={token} scope={scope} incomingApprovals={workspace.run.approvals} onApprovalResolved={workspace.dismissApproval} onConnect={onConnect} /></div> : <ScheduledTasks token={token} scope={scope} onManageAgents={() => setManage(true)} />;
 }
 
-/** The signed-in account at the foot of the sidebar; it opens a small menu with Settings, Shortcuts and Log out. */
-function AccountRow({ token, inSettings, onSettings, onClose, onShortcuts, onLogout }: { token: string; inSettings: boolean; onSettings: () => void; onClose: () => void; onShortcuts: () => void; onLogout: (() => void) | null }) {
-  const { t } = useLocale();
+/** One profile entry owns account, model, language and application settings. */
+function AccountRow({ token, onSettings, onProviders, onTools, onShortcuts, onLogout, onSwitch }: {
+  token: string; onSettings: () => void; onProviders: () => void; onTools: () => void; onShortcuts: () => void;
+  onLogout: (() => void) | null; onSwitch: (() => void) | null;
+}) {
+  const { t, locale, setLocale } = useLocale();
+  const { selected } = useModels();
   const [account, setAccount] = useState<{ email: string; display_name: string } | null>(null);
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!token) { setAccount(null); return; }
     let stopped = false;
@@ -164,24 +183,29 @@ function AccountRow({ token, inSettings, onSettings, onClose, onShortcuts, onLog
   useEffect(() => {
     if (!open) return;
     const away = (event: MouseEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
-    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", away);
-    document.addEventListener("keydown", escape);
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { setOpen(false); trigger.current?.focus(); } };
+    document.addEventListener("mousedown", away); document.addEventListener("keydown", escape);
     return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", escape); };
   }, [open]);
-  const label = account?.email || account?.display_name || t("account.signedOut");
+  const local = account?.email === "local@nexus.local" || (Boolean(token) && onLogout === null);
+  const label = local ? t("profile.local") : account?.display_name || account?.email || t("account.signedOut");
   const choose = (run: () => void) => () => { setOpen(false); run(); };
-  const item = (icon: NavIcon, text: string, run: () => void) => <button type="button" role="menuitem" className="account-menu__item" onClick={choose(run)}><NavGlyph name={icon} /><span>{text}</span></button>;
+  const item = (icon: NavIcon, text: string, run: () => void) => <button type="button" className="account-menu__item" onClick={choose(run)}><NavGlyph name={icon} /><span>{text}</span></button>;
   return <div className="account-wrap" ref={root}>
-    {open && <div className="account-menu" role="menu" aria-label={t("account.open")}>
-      {inSettings ? item("general", t("account.menu.close"), onClose) : item("general", t("page.settings"), onSettings)}
+    {open && <div className="account-menu ag-profile-menu" role="dialog" aria-label={t("profile.menu")}>
+      <header><strong>{label}</strong><small>{t("profile.activeAI")}: {selected ? modelLabel(selected) : t("profile.noModel")}</small></header>
+      {item("models", t("profile.providers"), onProviders)}
+      {item("customize", t("profile.tools"), onTools)}
+      <div className="ag-profile-language"><span>{t("profile.language")}</span><div role="group" aria-label={t("profile.language")}><button type="button" aria-pressed={locale === "vi"} onClick={() => setLocale("vi")}>Tiếng Việt</button><button type="button" aria-pressed={locale === "en"} onClick={() => setLocale("en")}>English</button></div></div>
       <div className="account-menu__rule" />
       {item("shortcuts", t("shell.shortcutsTitle"), onShortcuts)}
-      {onLogout && <><div className="account-menu__rule" />{item("logout", t("account.menu.logout"), onLogout)}</>}
+      {item("general", t("profile.general"), onSettings)}
+      {!local && onSwitch && item("teammates", t("profile.switchAccount"), onSwitch)}
+      {!local && onLogout && item("logout", t("account.menu.logout"), onLogout)}
     </div>}
-    <button type="button" className={`account-row ${open ? "is-active" : ""}`} aria-haspopup="menu" aria-expanded={open} title={t("account.open")} aria-label={t("account.open")} onClick={() => setOpen((value) => !value)}>
-      <span className="account-avatar" aria-hidden="true">{(account?.display_name || account?.email || "?").charAt(0).toUpperCase()}</span>
-      <span className="account-email">{label}</span>
+    <button ref={trigger} type="button" className={`account-row ${open ? "is-active" : ""}`} aria-haspopup="dialog" aria-expanded={open} title={t("profile.menu")} aria-label={t("profile.menu")} onClick={() => setOpen(!open)}>
+      <span className="account-avatar" aria-hidden="true">{local ? "L" : label.charAt(0).toUpperCase()}</span>
+      <span className="ag-profile-identity"><strong>{label}</strong><small><span className={`run-dot run-dot--${selected ? "completed" : "idle"}`} />{t(selected ? "profile.connected" : "profile.noModel")}</small></span>
     </button>
   </div>;
 }
@@ -191,7 +215,7 @@ type LocalSession = { access_token: string; tenant_id: string; workspace_id: str
 export function StudioApp({ initialPage = "studio" }: { initialPage?: NavPage }) {
   const { t } = useLocale();
   const [page, setPage] = useState<NavPage>(initialPage);
-  useEffect(() => { document.title = `${t(`page.${page}`)} · NexusAgent`; }, [page, t]);
+  useEffect(() => { document.title = `${t(`page.${page}`)} · Alba Agent`; }, [page, t]);
   const [token, setToken] = useState("");
   const [scope, setScope] = useState<WorkspaceScope>(emptyScope);
   const [localMode, setLocalMode] = useState<boolean | null>(null); // null while the server is asked
@@ -201,7 +225,9 @@ export function StudioApp({ initialPage = "studio" }: { initialPage?: NavPage })
   const [commandOpen, setCommandOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const { preferences, update: updatePreferences } = usePreferences();
+  const theme = preferences.theme;
+  const setTheme = useCallback((theme: "dark" | "light" | "system") => updatePreferences({ theme }), [updatePreferences]);
   const [bindings, setBindings] = useState<Bindings>(() => loadBindings({ getItem: () => null }));
   const [mac, setMac] = useState(false);
 
@@ -221,8 +247,6 @@ export function StudioApp({ initialPage = "studio" }: { initialPage?: NavPage })
     setMac(/Mac|iPhone|iPad/.test(window.navigator.platform));
     const desktop = getDesktop();
     if (desktop) document.documentElement.dataset.desktop = desktop.platform; // lets the CSS leave room for native window controls
-    const savedTheme = window.localStorage.getItem("nexus_theme");
-    if (savedTheme === "light" || savedTheme === "dark") setTheme(savedTheme);
     const modalEvent = (event: Event) => setModal((event as CustomEvent<"api-key" | "widget">).detail);
     const back = () => {
       const match = (Object.entries(pagePaths) as Array<[NavPage, string]>).find(([, href]) => href === window.location.pathname);
@@ -232,8 +256,6 @@ export function StudioApp({ initialPage = "studio" }: { initialPage?: NavPage })
     window.addEventListener("popstate", back);
     return () => { window.removeEventListener("nexus:modal", modalEvent); window.removeEventListener("popstate", back); };
   }, [initialPage]);
-
-  useEffect(() => { document.documentElement.dataset.theme = theme; window.localStorage.setItem("nexus_theme", theme); }, [theme]);
 
   // Local mode: the server hands out the built-in owner session, so nothing ever asks the user to sign in.
   const mintRef = useRef<(() => Promise<void>) | null>(null);
@@ -290,8 +312,8 @@ export function StudioApp({ initialPage = "studio" }: { initialPage?: NavPage })
 
   const [dock, dispatchDock] = useReducer(dockAfter, INITIAL_DOCK);
   const [inspector, setInspector] = useState(false);
-  const showDock = useCallback((tab: DockTab) => dispatchDock({ type: "show", tab }), []);
-  const toggleInspector = useCallback(() => { setInspector((value) => !value); dispatchDock({ type: "show", tab: "canvas" }); }, []);
+  const showDock = useCallback((tab: DockTab) => { if (tab === "canvas") window.dispatchEvent(new CustomEvent("nexus:set-mode", { detail: "mode-canvas" })); else dispatchDock({ type: "show", tab }); }, []);
+  const toggleInspector = useCallback(() => { setInspector((value) => !value); window.dispatchEvent(new CustomEvent("nexus:set-mode", { detail: "mode-canvas" })); }, []);
   const closeSettings = useCallback(() => navigate("studio"), [navigate]);
 
   useEffect(() => {
@@ -302,12 +324,15 @@ export function StudioApp({ initialPage = "studio" }: { initialPage?: NavPage })
       if (!action) return;
       event.preventDefault();
       if (action === "palette") setCommandOpen(true);
+      else if (action === "new-conversation") window.dispatchEvent(new Event("nexus:new-conversation"));
+      else if (action === "open-terminal") window.dispatchEvent(new Event("nexus:open-terminal"));
       else if (action === "toggle-sidebar") toggleSidebar();
       else if (action === "run") window.dispatchEvent(new CustomEvent("nexus:run"));
       else if (action === "toggle-canvas") window.dispatchEvent(new CustomEvent("nexus:toggle-canvas"));
       else if (action === "toggle-dock") dispatchDock({ type: "toggle" });
       else if (action === "toggle-inspector") toggleInspector();
       else if (action === "focus-composer") { if (page !== "studio") navigate("studio"); window.setTimeout(() => window.dispatchEvent(new CustomEvent("nexus:focus-composer")), 0); }
+      else if (action.startsWith("mode-") || action === "toggle-workbench") window.dispatchEvent(new CustomEvent("nexus:set-mode", { detail: action }));
       else if (NAV_TARGETS[action]) navigate(NAV_TARGETS[action]);
     };
     window.addEventListener("keydown", keys);
@@ -336,24 +361,41 @@ type FrameProps = {
   hint: (action: string) => string; openPalette: () => void; commandOpen: boolean; closePalette: () => void; connect: (() => void) | null;
   token: string; scope: WorkspaceScope; accountOpen: boolean; setAccountOpen: (open: boolean) => void; saveScope: (value: WorkspaceScope) => void; saveToken: (value: string) => void;
   modal: "api-key" | "widget" | null; setModal: (kind: "api-key" | "widget" | null) => void; helpOpen: boolean; setHelpOpen: (open: boolean) => void;
-  bindings: Bindings; changeBindings: (next: Bindings) => void; mac: boolean; theme: "dark" | "light"; setTheme: (value: "dark" | "light") => void;
+  bindings: Bindings; changeBindings: (next: Bindings) => void; mac: boolean; theme: "dark" | "light" | "system"; setTheme: (value: "dark" | "light" | "system") => void;
   onLogout: (() => void) | null; closeSettings: () => void;
 };
 
 /** The window: title bar on top; sidebar, the work and the right dock below; settings as a panel over everything. Lives inside the workspace providers. */
 function Frame(props: FrameProps) {
+  const [sidebarWidth, resizeSidebar] = usePanelSize("nexus_sidebar_width", 240, 200, 360);
   const { t } = useLocale();
   const { page, navigate, token, scope, dock, showDock, dispatchDock, openPalette, hint, inspector, toggleInspector } = props;
   const workspace = useWorkspace();
   const { conversations, reload } = useConversations();
   const review = useReview();
+  const { mode: studioMode, setMode: setStudioMode } = workspace;
+  useEffect(() => {
+    const change = (event: Event) => {
+      const action = (event as CustomEvent<string>).detail;
+      setStudioMode(action === "mode-canvas" ? "canvas" : action === "mode-editor" ? "editor" : action === "toggle-workbench" ? studioMode === "editor" ? "mission" : "editor" : "mission");
+      navigate("studio");
+    };
+    window.addEventListener("nexus:set-mode", change);
+    return () => window.removeEventListener("nexus:set-mode", change);
+  }, [studioMode, setStudioMode, navigate]);
+  const [workspaceDialogOpen, setWorkspaceDialogOpen] = useState(false);
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const inSettings = SETTINGS_FAMILY.includes(page);
   const shownPage: NavPage = inSettings ? "studio" : page;
+  const toggleDock = useCallback(() => dispatchDock({ type: "toggle" }), [dispatchDock]);
+  const closeDock = useCallback(() => dispatchDock({ type: "close" }), [dispatchDock]);
+  const expandDock = useCallback(() => dispatchDock({ type: "expand" }), [dispatchDock]);
 
   const value = useMemo<ShellValue>(() => ({
-    dock, showDock, toggleDock: () => dispatchDock({ type: "toggle" }), closeDock: () => dispatchDock({ type: "close" }), expandDock: () => dispatchDock({ type: "expand" }),
+    conversations,
+    dock, showDock, toggleDock, closeDock, expandDock,
     navigate, openPalette, hint, review, inspector, toggleInspector,
-  }), [dock, showDock, dispatchDock, navigate, openPalette, hint, review, inspector, toggleInspector]);
+  }), [dock, showDock, toggleDock, closeDock, expandDock, navigate, openPalette, hint, review, inspector, toggleInspector, conversations]);
 
   const current = conversations.find((item) => item.run.id === workspace.runId);
   const firstWords = workspace.messages.find((message) => message.role === "user")?.text ?? null;
@@ -361,6 +403,12 @@ function Frame(props: FrameProps) {
   useEffect(() => { try { setProjects(loadProjects(window.localStorage)); } catch { setProjects({}); } }, [conversations]);
   const project = workspace.runId ? projects[workspace.runId] ?? null : null;
   const start = () => { workspace.newTask(); navigate("studio"); window.setTimeout(() => window.dispatchEvent(new Event("nexus:focus-composer")), 0); };
+  const { newTask } = workspace;
+  useEffect(() => {
+    const create = () => { newTask(); navigate("studio"); window.setTimeout(() => window.dispatchEvent(new Event("nexus:focus-composer")), 0); };
+    window.addEventListener("nexus:new-conversation", create);
+    return () => window.removeEventListener("nexus:new-conversation", create);
+  }, [newTask, navigate]);
 
   const palette = [
     { label: t("shell.newConversation"), hint: t("shell.conversations"), run: start },
@@ -369,14 +417,15 @@ function Frame(props: FrameProps) {
     { label: t("dock.terminal"), hint: hint("toggle-dock"), run: () => showDock("terminal") },
     { label: t("dock.browser"), hint: hint("toggle-dock"), run: () => showDock("browser") },
     { label: t("dock.canvas"), hint: hint("toggle-canvas"), run: () => showDock("canvas") },
-    ...conversations.slice(0, 8).map((item) => ({ label: item.name, hint: t("shell.conversations"), run: () => { if (item.run.id !== workspace.runId) workspace.openRun(item.run.workflow_id, item.run.id, item.name); navigate("studio"); } })),
+    ...conversations.slice(0, 8).map((item) => ({ label: item.name, hint: t("shell.conversations"), run: () => { if (item.run.workflow_id) { if (item.run.id !== workspace.runId) workspace.openRun(item.run.workflow_id, item.run.id, item.name); } else if (item.run.conversation_id) workspace.openConversation(item.run.conversation_id); navigate("studio"); } })),
   ];
 
-  const account = <AccountRow token={token} inSettings={inSettings} onSettings={() => navigate("general")} onClose={props.closeSettings} onShortcuts={() => props.setHelpOpen(true)} onLogout={props.onLogout} />;
-  return <ShellContext.Provider value={value}><div className={`app-shell app-shell--chat ag-app ${props.collapsed ? "is-collapsed" : ""} ${props.mobileNavOpen ? "is-nav-open" : ""}`}>
-    <TitleBar page={shownPage} title={current?.name ?? firstWords ?? ""} project={project} collapsed={props.collapsed} onToggleSidebar={props.toggleSidebar} review={review} onShortcuts={() => props.setHelpOpen(true)} onNewConversation={start} />
-    <div className="ag-body">
-      <Sidebar page={page} conversations={conversations} reload={reload} navigate={navigate} footer={account} onOpenSettings={() => navigate("general")} />
+  const account = <AccountRow token={token} onSettings={() => navigate("general")} onProviders={() => navigate("settings")} onTools={() => navigate("integrations")} onShortcuts={() => navigate("shortcuts")} onLogout={props.onLogout} onSwitch={props.connect} />;
+  return <ShellContext.Provider value={value}><div style={{ "--ag-sidebar-w": `${sidebarWidth}px` } as React.CSSProperties} className={`app-shell app-shell--chat ag-app nx-shell ${props.collapsed ? "is-collapsed" : ""} ${props.mobileNavOpen ? "is-nav-open" : ""}`}>
+    <TitleBar page={shownPage} title={current?.name ?? firstWords ?? ""} project={project} collapsed={props.collapsed} onToggleSidebar={props.toggleSidebar} review={review} onShortcuts={() => navigate("shortcuts")} onNewConversation={start} />
+    <div className="ag-body" inert={inSettings} aria-hidden={inSettings || undefined}>
+      <Sidebar onWorkspace={(create) => { setCreatingWorkspace(create); setWorkspaceDialogOpen(true); }} page={page} conversations={conversations} reload={reload} navigate={navigate} footer={account} />
+      <PanelResize className="ag-sidebar-resize" label={t("layout.sidebar")} value={sidebarWidth} min={200} max={360} initial={240} onChange={resizeSidebar} />
       {props.mobileNavOpen && <button className="ag-scrim" aria-label={t("shell.closeNav")} onClick={props.closeNav} />}
       <main className="ag-main">
         {shownPage === "studio"
@@ -387,12 +436,16 @@ function Frame(props: FrameProps) {
           </div>}
       </main>
     </div>
-    {inSettings && <SettingsModal page={page} navigate={navigate} onClose={props.closeSettings} onShortcuts={() => props.setHelpOpen(true)} footer={account}>
-      {page === "general" && <GeneralSettings theme={props.theme} onTheme={props.setTheme} bindings={props.bindings} onBindings={props.changeBindings} mac={props.mac} />}
+    {inSettings && <SettingsModal page={page} navigate={navigate} onClose={props.closeSettings} onShortcuts={() => navigate("shortcuts")} footer={account}>
+      {page === "general" && <GeneralSettings />}
+      {page === "application" && <ApplicationSettings />}
+      {page === "appearance" && <AppearanceSettings />}
+      {page === "shortcuts" && <ShortcutSettings bindings={props.bindings} onChange={props.changeBindings} mac={props.mac} />}
+      {page === "notifications" && <NotificationSettings />}
       {page === "settings" && <ProviderSettings token={token} onNavigate={navigate} />}
       {page === "intelligence" && <><div className="page-title-row"><div><h1>{t("intelligence.title")}</h1><p>{t("intelligence.body")}</p></div></div><div className="intelligence-stack"><EvolutionHost token={token} onOpened={() => navigate("studio")} /><LearningTransferRadar token={token} /><FinOpsDistillationPanel token={token} /></div></>}
     </SettingsModal>}
-    {props.accountOpen && <AccountDialog token={token} scope={scope} onScope={props.saveScope} onToken={props.saveToken} onClose={() => props.setAccountOpen(false)} />}
+    {(props.accountOpen || workspaceDialogOpen) && <AccountDialog initialRegister={creatingWorkspace} token={token} scope={scope} onScope={props.saveScope} onToken={props.saveToken} onClose={() => { setWorkspaceDialogOpen(false); props.setAccountOpen(false); }} />}
     {props.modal && <IntegrationDialog kind={props.modal} token={token} onClose={() => props.setModal(null)} />}
     {props.commandOpen && <CommandPalette onClose={props.closePalette} onNavigate={navigate} hint={props.hint} onConnect={props.connect} extra={palette} />}
     {props.helpOpen && <ShortcutsDialog bindings={props.bindings} onChange={props.changeBindings} mac={props.mac} onClose={() => props.setHelpOpen(false)} />}

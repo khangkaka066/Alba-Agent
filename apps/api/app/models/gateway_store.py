@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from decimal import Decimal
 from datetime import datetime, timezone
 from uuid import UUID
@@ -40,6 +41,9 @@ class SqlGatewayStore:
     async def _materialize(self, credential: ModelCredential, tenant_id: UUID, workspace_id: UUID, provider: Provider) -> ResolvedCredential:
         fields = CredentialCipher.decode_fields(self._cipher.decrypt(credential.encrypted_key, tenant_id, workspace_id, credential.provider))
         preset = credential.preset_id or ""
+        if credential.settings.get("auth_kind") == "official_cli":
+            base = os.environ.get("NEXUS_ACCOUNT_API_BASE", "http://127.0.0.1:18000").rstrip("/")
+            return ResolvedCredential(fields["api_key"], base + "/api/v1/account-runtime", "SUBSCRIPTION_INCLUDED", wire="openai")
         if preset == "github_copilot":
             if not fields.get("oauth_token"):
                 raise ConnectorError("The stored GitHub Copilot login is incomplete; sign in again")
@@ -156,6 +160,22 @@ class SqlGatewayStore:
             return CredentialCipher.decode_fields(
                 self._cipher.decrypt(credential.encrypted_key, tenant_id, workspace_id, provider)
             ).get("api_key", "")
+
+    async def resolve_model_credential(self, tenant_id: UUID, workspace_id: UUID, provider: Provider, model: str) -> ResolvedCredential | None:
+        from app.account_cli import ALIAS_PREFIX, alias_provider
+        account = alias_provider(model)
+        if account is None:
+            if model.startswith(ALIAS_PREFIX):
+                raise LookupError("This account connection is no longer available")
+            return await self.resolve_default_credential(tenant_id, workspace_id, provider)
+        async with scoped_session(self._engine, tenant_id, workspace_id) as session:
+            row = await session.scalar(select(ModelCredential).where(
+                ModelCredential.name == f"account:{account}", ModelCredential.provider == provider,
+                ModelCredential.status == "connected", ModelCredential.settings["auth_kind"].astext == "official_cli",
+            ))
+            if row is None:
+                raise LookupError("Sign in to the selected account in Settings before using this model")
+            return await self._materialize(row, tenant_id, workspace_id, provider)
 
     async def resolve_default_credential(
         self, tenant_id: UUID, workspace_id: UUID, provider: Provider

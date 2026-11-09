@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 from sqlalchemy import select, update
 
 from app.auth.context import TenantContext, require_role
+from app.auth.local import local_mode_enabled
 from app.models import ModelCredential, TenantBudget
 from app.models.scope import scoped_session
 from app.routers.common import get_services, not_found
@@ -106,7 +107,7 @@ def _view(row: ModelCredential, cipher: Any) -> CredentialView:
     masked_secret = secret_fields.get("api_key") or next(iter(secret_fields.values()), "")
     return CredentialView(
         id=row.id, preset_id=row.preset_id or row.name, provider=row.provider, name=row.name,
-        masked_key=None if PRESETS_BY_ID.get(preset_id) and PRESETS_BY_ID[preset_id].local else (_mask(masked_secret) if masked_secret else None), status=row.status.upper(), base_url=row.base_url,
+        masked_key=None if row.settings.get("auth_kind") == "official_cli" or (PRESETS_BY_ID.get(preset_id) and PRESETS_BY_ID[preset_id].local) else (_mask(masked_secret) if masked_secret else None), status=row.status.upper(), base_url=row.base_url,
         is_default=row.is_default, available_models=row.available_models,
         default_models=row.default_models, settings=row.settings,
         balance=row.live_balance,
@@ -182,6 +183,8 @@ async def ai_status(request: Request, context: READ) -> dict[str, object]:
                                       .order_by(ModelCredential.is_default.desc(), ModelCredential.created_at))).all()
         budget = await session.get(TenantBudget, context.tenant_id)
     for row in rows:
+        if row.preset_id == "github_copilot":
+            continue
         preset = PRESETS_BY_ID.get(row.preset_id or row.name)
         if preset is None or preset.category not in MODEL_CATEGORIES:
             continue
@@ -230,9 +233,29 @@ async def chat_models(request: Request, context: READ) -> dict[str, object]:
             entries[identifier] = {"id": identifier, "model": model, "provider": provider, "group": group, "source": source, "local": local, "unverified": unverified}
 
     for row in rows:
+        if row.preset_id == "github_copilot":
+            continue
         preset = PRESETS_BY_ID.get(row.preset_id or row.name)
         if preset is None or preset.category not in MODEL_CATEGORIES:
             continue
+        account_provider = str(row.settings.get("account_provider", ""))
+        if row.settings.get("auth_kind") == "official_cli" and account_provider in {"gemini", "codex"} and local_mode_enabled():
+            from app.account_cli import AccountCliError, alias, profile_for
+            from app.routers.account_login import account_models
+            try:
+                catalog, current = await account_models(request, profile_for(context.tenant_id, context.workspace_id, account_provider), account_provider)
+            except (AccountCliError, OSError):
+                catalog, current = [], ""
+            if catalog:
+                if default is None:
+                    default = f"{row.provider}/{alias(account_provider, current or catalog[0]['id'])}"
+                for item in catalog:
+                    name = alias(account_provider, item["id"])
+                    add(row.provider, name, preset.name, "workspace", False)
+                    identifier = f"{row.provider}/{name}"
+                    if identifier in entries:
+                        entries[identifier]["model"] = item["name"]
+                continue
         doubtful = suspect_models(row.settings)
         chosen = row.default_models.get("orchestrator") or next((item for item in row.available_models if _is_chat_model(item) and item not in doubtful), "")
         if chosen and default is None:
@@ -240,6 +263,10 @@ async def chat_models(request: Request, context: READ) -> dict[str, object]:
         for model in row.available_models:
             if _is_chat_model(model):
                 add(row.provider, model, preset.name, "workspace", preset.local, model in doubtful)
+                if row.settings.get("auth_kind") == "official_cli" and f"{row.provider}/{model}" in entries:
+                    from app.account_cli import PROVIDERS
+                    account = str(row.settings.get("account_provider", ""))
+                    entries[f"{row.provider}/{model}"]["model"] = PROVIDERS.get(account, {}).get("name", model)
     if budget is not None and budget.remaining_usd > 0:
         for variable, provider in PLATFORM_PROVIDERS:
             if not os.environ.get(variable):

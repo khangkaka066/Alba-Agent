@@ -93,3 +93,49 @@ def test_self_test_probe_without_test_files_is_unverified(tmp_path: Path) -> Non
     evidence = run_self_test_probe(tmp_path, {"clamp.py": SOURCE}, {})
     assert evidence is not None and evidence.ran == 0
     assert decide(evidence, execution_ok=True).status is Status.UNVERIFIED
+
+
+HTML = '<!doctype html><html><head><title>Alba Agent</title><meta name="viewport" content="width=device-width"><style>body{background:black;color:white}</style></head><body><h1>Alba Agent</h1><canvas id="scene"></canvas><script type="module">import * as THREE from "https://cdn.example/three.js";const scene=new THREE.Scene();</script></body></html>'
+HTML_TESTS = '''import unittest
+from pathlib import Path
+class WebRequirements(unittest.TestCase):
+    def page(self): return Path("artifacts/index.html").read_text()
+    def test_brand_title(self): self.assertIn("<title>Alba Agent</title>",self.page())
+    def test_responsive_viewport(self): self.assertIn('name="viewport"',self.page())
+    def test_visible_scene(self): self.assertIn('<canvas id="scene">',self.page())
+    def test_three_module(self): self.assertIn('import * as THREE',self.page())
+    def test_black_white_style(self): self.assertIn('background:black;color:white',self.page())
+'''
+
+
+def test_html_artifacts_pass_the_same_discrimination_and_mutation_gates(tmp_path: Path) -> None:
+    from verification import Status, decide
+    (tmp_path / "artifacts").mkdir()
+    evidence=run_self_test_probe(tmp_path,{"artifacts/index.html":HTML,"test_page.py":HTML_TESTS},{})
+    assert evidence is not None and evidence.ran==5 and evidence.mutants>=3 and evidence.killed==evidence.mutants
+    assert decide(evidence,execution_ok=True).status is Status.VERIFIED
+
+
+def test_html_tests_that_only_check_file_existence_do_not_prove_web_behaviour(tmp_path: Path) -> None:
+    from verification import Status, decide
+    (tmp_path / "artifacts").mkdir()
+    weak='import unittest\nfrom pathlib import Path\nclass T(unittest.TestCase):\n'+''.join(f'    def test_{i}(self): self.assertTrue(Path("artifacts/index.html").exists())\n' for i in range(5))
+    evidence=run_self_test_probe(tmp_path,{"artifacts/index.html":HTML,"test_page.py":weak},{})
+    assert evidence is not None and evidence.mutants>=3 and evidence.killed==0
+    assert decide(evidence,execution_ok=True).status is Status.UNVERIFIED
+
+
+def test_unchanged_html_input_does_not_falsely_count_as_new_verified_work(tmp_path: Path) -> None:
+    from verification import Status, decide
+    (tmp_path / "artifacts").mkdir()
+    evidence=run_self_test_probe(tmp_path,{"artifacts/index.html":HTML,"test_page.py":HTML_TESTS},{"artifacts/index.html":HTML.encode()})
+    assert evidence is not None and not evidence.discriminates
+    assert decide(evidence,execution_ok=True).status is Status.UNVERIFIED
+
+
+def test_mutation_isolation_restores_other_source_files_before_testing(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text('import b\ndef value():\n    return 1\n')
+    (tmp_path / "b.py").write_text('def other():\n    return 2\n')
+    (tmp_path / "test_weak.py").write_text('import unittest\nimport a\nclass T(unittest.TestCase):\n    def test_import(self): self.assertTrue(callable(a.value))\n')
+    result=gate(str(tmp_path),["a.py","b.py"],["test_weak.py"],{})
+    assert result["passed"] and result["discriminates"] and result["killed"]==0

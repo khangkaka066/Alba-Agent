@@ -2,7 +2,7 @@
 // what the dock's address bar may open. Kept free of React so it can be unit tested with node:test.
 
 export const PROJECTS_KEY = "nexus_run_projects";
-export const DOCK_TABS = ["review", "files", "terminal", "browser", "canvas"];
+export const DOCK_TABS = ["artifacts", "agents", "tasks", "review", "terminal", "files", "browser", "canvas"];
 
 /** runId -> project (folder) name, remembered on this device when a task starts inside an opened folder. */
 export function loadProjects(storage) {
@@ -44,7 +44,7 @@ export function groupConversations(tasks, projects) {
   return { projects: [...byName.entries()].map(([name, items]) => ({ name, tasks: items })), loose };
 }
 
-export const INITIAL_DOCK = { open: false, tab: "files", expanded: false };
+export const INITIAL_DOCK = { open: false, tab: "artifacts", expanded: false };
 
 /** The dock's state machine. Showing a tab opens the dock; choosing the open tab again keeps it open (it never toggles by accident). */
 export function dockAfter(state, action) {

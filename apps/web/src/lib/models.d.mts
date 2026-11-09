@@ -1,5 +1,9 @@
 export type ChatModel = { id: string; model: string; provider: string; group: string; source: "workspace" | "platform"; local: boolean; unverified?: boolean };
 export type ModelGroup = { name: string; local: boolean; models: ChatModel[] };
+export type EffortChoice = { id: string; value: string; label: string };
+export function modelChoices(models: ChatModel[], selected: string | null): ChatModel[];
+export function effortChoices(models: ChatModel[], selected: string | null): EffortChoice[];
+export function preferredModelVariant(models: ChatModel[], target: string, selected: string | null): string;
 export const MODEL_STORAGE_KEY: string;
 export function modelLabel(id: string | null | undefined): string;
 export type SuggestedModel = { id: string; model: string; provider: string; group: string; connected: boolean };

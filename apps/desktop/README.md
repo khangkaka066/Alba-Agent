@@ -1,4 +1,6 @@
-# NexusAgent Desktop
+# Alba Agent Desktop
+
+`NEXUS_DESKTOP_DATA_DIR` selects an existing embedded-stack data folder (database, encrypted credentials and artifacts). When omitted, the app uses the `data` folder in its normal application support directory.
 
 The installer carries the whole product: Postgres, Redis, Qdrant, the API, the worker and the web app start
 inside the app when you open it. **No Docker, no Python, nothing else to install.** macOS 15 or later on Apple Silicon (`arm64`) `.dmg`; there is no Intel or Windows installer.
@@ -14,12 +16,12 @@ It also adds what a browser cannot do:
 ## Run
 
 Open the app. The first start creates your private database and secrets in the app-data folder
-(`~/Library/Application Support/NexusAgent/data`, secrets file mode 0600), which takes about a minute; later starts take
+(`~/Library/Application Support/Alba Agent/data`, secrets file mode 0600), which takes about a minute; later starts take
 under half a minute. Then connect a model provider in **Settings → Providers**. Agent commands run on your machine inside a
 macOS sandbox (writes only in the run's own folder, no `.env` or credential reads, no network unless you approve a command;
 see `packages/computer-sandbox/README.md`, "Local mode").
 
-Files for support are in `~/Library/Application Support/NexusAgent/logs/` (one per service; no secrets).
+Files for support are in `~/Library/Application Support/Alba Agent/logs/` (one per service; no secrets).
 To give the services model keys without the UI, put `NEXUS_*_API_KEY=` / `..._API_BASE=` lines in `data/nexus.env`.
 
 Connect to a server instead of running locally (the embedded stack is then not started):
@@ -65,4 +67,4 @@ available yet; see `tasks/todo.md`, Phase 36.
 
 The web app runs with `contextIsolation`, no Node integration and the renderer sandbox. The only bridge is
 `window.nexusDesktop` (folder access and notifications), honoured only for pages served from the configured server origin.
-Navigation to other origins opens in your browser. The app sends nothing anywhere except to your NexusAgent server.
+Navigation to other origins opens in your browser. The app sends nothing anywhere except to your Alba Agent server.

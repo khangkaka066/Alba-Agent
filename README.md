@@ -1,15 +1,15 @@
 <p align="center">
-  <img src="docs/assets/nexusagent-logo.png" alt="NexusAgent" width="640">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/alba-logo-dark.svg"><img src="docs/assets/alba-logo.svg" alt="Alba Agent" width="180"></picture>
 </p>
 
 <h3 align="center">A governed team of AI agents in your own sandbox.<br>Describe a goal. Agents plan, code and produce files. You approve the risky steps.</h3>
 
 <p align="center">
-  <a href="https://github.com/khangkaka066/Nexus-Agent/actions/workflows/ci.yml"><img src="https://github.com/khangkaka066/Nexus-Agent/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/khangkaka066/Nexus-Agent?color=2f6fed" alt="MIT license"></a>
-  <a href="https://github.com/khangkaka066/Nexus-Agent/stargazers"><img src="https://img.shields.io/github/stars/khangkaka066/Nexus-Agent?style=flat&logo=github&color=2f6fed" alt="Stars"></a>
-  <a href="https://github.com/khangkaka066/Nexus-Agent/forks"><img src="https://img.shields.io/github/forks/khangkaka066/Nexus-Agent?style=flat&logo=github&color=2f6fed" alt="Forks"></a>
-  <a href="https://github.com/khangkaka066/Nexus-Agent/issues"><img src="https://img.shields.io/github/issues/khangkaka066/Nexus-Agent?style=flat&color=2f6fed" alt="Issues"></a>
+  <a href="https://github.com/khangkaka066/Alba-Agent/actions/workflows/ci.yml"><img src="https://github.com/khangkaka066/Alba-Agent/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/khangkaka066/Alba-Agent?color=2f6fed" alt="MIT license"></a>
+  <a href="https://github.com/khangkaka066/Alba-Agent/stargazers"><img src="https://img.shields.io/github/stars/khangkaka066/Alba-Agent?style=flat&logo=github&color=2f6fed" alt="Stars"></a>
+  <a href="https://github.com/khangkaka066/Alba-Agent/forks"><img src="https://img.shields.io/github/forks/khangkaka066/Alba-Agent?style=flat&logo=github&color=2f6fed" alt="Forks"></a>
+  <a href="https://github.com/khangkaka066/Alba-Agent/issues"><img src="https://img.shields.io/github/issues/khangkaka066/Alba-Agent?style=flat&color=2f6fed" alt="Issues"></a>
   <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-2f6fed?style=flat" alt="PRs welcome"></a>
 </p>
 
@@ -35,44 +35,28 @@
 
 ---
 
-## Why NexusAgent
+## Why Alba Agent
 
-Most multi-agent projects are libraries: you write the orchestration, the sandbox, the review step and the UI yourself. NexusAgent is the finished product built on top of them. It is a self-hosted web and desktop app where you type a goal, an AI architect designs a whole **team** of agents for it, the team runs inside an isolated sandbox, and a human approves the sensitive steps.
+Most multi-agent projects are libraries: you write the orchestration, the sandbox, the review step and the UI yourself. Alba Agent is the finished product built on top of them. It is a self-hosted web and desktop app where you type a goal, an AI architect designs a whole **team** of agents for it, the team runs inside an isolated sandbox, and a human approves the sensitive steps.
 
 - **Team, not chatbot.** A request becomes a structured team: directors, department leads and specialists, with a quality gate that sends missing work back to the right department.
-- **Runs on your Mac without Docker.** The desktop app carries its own database, queue, vector store, API, Node, git and ffmpeg; agent commands run in an operating-system sandbox. A server version that runs in Docker is kept on the [`docker` branch](https://github.com/khangkaka066/Nexus-Agent/tree/docker).
+- **Runs on your Mac without Docker.** The desktop app carries its own database, queue, vector store, API, Node, git and ffmpeg; agent commands run in an operating-system sandbox. A server version that runs in Docker is kept on the [`docker` branch](https://github.com/khangkaka066/Alba-Agent/tree/docker).
 - **Safe by design.** Code runs in a locked-down sandbox. Sensitive actions stop at an approval card. Every decision is written to an audit log.
 - **Honest results.** A team that claims a file it never wrote fails with a clear message (media is never invented) instead of finishing as if it had delivered.
-- **Bring any model.** Use your ChatGPT, Claude, Gemini or GitHub Copilot plan, an API key, any OpenAI-compatible gateway, or a local Ollama model.
+- **Bring any model.** Use your ChatGPT, Claude or Gemini plan, an API key, any OpenAI-compatible gateway, or a local Ollama model.
 - **Yours.** Self-hosted, MIT licensed, no telemetry leaves your machine.
 
 ---
 
 ## 🖼️ See it
 
-<p align="center">
-  <img src="docs/media/nexus-tour.gif" alt="NexusAgent tour: home, slash actions, review, files, overview, canvas, command palette, settings" width="860">
-</p>
-<p align="center"><sub>A tour of the real interface. Every frame is a screenshot of the running app, taken from a task the team actually completed.</sub></p>
+<p align="center"><img src="docs/screenshots/alba-home.png" alt="Alba Agent with separate Model and Effort controls" width="960"></p>
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/ui-home.png" alt="Home: one prompt, model, team size, permissions"><br><sub><b>One prompt.</b> Model, team size and the agent's permission preset sit in the box; <code>@</code> attaches earlier results, <code>/</code> opens quick actions.</sub></td>
-    <td width="50%"><img src="docs/screenshots/ui-review.png" alt="Review tab with added and removed lines per file"><br><sub><b>Review.</b> Every file the team produced with lines added and removed; accept or reject one file or all.</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/ui-files.png" alt="Files tab with a diff view of todo.py"><br><sub><b>Files as diffs.</b> Preview, download, or accept into your project folder.</sub></td>
-    <td><img src="docs/screenshots/ui-overview.png" alt="Overview menu of the right panel with modified files"><br><sub><b>Overview.</b> Jump to Review, Files, Terminal, Browser or Canvas, and see what changed.</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/ui-canvas.png" alt="The agent team on the visual canvas"><br><sub><b>The team on a canvas.</b> Directors, departments, sandboxes, quality gate and sign-off, beside the conversation.</sub></td>
-    <td><img src="docs/screenshots/ui-browser.png" alt="Browser tab opening a local page"><br><sub><b>Browser tab.</b> Open a local dev server or any web page next to the chat.</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/ui-palette.png" alt="Command palette"><br><sub><b>Command palette</b> (<code>⌘K</code>): navigate, open a panel, jump to a conversation.</sub></td>
-    <td><img src="docs/screenshots/ui-settings.png" alt="Settings panel with the models page"><br><sub><b>Settings as a panel.</b> Use the plan you already pay for, or any API key or gateway.</sub></td>
-  </tr>
-</table>
+The current interface uses the ALBA master emblem. Model and Effort are separate controls; account sign-in lives in Settings → Models. The agent-team canvas remains available beside the conversation.
+
+<details><summary>Agent-team canvas</summary>
+<p align="center"><img src="docs/screenshots/alba-canvas.png" alt="Alba Agent hierarchical team canvas" width="960"></p>
+</details>
 
 ---
 
@@ -84,28 +68,28 @@ The window follows the layout of modern AI code editors, so what matters is in f
 |---|---|
 | **Title bar** | Sidebar toggle, back and forward, search; the breadcrumb `Project / Conversation`; a menu (copy the conversation, run log, shortcuts), the *Overview* menu and the right-panel toggle. |
 | **Sidebar** | *New Conversation*, *Automations* (scheduled teammates), *Customizations* (channels, MCP, skills); **Projects** (a folder you opened, with its conversations); **Conversations**; *Settings* and your account at the foot. |
-| **Conversation** | Messages, the team's live progress, approval cards, and the message box: attach (`+` or `@`), model, permissions, dictation (browsers that support it), send. |
-| **Right panel** | *Review* (lines added and removed), *Files* (diff, download, accept), *Terminal* (the run's output, read-only), *Browser*, *Canvas* (the agent graph and the run log). Drag its edge to resize, or expand it to full width. |
-| **Settings** | A panel over the work: General (theme, language, permissions, shortcuts), Models, Learning metrics. |
+| **Conversation** | Messages, the team's live progress, approval cards, and the message box: attach (`+` or `@`), Model, Effort, permissions, dictation (browsers that support it), send. |
+| **Right panel** | *Review* (lines added and removed), *Files* (diff, download, accept), an interactive *Terminal*, *Browser*, *Canvas* (the agent graph and the run log). Drag its edge to resize, or expand it to full width. |
+| **Settings** | A panel over the work: General, Application, Appearance, Shortcuts, Notifications and Models. |
 
 | Keys | Action |
 |---|---|
-| `⌘K` / `Ctrl+K` | Command palette |
+| `⌘⇧P` / `Ctrl+Shift+P` | Command palette |
 | `⌘Enter` | Send the message |
 | `⌘L` | Focus the message box |
 | `⌘J` | Show or hide the right panel |
 | `⌘I` | Open the agent run log (Canvas) |
 | `⌘B` | Show or hide the sidebar |
-| `⌘\` | Switch between Files and Canvas |
+| `⌘\` | Toggle the agent canvas |
 | `A` / `Y` / `D` | On the first approval card: allow once / always allow (scheduled tasks) / deny |
 
-Every shortcut can be changed in **Settings → General**. On narrow windows the sidebar becomes a drawer and the right panel covers the conversation.
+Shortcuts can be changed in **Settings → Shortcuts**. On narrow windows the sidebar becomes a drawer and the right panel covers the conversation.
 
 ---
 
 ## ⚡ Install
 
-You need either an AI subscription you already use (ChatGPT, Claude, Gemini, GitHub Copilot) or an API key.
+You need either an AI subscription you already use (ChatGPT, Claude, Gemini) or an API key.
 
 ### The desktop app (macOS, Apple Silicon, no Docker)
 
@@ -114,10 +98,10 @@ The installer carries the whole product: PostgreSQL, Redis, Qdrant, the API, the
 ```bash
 python3 scripts/package/build_runtime.py mac-arm64     # downloads (sha256-pinned) and assembles the runtime
 python3 scripts/package/verify_runtime.py mac-arm64    # portability audit and a smoke run from a relocated copy; must pass
-pnpm --filter @nexus/desktop build:mac                 # apps/desktop/release/NexusAgent-<version>-mac-arm64.dmg
+pnpm --filter @nexus/desktop build:mac                 # apps/desktop/release/Alba Agent-<version>-mac-arm64.dmg
 ```
 
-Open the `.dmg` and drag NexusAgent to Applications. Requirements and limits, stated plainly:
+Open the `.dmg` and drag Alba Agent to Applications. Requirements and limits, stated plainly:
 
 - **macOS 15 or later on Apple Silicon.** There is no Intel or Windows installer yet.
 - **The `.dmg` is not signed or notarized**, so macOS asks you to confirm the first launch (right-click the app, then *Open*).
@@ -128,7 +112,7 @@ Details: [apps/desktop/README.md](apps/desktop/README.md).
 
 ### Server, Linux and Windows
 
-There is no installer for them on `main`. A Docker deployment (any OS with Docker, and self-hosted servers with HTTPS) is kept on the [`docker` branch](https://github.com/khangkaka066/Nexus-Agent/tree/docker); a Windows build is planned and has not been started. The desktop app can also open a window onto a server you run from that branch (*Settings* in the app, an HTTPS address).
+There is no installer for them on `main`. A Docker deployment (any OS with Docker, and self-hosted servers with HTTPS) is kept on the [`docker` branch](https://github.com/khangkaka066/Alba-Agent/tree/docker); a Windows build is planned and has not been started. The desktop app can also open a window onto a server you run from that branch (*Settings* in the app, an HTTPS address).
 
 ## First run
 
@@ -163,7 +147,7 @@ Open the app. There is no sign-up: a *Local Workspace* is created for you. Then:
 
 ## 🎬 Agent studios
 
-Ask for a product and NexusAgent builds a whole studio. Pick the size: *compact*, *by department* (~19 agents) or *full studio*.
+Ask for a product and Alba Agent builds a whole studio. Pick the size: *compact*, *by department* (~19 agents) or *full studio*.
 
 | Studio | Agents | Produces |
 |---|---:|---|
@@ -226,17 +210,18 @@ The runtime is assembled from plugins: connections, model access, checkpoints, t
 
 Open **Settings → Models**.
 
-| Source | How |
+| Source | Connection |
 |---|---|
-| **GitHub Copilot** | *Sign in with GitHub* and enter the 8-character code. |
-| **ChatGPT Plus / Pro / Team** | `codex login`, copy `~/.codex/auth.json` into `data/subscriptions/codex/` (or paste it), and give the URL of your subscription bridge. |
-| **Claude Pro / Max** | `claude setup-token` and paste the token, or copy `~/.claude/.credentials.json` into `data/subscriptions/claude/`. |
-| **Gemini Advanced / Code Assist** | Copy `~/.gemini/oauth_creds.json` into `data/subscriptions/gemini/`, or paste a bridge token. |
-| **API key or gateway** | **Nexus Harness**: enter the API URL and key of any OpenAI-compatible provider; models are discovered automatically. OpenAI, Anthropic, Gemini, DeepSeek and Ollama have their own cards. |
+| **Codex / ChatGPT** | Install the official Codex CLI, then choose **Sign in with Codex**. Complete the browser flow; Alba verifies a real answer before enabling the connection. |
+| **Claude Pro / Max** | Install the official Claude Code app and choose **Sign in with Claude**. The official app owns your login and plan limits. |
+| **Google / Gemini** | Sign in through the official Antigravity ACP runtime. Retired Gemini CLI personal Code Assist authentication is not used. |
+| **API providers** | Enter the provider URL and API key in Models. Saved credentials are encrypted and scoped to your workspace. |
+| **Local models** | Connect an Ollama or other supported local server. |
 
-Use the model selector in the message box to switch model per task, including any model id you type. Plan usage is recorded at $0 per token; no price table is needed.
+Sign-in runs through each provider's unmodified official application. Alba does not ask you to paste subscription tokens or credential files. Official account programs are installed separately and are not redistributed as dependencies of Alba. Connecting a subscription does not overwrite saved API provider credentials. An authenticated account that returns 429 is shown as **Signed in · Limited**, without replacing another working model.
 
-> Plan tokens work only on endpoints that understand them (for example a bridge such as CLIProxyAPI), and providers may limit using plan tokens outside their own apps. Check the terms of your plan.
+The chat has separate **Model** and **Effort** controls. Codex models and reasoning levels are discovered through its official app-server; Gemini options come from the official Antigravity ACP catalog. Model families appear once; Effort lists only the levels the account actually supplies. Unsupported effort controls are disabled. The selected concrete model and effort survive reloads. Availability and usage limits are controlled by the provider; zero metered API cost does not imply unlimited subscription usage.
+
 
 ---
 
@@ -252,7 +237,7 @@ Use the model selector in the message box to switch model per task, including an
 |---|---|
 | Security | `NEXUS_SECRET_KEY`, `NEXUS_API_KEY_PEPPER`, `NEXUS_CREDENTIAL_ENCRYPTION_KEY_BASE64` |
 | Models | `NEXUS_*_API_KEY` (optional server keys), `NEXUS_MODEL_RATES_JSON` (optional cost estimates) |
-| Plans | `NEXUS_CODEX_HOME`, `NEXUS_CLAUDE_HOME`, `NEXUS_GEMINI_HOME`, `NEXUS_COPILOT_HOME` |
+| Official account apps | `NEXUS_ACCOUNT_CLI_DIR`, `NEXUS_ACCOUNT_CODEX_BIN`, `NEXUS_ACCOUNT_CLAUDE_BIN`, `NEXUS_ACCOUNT_GEMINI_BIN` |
 | Plugins | `NEXUS_PLUGINS_FILE`, `NEXUS_PLUGIN_PATCHES` |
 | Access | `NEXUS_LOCAL_MODE`, `NEXUS_PUBLIC_SIGNUP_ENABLED`, `NEXUS_REGISTRATION_TOKEN`, `NEXUS_CORS_ORIGINS` |
 | Sandbox | `NEXUS_COMPUTER_ROOT`, `NEXUS_SANDBOX_PROVIDER` |
@@ -264,11 +249,11 @@ Everything is listed in [.env.example](.env.example). Call the API with a scoped
 ## 🧪 Development and tests
 
 ```bash
-pytest && mypy packages/ apps/api/          # backend: 180+ tests, strict typing
+pytest && mypy packages/ apps/api/          # backend tests and strict typing
 pnpm lint && pnpm check && pnpm test        # frontend
 ```
 
-CI runs the same commands plus licence and branding checks on every push. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+CI runs the same commands plus licence and branding checks on every push. Current local results and test limitations are recorded in [the Alba rollout verification](docs/verification/alba-rollout/README.md). Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ---
 
@@ -277,22 +262,22 @@ CI runs the same commands plus licence and branding checks on every push. Read [
 - **Posting to TikTok, Facebook and YouTube is not wired yet.** The marketing and film teams write publish-ready packages and checklists and stop at your approval; channel cards store a token and check connectivity only.
 - **Video generation** depends on your provider offering a video API. Agents describe, plan and assemble media; they do not invent files.
 - The interface has a single local workspace for now; the multi-workspace switcher is planned (the backend already isolates workspaces).
-- **The right panel is honest about what it is.** *Terminal* shows the run's output and is not an interactive shell; *Browser* is a sandboxed frame (a site that refuses framing opens in your system browser); the permission preset is read-only and describes the sandbox policy. Dictation needs a browser with speech recognition and is not offered in the desktop app.
+- **Browser and terminal access depend on the sandbox provider.** The local macOS provider supports interactive terminals, managed background processes and a remote browser screen. Browser checks use the assigned sandbox browser. Dictation needs a browser with speech recognition.
 - The new shell is dark-first; the light theme is not fully restyled yet.
 - With an unusual model gateway the architect may pick model names the gateway does not have (the task then stops with a *model not found* error). Choose a model you have connected, or give the full provider-qualified id.
 - Agents can still misjudge their own work. Failed claims are caught and reported, and every run can be retried, but review important output yourself.
 - Planned: node handlers as plugins, per-workspace plugin configuration, Windows and Linux desktop verification.
 
-Ideas and bug reports are welcome in [Issues](https://github.com/khangkaka066/Nexus-Agent/issues).
+Ideas and bug reports are welcome in [Issues](https://github.com/khangkaka066/Alba-Agent/issues).
 
 ---
 
 ## ⭐ Support the project
 
-If NexusAgent saves you time, a star helps other people find it, and sharing a screenshot of a team you built helps even more.
+If Alba Agent saves you time, a star helps other people find it, and sharing a screenshot of a team you built helps even more.
 
-<a href="https://star-history.com/#khangkaka066/Nexus-Agent&Date">
-  <img src="https://api.star-history.com/svg?repos=khangkaka066/Nexus-Agent&type=Date" alt="Star history" width="520">
+<a href="https://star-history.com/#khangkaka066/Alba-Agent&Date">
+  <img src="https://api.star-history.com/svg?repos=khangkaka066/Alba-Agent&type=Date" alt="Star history" width="520">
 </a>
 
 ## 🔒 Security and license
@@ -303,3 +288,9 @@ If NexusAgent saves you time, a star helps other people find it, and sharing a s
 - Released under the [MIT License](LICENSE).
 
 <sub>**Topics:** multi-agent, ai-agents, agent-orchestration, llm, workflow-automation, mcp, rag, human-in-the-loop, desktop-app, macos, fastapi, nextjs, multi-tenant, ai-workflow-builder.</sub>
+
+## Brand and compatibility
+
+The application is now **Alba Agent**, using the owner-supplied ALBA master logo. The repository retains the `@nexus/*` package scopes, `NEXUS_*` environment variables, database identifiers and existing local data directories for compatibility with earlier installs. This does not reset saved accounts, API keys or conversations. Product text, app metadata, launch screen and icons use the Alba identity.
+
+In **Auto** mode, clear website creation briefs and their technology follow-ups are routed into workflow/team generation. Greetings and questions remain ordinary chat; asking for a plan or advice does not start execution.

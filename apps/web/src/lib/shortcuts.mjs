@@ -5,15 +5,21 @@ export const STORAGE_KEY = "nexus_shortcuts";
 
 // Display names live in the message tables under `shortcut.<id>` and `shortcut.group.<group>`.
 export const ACTIONS = [
-  { id: "palette", group: "general", default: "Mod+K" },
+  { id: "palette", group: "general", default: "Mod+Shift+P" },
+  { id: "new-conversation", group: "general", default: "Mod+Shift+N" },
+  { id: "open-terminal", group: "general", default: "Mod+Shift+T" },
   { id: "toggle-sidebar", group: "general", default: "Mod+B" },
   { id: "toggle-canvas", group: "general", default: "Mod+\\" },
   { id: "run", group: "general", default: "Mod+Enter" },
   { id: "toggle-dock", group: "general", default: "Mod+J" },
   { id: "toggle-inspector", group: "general", default: "Mod+I" },
   { id: "focus-composer", group: "general", default: "Mod+L" },
-  { id: "nav-studio", group: "navigation", default: "Mod+1" },
-  { id: "nav-integrations", group: "navigation", default: "Mod+2" },
+  { id: "mode-mission", group: "navigation", default: "Mod+1" },
+  { id: "mode-editor", group: "navigation", default: "Mod+2" },
+  { id: "mode-canvas", group: "navigation", default: "Mod+3" },
+  { id: "toggle-workbench", group: "navigation", default: "Mod+E" },
+  { id: "nav-studio", group: "navigation", default: "Mod+Shift+1" },
+  { id: "nav-integrations", group: "navigation", default: "Mod+Shift+2" },
   { id: "nav-settings", group: "navigation", default: "Mod+," },
 ];
 
@@ -56,13 +62,14 @@ export function formatCombo(combo, mac) {
 export function resolveBindings(saved) {
   const result = { ...DEFAULT_BINDINGS };
   if (!saved || typeof saved !== "object") return result;
-  for (const action of ACTIONS) if (isValidCombo(saved[action.id])) result[action.id] = saved[action.id];
+  for (const action of ACTIONS) if (saved[action.id] === "" || isValidCombo(saved[action.id])) result[action.id] = saved[action.id];
   // Each pass reverts the later of two colliding actions to its default; defaults are unique, so this settles.
   for (let pass = 0; pass < ACTIONS.length; pass += 1) {
     const owner = new Map();
     let changed = false;
     for (const action of ACTIONS) {
       const combo = result[action.id];
+      if (!combo) continue;
       if (owner.has(combo) && combo !== DEFAULT_BINDINGS[action.id]) { result[action.id] = DEFAULT_BINDINGS[action.id]; changed = true; }
       else if (owner.has(combo)) { result[owner.get(combo)] = DEFAULT_BINDINGS[owner.get(combo)]; changed = true; owner.set(combo, action.id); }
       else owner.set(combo, action.id);
@@ -74,6 +81,7 @@ export function resolveBindings(saved) {
 
 /** The other action that already uses this combo, if any. */
 export function findConflict(bindings, actionId, combo) {
+  if (!combo) return null;
   return ACTIONS.find((action) => action.id !== actionId && bindings[action.id] === combo)?.id ?? null;
 }
 

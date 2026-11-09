@@ -12,6 +12,7 @@ DEFAULT_PLUGINS = Path(__file__).with_name("default.yaml")
 
 def default_registry() -> PluginRegistry:
     """Every plugin that configuration may name. Imports are local so reading this package stays cheap."""
+    from .interactive import InteractiveComputerPlugin
     from .infrastructure import InfrastructurePlugin
     from .llm import GatewayLlmPlugin
     from .memory import CheckpointsPlugin
@@ -20,7 +21,7 @@ def default_registry() -> PluginRegistry:
     from .tools import ToolRegistryPlugin
 
     registry = PluginRegistry()
-    for plugin in (InfrastructurePlugin, GatewayLlmPlugin, CheckpointsPlugin, SandboxSupervisorPlugin, DockerSandboxPlugin, LocalSandboxPlugin, SandboxRunnerPlugin, ToolRegistryPlugin):
+    for plugin in (InteractiveComputerPlugin, InfrastructurePlugin, GatewayLlmPlugin, CheckpointsPlugin, SandboxSupervisorPlugin, DockerSandboxPlugin, LocalSandboxPlugin, SandboxRunnerPlugin, ToolRegistryPlugin):
         registry.register(plugin.name, plugin)
     return registry
 

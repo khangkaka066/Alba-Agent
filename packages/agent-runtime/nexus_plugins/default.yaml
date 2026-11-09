@@ -1,4 +1,4 @@
-# The plugins a NexusAgent process boots, in order. Rows are matched by id, so a patch file can replace a row's
+# The plugins a Alba Agent process boots, in order. Rows are matched by id, so a patch file can replace a row's
 # config, disable it (`disabled: true`), insert another or remove one. Print the result with:
 #   python -m nexus_plugins dump-config [--patch file.yaml ...]
 plugins:
@@ -17,5 +17,7 @@ plugins:
   - id: sandbox-local  # macOS only, no Docker; enable with a patch (disabled: false) and NEXUS_SANDBOX_PROVIDER=local
     plugin: sandbox.local
     disabled: true
+  - id: sandbox-interactive
+    plugin: sandbox.interactive
   - id: sandbox-runner
     plugin: sandbox.runner

@@ -25,8 +25,10 @@ from app.routers.common import conflict, get_services, not_found
 from app.routers.conversations import append_message, start_conversation
 from nexus_core_schema.models import NexusGenSandboxNodeSpec, WorkflowSpec
 from verification import is_compile_only
-from nexus_core_schema.models import RuntimeEvent
+from nexus_core_schema.models import RuntimeEvent, RuntimeEventType
 from flows.compiler import FlowCompiler
+from checkpoints.store import CheckpointStore
+from callbacks.event_bus import RuntimeEventEmitter
 from nexus_core_schema.artifacts import artifact_directory, artifact_file, list_artifacts, MEDIA_TYPES
 
 router = APIRouter(tags=["workflows"])
@@ -282,6 +284,30 @@ class RetryRequest(BaseModel):
     mode: Literal["step", "team"] = "step"
 
 
+@router.post("/api/v1/runs/{run_id}/cancel")
+async def cancel_run(run_id: UUID, request: Request, context: RUN) -> dict[str, str]:
+    """Stop queued/paused work now and running work at its next safe tool/checkpoint boundary."""
+    services = get_services(request)
+    async with scoped_session(services.engine, context.tenant_id, context.workspace_id) as session:
+        run = await session.scalar(select(WorkflowRun).where(WorkflowRun.id == run_id).with_for_update())
+        if run is None:
+            raise not_found("Run is not visible in this workspace")
+        if run.status in ("completed", "failed", "cancelled"):
+            return {"status": run.status}
+        await services.redis.set(CheckpointStore.cancellation_key(context.tenant_id, context.workspace_id, run_id), "1", ex=86400)
+        immediate = run.status in ("queued", "paused")
+        if immediate:
+            run.status = "cancelled"
+            run.finished_at = datetime.now(timezone.utc)
+        session.add(AuditLog(tenant_id=context.tenant_id, workspace_id=context.workspace_id, actor_id=context.user_id,
+                             action="workflow.cancel_requested", target_type="workflow_run", target_id=run_id, details={"immediate": immediate}))
+    state = "cancelled" if immediate else "cancelling"
+    await RuntimeEventEmitter(services.redis, context.tenant_id, context.workspace_id, run_id).emit(
+        RuntimeEventType.FLOW_STATE_CHANGED, {"status": state, "reason": "user_requested"},
+    )
+    return {"status": state}
+
+
 @router.post("/api/v1/runs/{run_id}/retry", status_code=status.HTTP_202_ACCEPTED)
 async def retry_run(run_id: UUID, body: RetryRequest, request: Request, context: RUN) -> dict[str, Any]:
     services = get_services(request)
@@ -293,6 +319,9 @@ async def retry_run(run_id: UUID, body: RetryRequest, request: Request, context:
         if run.status != "failed":
             raise conflict("Only a failed task can be retried")
         has_checkpoint = await session.scalar(select(RunCheckpoint.id).where(RunCheckpoint.run_id == run_id).limit(1)) is not None
+        if body.mode == "step" and has_checkpoint:
+            run.status = "running"  # the worker only resumes runs the database marks queued or running
+            run.finished_at = None
         if body.mode == "team" or not has_checkpoint:
             inputs = dict(run.input_data)
             upstream = inputs.get("upstream_artifacts")
